@@ -30,11 +30,6 @@ jobs:
       env:
         MTEAM_API_KEY: ${{ secrets.MTEAM_API_KEY }}
 
-    - name: Run organizer/jav-actor tests
-      run: |
-        go test -v ./...
-      working-directory: ./organizer/jav-actor
-
     - name: Run frontend formatter check, linter and tests
       run: |
         npm ci
@@ -42,11 +37,3 @@ jobs:
         npx eslint .
         npx vitest run
       working-directory: ./frontend
-
-    - name: Run organizer/file-organizer check, linter and tests
-      run: |
-        uv sync --locked --all-extras --dev
-        uvx ruff check .
-        uvx ruff format . --check
-        uv run pytest
-      working-directory: ./organizer/file-organizer

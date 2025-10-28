@@ -6,9 +6,9 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/charleshuang3/autoget/backend/indexers"
-	"github.com/charleshuang3/autoget/backend/internal/db"
-	"github.com/charleshuang3/autoget/backend/internal/notify"
+	"github.com/autoget-project/autoget/backend/indexers"
+	"github.com/autoget-project/autoget/backend/internal/db"
+	"github.com/autoget-project/autoget/backend/internal/notify"
 	"github.com/rs/zerolog/log"
 	"gorm.io/gorm"
 )

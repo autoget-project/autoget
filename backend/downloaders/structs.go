@@ -3,8 +3,8 @@ package downloaders
 import (
 	"fmt"
 
-	"github.com/charleshuang3/autoget/backend/downloaders/config"
-	"github.com/charleshuang3/autoget/backend/downloaders/transmission"
+	"github.com/autoget-project/autoget/backend/downloaders/config"
+	"github.com/autoget-project/autoget/backend/downloaders/transmission"
 	"github.com/robfig/cron/v3"
 	"gorm.io/gorm"
 )

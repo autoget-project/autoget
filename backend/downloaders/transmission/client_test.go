@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charleshuang3/autoget/backend/downloaders/config"
-	"github.com/charleshuang3/autoget/backend/internal/db"
+	"github.com/autoget-project/autoget/backend/downloaders/config"
+	"github.com/autoget-project/autoget/backend/internal/db"
 	"github.com/hekmon/transmissionrpc/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

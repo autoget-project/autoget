@@ -4,8 +4,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/charleshuang3/autoget/backend/indexers"
-	"github.com/charleshuang3/autoget/backend/indexers/rsshelper"
+	"github.com/autoget-project/autoget/backend/indexers"
+	"github.com/autoget-project/autoget/backend/indexers/rsshelper"
 	"github.com/mmcdole/gofeed"
 	"github.com/robfig/cron/v3"
 )

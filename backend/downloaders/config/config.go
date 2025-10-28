@@ -3,7 +3,7 @@ package config
 import (
 	"fmt"
 
-	"github.com/charleshuang3/autoget/backend/internal/db"
+	"github.com/autoget-project/autoget/backend/internal/db"
 )
 
 type TransmissionConfig struct {

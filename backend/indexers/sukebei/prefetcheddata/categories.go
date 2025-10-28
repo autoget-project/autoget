@@ -5,8 +5,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/charleshuang3/autoget/backend/indexers"
-	nPrefetcheddata "github.com/charleshuang3/autoget/backend/indexers/nyaa/prefetcheddata"
+	"github.com/autoget-project/autoget/backend/indexers"
+	nPrefetcheddata "github.com/autoget-project/autoget/backend/indexers/nyaa/prefetcheddata"
 )
 
 var (

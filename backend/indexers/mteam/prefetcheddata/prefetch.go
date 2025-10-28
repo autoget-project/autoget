@@ -7,7 +7,7 @@ import (
 
 	_ "embed"
 
-	"github.com/charleshuang3/autoget/backend/indexers"
+	"github.com/autoget-project/autoget/backend/indexers"
 )
 
 type prefetched struct {

@@ -1,4 +1,4 @@
-module github.com/charleshuang3/autoget/backend
+module github.com/autoget-project/autoget/backend
 
 go 1.24.6
 

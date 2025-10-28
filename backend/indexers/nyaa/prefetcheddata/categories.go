@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/charleshuang3/autoget/backend/indexers"
+	"github.com/autoget-project/autoget/backend/indexers"
 )
 
 var (

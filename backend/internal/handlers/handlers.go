@@ -6,10 +6,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/charleshuang3/autoget/backend/downloaders"
-	"github.com/charleshuang3/autoget/backend/indexers"
-	"github.com/charleshuang3/autoget/backend/internal/config"
-	"github.com/charleshuang3/autoget/backend/internal/db"
+	"github.com/autoget-project/autoget/backend/downloaders"
+	"github.com/autoget-project/autoget/backend/indexers"
+	"github.com/autoget-project/autoget/backend/internal/config"
+	"github.com/autoget-project/autoget/backend/internal/db"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
