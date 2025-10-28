@@ -11,11 +11,11 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/charleshuang3/autoget/backend/indexers"
-	"github.com/charleshuang3/autoget/backend/indexers/nyaa/prefetcheddata"
-	"github.com/charleshuang3/autoget/backend/internal/errors"
-	"github.com/charleshuang3/autoget/backend/internal/helpers"
-	"github.com/charleshuang3/autoget/backend/internal/notify"
+	"github.com/autoget-project/autoget/backend/indexers"
+	"github.com/autoget-project/autoget/backend/indexers/nyaa/prefetcheddata"
+	"github.com/autoget-project/autoget/backend/internal/errors"
+	"github.com/autoget-project/autoget/backend/internal/helpers"
+	"github.com/autoget-project/autoget/backend/internal/notify"
 	"github.com/rs/zerolog/log"
 	"gorm.io/gorm"
 )

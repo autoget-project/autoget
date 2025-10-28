@@ -42,11 +42,3 @@ jobs:
         npx eslint .
         npx vitest run
       working-directory: ./frontend
-
-    - name: Run organizer/file-organizer check, linter and tests
-      run: |
-        uv sync --locked --all-extras --dev
-        uvx ruff check .
-        uvx ruff format . --check
-        uv run pytest
-      working-directory: ./organizer/file-organizer

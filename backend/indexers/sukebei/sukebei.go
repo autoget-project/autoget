@@ -1,9 +1,9 @@
 package sukebei
 
 import (
-	"github.com/charleshuang3/autoget/backend/indexers/nyaa"
-	"github.com/charleshuang3/autoget/backend/indexers/sukebei/prefetcheddata"
-	"github.com/charleshuang3/autoget/backend/internal/notify"
+	"github.com/autoget-project/autoget/backend/indexers/nyaa"
+	"github.com/autoget-project/autoget/backend/indexers/sukebei/prefetcheddata"
+	"github.com/autoget-project/autoget/backend/internal/notify"
 	"gorm.io/gorm"
 )
 

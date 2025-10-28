@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/charleshuang3/autoget/backend/indexers"
-	"github.com/charleshuang3/autoget/backend/internal/errors"
-	"github.com/charleshuang3/autoget/backend/internal/helpers"
+	"github.com/autoget-project/autoget/backend/indexers"
+	"github.com/autoget-project/autoget/backend/internal/errors"
+	"github.com/autoget-project/autoget/backend/internal/helpers"
 )
 
 type genDownloadLinkResponse struct {

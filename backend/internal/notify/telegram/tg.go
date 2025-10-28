@@ -3,7 +3,7 @@ package telegram
 import (
 	"context"
 
-	"github.com/charleshuang3/autoget/backend/internal/notify"
+	"github.com/autoget-project/autoget/backend/internal/notify"
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 )

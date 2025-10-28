@@ -1,7 +1,7 @@
 package indexers
 
 import (
-	"github.com/charleshuang3/autoget/backend/internal/errors"
+	"github.com/autoget-project/autoget/backend/internal/errors"
 	"github.com/robfig/cron/v3"
 )
 

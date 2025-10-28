@@ -4,10 +4,10 @@ import (
 	"os"
 	"testing"
 
-	dlconfig "github.com/charleshuang3/autoget/backend/downloaders/config"
-	"github.com/charleshuang3/autoget/backend/indexers/mteam"
-	"github.com/charleshuang3/autoget/backend/indexers/nyaa"
-	"github.com/charleshuang3/autoget/backend/internal/notify/telegram"
+	dlconfig "github.com/autoget-project/autoget/backend/downloaders/config"
+	"github.com/autoget-project/autoget/backend/indexers/mteam"
+	"github.com/autoget-project/autoget/backend/indexers/nyaa"
+	"github.com/autoget-project/autoget/backend/internal/notify/telegram"
 	"github.com/stretchr/testify/assert"
 )
 

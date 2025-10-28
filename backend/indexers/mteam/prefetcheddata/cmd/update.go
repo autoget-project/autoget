@@ -7,7 +7,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/charleshuang3/autoget/backend/indexers/mteam/prefetcheddata"
+	"github.com/autoget-project/autoget/backend/indexers/mteam/prefetcheddata"
 )
 
 // This is a tools used to update categories.
