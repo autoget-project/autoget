@@ -148,7 +148,7 @@ func TestDetail(t *testing.T) {
 	}, MTeamTypeNormal, "", nil, nil)
 	require.NotNil(t, m)
 
-	res, err := m.Detail("947796", true)
+	res, err := m.Detail("913855", true)
 	require.Nil(t, err)
 	assert.NotNil(t, res)
 }
@@ -164,7 +164,7 @@ func TestDownload(t *testing.T) {
 	}, MTeamTypeNormal, dir, nil, nil)
 	require.NotNil(t, m)
 
-	res, err := m.Download("947796")
+	res, err := m.Download("913855")
 	require.Nil(t, err)
 
 	assert.NotEmpty(t, res.TorrentFilePath)

@@ -153,6 +153,11 @@ func (s *Service) indexerDownload(c *gin.Context) {
 		return
 	}
 
+	files := []string{}
+	for _, file := range detail.Files {
+		files = append(files, file.Name)
+	}
+
 	downloadStatus := &db.DownloadStatus{
 		ID:         res.TorrentHash,
 		Downloader: indexer.DownloaderName(),
@@ -161,6 +166,8 @@ func (s *Service) indexerDownload(c *gin.Context) {
 		ResTitle2:  detail.Title2,
 		ResIndexer: indexerName,
 		Category:   detail.Category,
+		FileList:   files,
+		Metadata:   detail.Metadata,
 	}
 	if err := s.db.Create(downloadStatus).Error; err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})

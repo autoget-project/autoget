@@ -32,6 +32,7 @@ func TestDetail(t *testing.T) {
 	assert.Equal(t, uint64(391747993), got.Size)
 	assert.NotEmpty(t, got.Description)
 	assert.Len(t, got.Files, 1)
+	assert.NotEmpty(t, got.Metadata)
 
 	assert.Equal(t, "[HnY] Bakugan Battle Brawlers 13 SUB - Storm of Passion (854x480 RAW DVD-Rip)(PokePoring Edition).mkv", got.Files[0].Name)
 	assert.Equal(t, uint64(391747993), got.Files[0].Size)

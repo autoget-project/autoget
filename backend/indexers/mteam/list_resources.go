@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -151,6 +152,38 @@ func (it *searchResponseItem) extractDBInfo() []indexers.VideoDB {
 	}
 
 	return res
+}
+
+var (
+	imdbIDRegex = regexp.MustCompile(`(tt\d+)`)
+)
+
+// extractMetadata for ai agent use.
+func (it *searchResponseItem) extractMetadata(category string) map[string]interface{} {
+	m := map[string]interface{}{
+		"title":       it.Name,
+		"description": it.SmallDescr,
+		"category":    category,
+	}
+
+	if it.Imdb != "" {
+		matches := imdbIDRegex.FindStringSubmatch(it.Imdb)
+		if len(matches) > 1 {
+			m["imdb_id"] = matches[1]
+		}
+	}
+
+	if it.DmmInfo.ID != "" {
+		m["dmm_id"] = it.DmmInfo.ProductNumber
+		if len(it.DmmInfo.ActressList) > 0 {
+			m["actors"] = it.DmmInfo.ActressList
+		}
+		if len(it.DmmInfo.KeywordList) > 0 {
+			m["labels"] = it.DmmInfo.KeywordList
+		}
+	}
+
+	return m
 }
 
 type searchResponse struct {

@@ -348,6 +348,12 @@ func (c *Client) Detail(id string, fileList bool) (*indexers.ResourceDetail, *er
 		})
 	}
 
+	detail.Metadata = map[string]interface{}{
+		"title":       detail.Title,
+		"description": detail.Description,
+		"category":    detail.Category,
+	}
+
 	return detail, nil
 }
 

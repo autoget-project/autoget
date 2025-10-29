@@ -107,9 +107,10 @@ type File struct {
 type ResourceDetail struct {
 	ListResourceItem
 
-	Mediainfo   string `json:"mediainfo,omitempty"`
-	Description string `json:"description,omitempty"`
-	Files       []File `json:"files,omitempty"`
+	Mediainfo   string                 `json:"mediainfo,omitempty"`
+	Description string                 `json:"description,omitempty"`
+	Files       []File                 `json:"files,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
 type DownloadResult struct {

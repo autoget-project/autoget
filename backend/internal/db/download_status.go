@@ -55,7 +55,8 @@ type DownloadStatus struct {
 	ResTitle   string
 	ResTitle2  string
 	Category   string
-	FileList   []string `gorm:"serializer:json"`
+	FileList   []string               `gorm:"serializer:json"`
+	Metadata   map[string]interface{} `gorm:"serializer:json"`
 
 	MoveState MoveState `gorm:"index:idx_downloader_state_movestate"`
 
