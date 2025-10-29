@@ -71,19 +71,6 @@ func fetchSourceList(apiKey string) (map[string]string, error) {
 	return m, nil
 }
 
-func fetchTeamList(apiKey string) (map[string]string, error) {
-	list := &listResponse{}
-	if err := fetchMTeamAPI(baseURL+"/api/torrent/teamList", apiKey, list); err != nil {
-		return nil, err
-	}
-
-	m := make(map[string]string)
-	for _, it := range list.Data {
-		m[it.ID] = it.Name
-	}
-	return m, nil
-}
-
 func fetchStandardList(apiKey string) (map[string]string, error) {
 	list := &listResponse{}
 	if err := fetchMTeamAPI(baseURL+"/api/torrent/standardList", apiKey, list); err != nil {

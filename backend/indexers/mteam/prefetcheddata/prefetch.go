@@ -15,7 +15,6 @@ type prefetched struct {
 	Countries   map[string]Country `json:"countries"`
 	Mediums     map[string]string  `json:"mediums"`
 	Standards   map[string]string  `json:"standards"`
-	Teams       map[string]string  `json:"teams"`
 	VideoCodecs map[string]string  `json:"video_codecs"`
 	AudioCodecs map[string]string  `json:"audio_codecs"`
 	Sources     map[string]string  `json:"sources"`
@@ -40,11 +39,6 @@ func FetchAll(apiKey string, excludeGayContent bool) (*prefetched, error) {
 	}
 
 	p.Standards, err = fetchStandardList(apiKey)
-	if err != nil {
-		return nil, err
-	}
-
-	p.Teams, err = fetchTeamList(apiKey)
 	if err != nil {
 		return nil, err
 	}
