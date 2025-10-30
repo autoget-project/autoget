@@ -12,9 +12,10 @@ import (
 )
 
 type Config struct {
-	Port     string `yaml:"port"`
-	ProxyURL string `yaml:"proxy_url"`
-	PgDSN    string `yaml:"pg_dsn"`
+	Port             string `yaml:"port"`
+	ProxyURL         string `yaml:"proxy_url"`
+	PgDSN            string `yaml:"pg_dsn"`
+	OrganizerService string `yaml:"organizer_service"`
 
 	Telegram *telegram.Config `yaml:"telegram"`
 
@@ -51,6 +52,10 @@ func ReadConfig(path string) (*Config, error) {
 func (c *Config) validate() error {
 	if c.PgDSN == "" {
 		return fmt.Errorf("postgres DSN is required")
+	}
+
+	if c.OrganizerService == "" {
+		return fmt.Errorf("organizer_service is required")
 	}
 
 	if c.Telegram == nil {

@@ -18,6 +18,7 @@ func TestReadConfig(t *testing.T) {
 port: "8080"
 proxy_url: "http://localhost:8888"
 pg_dsn: dsn
+organizer_service: "http://organizer:8080"
 telegram:
   token: "telegram_token"
   chat_id: "telegram_chat_id"
@@ -53,6 +54,7 @@ downloaders:
 
 		assert.Equal(t, "8080", cfg.Port)
 		assert.Equal(t, "http://localhost:8888", cfg.ProxyURL)
+		assert.Equal(t, "http://organizer:8080", cfg.OrganizerService)
 		assert.NotNil(t, cfg.Telegram)
 		assert.Equal(t, "telegram_token", cfg.Telegram.Token)
 		assert.Equal(t, "telegram_chat_id", cfg.Telegram.ChatID)
@@ -79,6 +81,7 @@ downloaders:
 port: "8081"
 proxy_url: "http://localhost:9999"
 pg_dsn: dsn
+organizer_service: "http://organizer:8081"
 telegram:
   token: "telegram_token_2"
   chat_id: "telegram_chat_id_2"
@@ -110,6 +113,7 @@ downloaders:
 
 		assert.Equal(t, "8081", cfg.Port)
 		assert.Equal(t, "http://localhost:9999", cfg.ProxyURL)
+		assert.Equal(t, "http://organizer:8081", cfg.OrganizerService)
 		assert.NotNil(t, cfg.Telegram)
 		assert.Equal(t, "telegram_token_2", cfg.Telegram.Token)
 		assert.Equal(t, "telegram_chat_id_2", cfg.Telegram.ChatID)
@@ -137,7 +141,8 @@ func TestConfig_validate(t *testing.T) {
 		{
 			name: "Valid config",
 			config: &Config{
-				PgDSN: "dsn",
+				PgDSN:            "dsn",
+				OrganizerService: "http://organizer.svc",
 				Telegram: &telegram.Config{
 					Token:  "test_token",
 					ChatID: "test_chat_id",
@@ -166,9 +171,21 @@ func TestConfig_validate(t *testing.T) {
 			wantErr: "",
 		},
 		{
-			name: "Missing Telegram config",
+			name: "Missing organizer_service",
 			config: &Config{
 				PgDSN: "dsn",
+				Telegram: &telegram.Config{
+					Token:  "test_token",
+					ChatID: "test_chat_id",
+				},
+			},
+			wantErr: "organizer_service is required",
+		},
+		{
+			name: "Missing Telegram config",
+			config: &Config{
+				PgDSN:            "dsn",
+				OrganizerService: "http://organizer.svc",
 				MTeam: &mteam.Config{
 					APIKey:     "test_key",
 					Downloader: "test_downloader",
@@ -188,7 +205,8 @@ func TestConfig_validate(t *testing.T) {
 		{
 			name: "Telegram missing token",
 			config: &Config{
-				PgDSN: "dsn",
+				PgDSN:            "dsn",
+				OrganizerService: "http://organizer.svc",
 				Telegram: &telegram.Config{
 					ChatID: "test_chat_id",
 				},
@@ -211,7 +229,8 @@ func TestConfig_validate(t *testing.T) {
 		{
 			name: "Telegram missing chat ID",
 			config: &Config{
-				PgDSN: "dsn",
+				PgDSN:            "dsn",
+				OrganizerService: "http://organizer.svc",
 				Telegram: &telegram.Config{
 					Token: "test_token",
 				},
@@ -234,7 +253,8 @@ func TestConfig_validate(t *testing.T) {
 		{
 			name: "MTeam missing API key",
 			config: &Config{
-				PgDSN: "dsn",
+				PgDSN:            "dsn",
+				OrganizerService: "http://organizer.svc",
 				Telegram: &telegram.Config{
 					Token:  "test_token",
 					ChatID: "test_chat_id",
@@ -257,7 +277,8 @@ func TestConfig_validate(t *testing.T) {
 		{
 			name: "MTeam missing downloader",
 			config: &Config{
-				PgDSN: "dsn",
+				PgDSN:            "dsn",
+				OrganizerService: "http://organizer.svc",
 				Telegram: &telegram.Config{
 					Token:  "test_token",
 					ChatID: "test_chat_id",
@@ -280,7 +301,8 @@ func TestConfig_validate(t *testing.T) {
 		{
 			name: "MTeam unknown downloader",
 			config: &Config{
-				PgDSN: "dsn",
+				PgDSN:            "dsn",
+				OrganizerService: "http://organizer.svc",
 				Telegram: &telegram.Config{
 					Token:  "test_token",
 					ChatID: "test_chat_id",
@@ -304,7 +326,8 @@ func TestConfig_validate(t *testing.T) {
 		{
 			name: "Nyaa missing downloader",
 			config: &Config{
-				PgDSN: "dsn",
+				PgDSN:            "dsn",
+				OrganizerService: "http://organizer.svc",
 				Telegram: &telegram.Config{
 					Token:  "test_token",
 					ChatID: "test_chat_id",
@@ -325,7 +348,8 @@ func TestConfig_validate(t *testing.T) {
 		{
 			name: "Nyaa unknown downloader",
 			config: &Config{
-				PgDSN: "dsn",
+				PgDSN:            "dsn",
+				OrganizerService: "http://organizer.svc",
 				Telegram: &telegram.Config{
 					Token:  "test_token",
 					ChatID: "test_chat_id",
@@ -348,7 +372,8 @@ func TestConfig_validate(t *testing.T) {
 		{
 			name: "Sukebei missing downloader",
 			config: &Config{
-				PgDSN: "dsn",
+				PgDSN:            "dsn",
+				OrganizerService: "http://organizer.svc",
 				Telegram: &telegram.Config{
 					Token:  "test_token",
 					ChatID: "test_chat_id",
@@ -369,7 +394,8 @@ func TestConfig_validate(t *testing.T) {
 		{
 			name: "Sukebei unknown downloader",
 			config: &Config{
-				PgDSN: "dsn",
+				PgDSN:            "dsn",
+				OrganizerService: "http://organizer.svc",
 				Telegram: &telegram.Config{
 					Token:  "test_token",
 					ChatID: "test_chat_id",
@@ -392,7 +418,8 @@ func TestConfig_validate(t *testing.T) {
 		{
 			name: "Invalid downloader config (missing transmission config)",
 			config: &Config{
-				PgDSN: "dsn",
+				PgDSN:            "dsn",
+				OrganizerService: "http://organizer.svc",
 				Telegram: &telegram.Config{
 					Token:  "test_token",
 					ChatID: "test_chat_id",
@@ -406,7 +433,8 @@ func TestConfig_validate(t *testing.T) {
 		{
 			name: "Invalid downloader config (invalid transmission URL)",
 			config: &Config{
-				PgDSN: "dsn",
+				PgDSN:            "dsn",
+				OrganizerService: "http://organizer.svc",
 				Telegram: &telegram.Config{
 					Token:  "test_token",
 					ChatID: "test_chat_id",
