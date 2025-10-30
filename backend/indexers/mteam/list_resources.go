@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/autoget-project/autoget/backend/indexers"
+	"github.com/autoget-project/autoget/backend/indexers/mteam/prefetcheddata"
 	"github.com/autoget-project/autoget/backend/internal/errors"
 )
 
@@ -159,11 +160,12 @@ var (
 )
 
 // extractMetadata for ai agent use.
-func (it *searchResponseItem) extractMetadata(category string) map[string]interface{} {
+func (it *searchResponseItem) extractMetadata(category prefetcheddata.CategoryInfo) map[string]interface{} {
 	m := map[string]interface{}{
-		"title":       it.Name,
-		"description": it.SmallDescr,
-		"category":    category,
+		"title":              it.Name,
+		"description":        it.SmallDescr,
+		"category":           category.Name,
+		"organizer_category": category.OrganizerCategory,
 	}
 
 	if it.Imdb != "" {

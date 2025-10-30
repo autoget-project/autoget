@@ -67,7 +67,7 @@ func (m *MTeam) Detail(id string, fileList bool) (*indexers.ResourceDetail, *err
 		images = append(images, imageUseProxy(img))
 	}
 
-	cat := m.prefetched.Categories.Infos[resp.Data.Category].Name
+	cat := m.prefetched.Categories.Infos[resp.Data.Category]
 
 	res := &indexers.ResourceDetail{
 		ListResourceItem: indexers.ListResourceItem{
@@ -75,7 +75,7 @@ func (m *MTeam) Detail(id string, fileList bool) (*indexers.ResourceDetail, *err
 			Title:       resp.Data.Name,
 			Title2:      resp.Data.SmallDescr,
 			CreatedDate: time,
-			Category:    cat,
+			Category:    cat.Name,
 			Size:        size,
 			Resolution:  m.prefetched.Standards[resp.Data.Standard],
 			Seeders:     uint32(seeders),

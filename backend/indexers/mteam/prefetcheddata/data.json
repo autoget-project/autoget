@@ -326,6 +326,9 @@
           "420",
           "421",
           "439"
+        ],
+        "organizer_category": [
+          "movie"
         ]
       },
       "105": {
@@ -336,6 +339,9 @@
           "402",
           "438",
           "435"
+        ],
+        "organizer_category": [
+          "tv_series"
         ]
       },
       "110": {
@@ -344,6 +350,10 @@
         "categories": [
           "434",
           "406"
+        ],
+        "organizer_category": [
+          "music",
+          "music_video"
         ]
       },
       "115": {
@@ -354,6 +364,10 @@
           "424",
           "437",
           "431"
+        ],
+        "organizer_category": [
+          "bango_porn",
+          "porn"
         ]
       },
       "120": {
@@ -365,6 +379,10 @@
           "426",
           "432",
           "436"
+        ],
+        "organizer_category": [
+          "bango_porn",
+          "porn"
         ]
       },
       "401": {
@@ -372,6 +390,9 @@
         "mode": "normal",
         "categories": [
           "401"
+        ],
+        "organizer_category": [
+          "movie"
         ]
       },
       "402": {
@@ -379,6 +400,9 @@
         "mode": "normal",
         "categories": [
           "402"
+        ],
+        "organizer_category": [
+          "tv_series"
         ]
       },
       "403": {
@@ -386,6 +410,9 @@
         "mode": "normal",
         "categories": [
           "403"
+        ],
+        "organizer_category": [
+          "tv_series"
         ]
       },
       "404": {
@@ -393,6 +420,9 @@
         "mode": "normal",
         "categories": [
           "404"
+        ],
+        "organizer_category": [
+          "tv_series"
         ]
       },
       "405": {
@@ -400,6 +430,10 @@
         "mode": "normal",
         "categories": [
           "405"
+        ],
+        "organizer_category": [
+          "tv_series",
+          "movie"
         ]
       },
       "406": {
@@ -407,6 +441,9 @@
         "mode": "normal",
         "categories": [
           "406"
+        ],
+        "organizer_category": [
+          "music_video"
         ]
       },
       "407": {
@@ -414,20 +451,26 @@
         "mode": "normal",
         "categories": [
           "407"
-        ]
+        ],
+        "organizer_category": []
       },
       "409": {
         "name": "Misc(其他)",
         "mode": "normal",
         "categories": [
           "409"
-        ]
+        ],
+        "organizer_category": []
       },
       "410": {
         "name": "AV(有码)/HD Censored",
         "mode": "adult",
         "categories": [
           "410"
+        ],
+        "organizer_category": [
+          "bango_porn",
+          "porn"
         ]
       },
       "411": {
@@ -435,13 +478,18 @@
         "mode": "adult",
         "categories": [
           "411"
-        ]
+        ],
+        "organizer_category": []
       },
       "412": {
         "name": "H-动漫",
         "mode": "adult",
         "categories": [
           "412"
+        ],
+        "organizer_category": [
+          "tv_series",
+          "movie"
         ]
       },
       "413": {
@@ -449,6 +497,9 @@
         "mode": "adult",
         "categories": [
           "413"
+        ],
+        "organizer_category": [
+          "book"
         ]
       },
       "419": {
@@ -456,6 +507,9 @@
         "mode": "normal",
         "categories": [
           "419"
+        ],
+        "organizer_category": [
+          "movie"
         ]
       },
       "420": {
@@ -463,6 +517,9 @@
         "mode": "normal",
         "categories": [
           "420"
+        ],
+        "organizer_category": [
+          "movie"
         ]
       },
       "421": {
@@ -470,6 +527,9 @@
         "mode": "normal",
         "categories": [
           "421"
+        ],
+        "organizer_category": [
+          "movie"
         ]
       },
       "422": {
@@ -477,20 +537,26 @@
         "mode": "normal",
         "categories": [
           "422"
-        ]
+        ],
+        "organizer_category": []
       },
       "423": {
         "name": "PC游戏",
         "mode": "normal",
         "categories": [
           "423"
-        ]
+        ],
+        "organizer_category": []
       },
       "424": {
         "name": "AV(有码)/SD Censored",
         "mode": "adult",
         "categories": [
           "424"
+        ],
+        "organizer_category": [
+          "bango_porn",
+          "porn"
         ]
       },
       "425": {
@@ -498,6 +564,9 @@
         "mode": "adult",
         "categories": [
           "425"
+        ],
+        "organizer_category": [
+          "porn"
         ]
       },
       "426": {
@@ -505,6 +574,10 @@
         "mode": "adult",
         "categories": [
           "426"
+        ],
+        "organizer_category": [
+          "bango_porn",
+          "porn"
         ]
       },
       "427": {
@@ -512,6 +585,9 @@
         "mode": "normal",
         "categories": [
           "427"
+        ],
+        "organizer_category": [
+          "book"
         ]
       },
       "429": {
@@ -519,6 +595,10 @@
         "mode": "adult",
         "categories": [
           "429"
+        ],
+        "organizer_category": [
+          "bango_porn",
+          "porn"
         ]
       },
       "430": {
@@ -526,6 +606,10 @@
         "mode": "adult",
         "categories": [
           "430"
+        ],
+        "organizer_category": [
+          "bango_porn",
+          "porn"
         ]
       },
       "431": {
@@ -533,6 +617,10 @@
         "mode": "adult",
         "categories": [
           "431"
+        ],
+        "organizer_category": [
+          "bango_porn",
+          "porn"
         ]
       },
       "432": {
@@ -540,6 +628,10 @@
         "mode": "adult",
         "categories": [
           "432"
+        ],
+        "organizer_category": [
+          "bango_porn",
+          "porn"
         ]
       },
       "433": {
@@ -547,6 +639,9 @@
         "mode": "adult",
         "categories": [
           "433"
+        ],
+        "organizer_category": [
+          "photobook"
         ]
       },
       "434": {
@@ -554,6 +649,9 @@
         "mode": "normal",
         "categories": [
           "434"
+        ],
+        "organizer_category": [
+          "music"
         ]
       },
       "435": {
@@ -561,6 +659,9 @@
         "mode": "normal",
         "categories": [
           "435"
+        ],
+        "organizer_category": [
+          "tv_series"
         ]
       },
       "436": {
@@ -568,6 +669,10 @@
         "mode": "adult",
         "categories": [
           "436"
+        ],
+        "organizer_category": [
+          "bango_porn",
+          "porn"
         ]
       },
       "437": {
@@ -575,6 +680,10 @@
         "mode": "adult",
         "categories": [
           "437"
+        ],
+        "organizer_category": [
+          "bango_porn",
+          "porn"
         ]
       },
       "438": {
@@ -582,6 +691,9 @@
         "mode": "normal",
         "categories": [
           "438"
+        ],
+        "organizer_category": [
+          "tv_series"
         ]
       },
       "439": {
@@ -589,6 +701,9 @@
         "mode": "normal",
         "categories": [
           "439"
+        ],
+        "organizer_category": [
+          "movie"
         ]
       },
       "442": {
@@ -596,6 +711,9 @@
         "mode": "normal",
         "categories": [
           "442"
+        ],
+        "organizer_category": [
+          "audio_book"
         ]
       },
       "444": {
@@ -603,6 +721,9 @@
         "mode": "normal",
         "categories": [
           "404"
+        ],
+        "organizer_category": [
+          "tv_series"
         ]
       },
       "445": {
@@ -611,6 +732,10 @@
         "categories": [
           "425",
           "433"
+        ],
+        "organizer_category": [
+          "photobook",
+          "porn"
         ]
       },
       "446": {
@@ -620,7 +745,8 @@
           "411",
           "412",
           "413"
-        ]
+        ],
+        "organizer_category": []
       },
       "447": {
         "name": "遊戲",
@@ -628,20 +754,26 @@
         "categories": [
           "423",
           "448"
-        ]
+        ],
+        "organizer_category": []
       },
       "448": {
         "name": "TV遊戲",
         "mode": "normal",
         "categories": [
           "448"
-        ]
+        ],
+        "organizer_category": []
       },
       "449": {
         "name": "動漫",
         "mode": "normal",
         "categories": [
           "405"
+        ],
+        "organizer_category": [
+          "tv_series",
+          "movie"
         ]
       },
       "450": {
@@ -654,24 +786,28 @@
           "442",
           "451",
           "409"
-        ]
+        ],
+        "organizer_category": []
       },
       "451": {
         "name": "教育影片",
         "mode": "normal",
         "categories": [
           "451"
-        ]
+        ],
+        "organizer_category": []
       },
       "adult": {
         "name": "adult",
         "mode": "adult",
-        "categories": []
+        "categories": [],
+        "organizer_category": []
       },
       "normal": {
         "name": "normal",
         "mode": "normal",
-        "categories": []
+        "categories": [],
+        "organizer_category": []
       }
     }
   },

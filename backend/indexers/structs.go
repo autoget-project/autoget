@@ -77,6 +77,21 @@ const (
 	ResolutionSD    = "SD" // below 720
 )
 
+type OrganizerCategory string
+
+const (
+	OrganizerCategoryUnknown    OrganizerCategory = "unknown"
+	OrganizerCategoryMovie      OrganizerCategory = "movie"
+	OrganizerCategoryTVSeries   OrganizerCategory = "tv_series"
+	OrganizerCategoryPhotobook  OrganizerCategory = "photobook"
+	OrganizerCategoryPorn       OrganizerCategory = "porn"
+	OrganizerCategoryBangoPorn  OrganizerCategory = "bango_porn" // Japanese and Taiwan Porn use bango (番号) system for naming
+	OrganizerCategoryAudioBook  OrganizerCategory = "audio_book"
+	OrganizerCategoryBook       OrganizerCategory = "book"
+	OrganizerCategoryMusic      OrganizerCategory = "music"
+	OrganizerCategoryMusicVideo OrganizerCategory = "music_video"
+)
+
 type VideoDB struct {
 	DB     string `json:"db"`
 	Link   string `json:"link"`

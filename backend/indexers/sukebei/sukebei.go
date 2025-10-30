@@ -22,6 +22,7 @@ func NewClient(config *nyaa.Config, torrentsDir string, db *gorm.DB, notify noti
 	c.Client.DefaultBaseURL = defaultBaseURL
 	c.Client.CategoriesMap = prefetcheddata.Categories
 	c.Client.CategoriesList = prefetcheddata.CategoriesList
+	c.Client.ToOrganizerCategoryMap = prefetcheddata.ToOrganizerCategory
 
 	return c
 }

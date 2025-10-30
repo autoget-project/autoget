@@ -60,9 +60,10 @@ type Client struct {
 
 	httpClient *http.Client
 
-	DefaultBaseURL string
-	CategoriesMap  map[string]indexers.Category
-	CategoriesList []indexers.Category
+	DefaultBaseURL         string
+	CategoriesMap          map[string]indexers.Category
+	CategoriesList         []indexers.Category
+	ToOrganizerCategoryMap map[string][]indexers.OrganizerCategory
 }
 
 func (c *Client) getBaseURL() string {
@@ -74,15 +75,16 @@ func (c *Client) getBaseURL() string {
 
 func NewClient(config *Config, torrentsDir string, db *gorm.DB, notify notify.INotifier) *Client {
 	c := &Client{
-		IndexerBasicInfo: *indexers.NewIndexerBasicInfo("nyaa", config.Downloader, false),
-		config:           config,
-		torrentsDir:      torrentsDir,
-		db:               db,
-		notify:           notify,
-		httpClient:       http.DefaultClient,
-		DefaultBaseURL:   defaultBaseURL,
-		CategoriesMap:    prefetcheddata.Categories,
-		CategoriesList:   prefetcheddata.CategoriesList,
+		IndexerBasicInfo:       *indexers.NewIndexerBasicInfo("nyaa", config.Downloader, false),
+		config:                 config,
+		torrentsDir:            torrentsDir,
+		db:                     db,
+		notify:                 notify,
+		httpClient:             http.DefaultClient,
+		DefaultBaseURL:         defaultBaseURL,
+		CategoriesMap:          prefetcheddata.Categories,
+		CategoriesList:         prefetcheddata.CategoriesList,
+		ToOrganizerCategoryMap: prefetcheddata.ToOrganizerCategory,
 	}
 
 	if config.UseProxy {
@@ -287,6 +289,8 @@ func (c *Client) Detail(id string, fileList bool) (*indexers.ResourceDetail, *er
 		keys = append(keys, key)
 	})
 
+	var category indexers.Category
+
 	firstPanelBody.Find(".col-md-5").Each(func(i int, s *goquery.Selection) {
 		if i >= len(keys) {
 			return
@@ -298,7 +302,8 @@ func (c *Client) Detail(id string, fileList bool) (*indexers.ResourceDetail, *er
 				links := s.Find("a")
 				href, exists := links.Last().Attr("href")
 				if exists {
-					detail.Category = c.CategoriesMap[strings.TrimPrefix(href, "/?c=")].Name
+					category = c.CategoriesMap[strings.TrimPrefix(href, "/?c=")]
+					detail.Category = category.Name
 				}
 			}
 		case "File size:":
@@ -352,6 +357,10 @@ func (c *Client) Detail(id string, fileList bool) (*indexers.ResourceDetail, *er
 		"title":       detail.Title,
 		"description": detail.Description,
 		"category":    detail.Category,
+	}
+
+	if cat, ok := c.ToOrganizerCategoryMap[category.ID]; ok {
+		detail.Metadata["organizer_category"] = cat
 	}
 
 	return detail, nil

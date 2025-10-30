@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/autoget-project/autoget/backend/indexers"
 	"github.com/rs/zerolog/log"
 )
 
@@ -72,9 +73,10 @@ type categoryWithOrder struct {
 }
 
 type CategoryInfo struct {
-	Name       string   `json:"name"`
-	Mode       string   `json:"mode"`
-	Categories []string `json:"categories"` // You can not search resources on "115" but need to includes all sub.
+	Name              string                       `json:"name"`
+	Mode              string                       `json:"mode"`
+	Categories        []string                     `json:"categories"` // You can not search resources on "115" but need to includes all sub.
+	OrganizerCategory []indexers.OrganizerCategory `json:"organizer_category"`
 }
 
 type categoryJSON struct {
@@ -150,6 +152,8 @@ func (l *listCategories) toCategoryJSON(excludeGayContent bool) *categoryJSON {
 	categoryInfo(adultRoot, categoryInfos, categoryAdult)
 	categoryInfo(normalRoot, categoryInfos, categoryNormal)
 
+	addOrganizerCategory(categoryInfos)
+
 	return &categoryJSON{
 		CategoryTree:  roots,
 		CategoryInfos: categoryInfos,
@@ -188,6 +192,69 @@ func categoryInfo(categories *categoryWithOrder, m map[string]*CategoryInfo, mod
 
 	for _, sub := range categories.SubCategories {
 		categoryInfo(sub, m, mode)
+	}
+}
+
+var toOrganizerCategory = map[string][]indexers.OrganizerCategory{
+	// Movies
+	"100": {indexers.OrganizerCategoryMovie}, // 电影
+	"401": {indexers.OrganizerCategoryMovie}, // 电影/SD
+	"419": {indexers.OrganizerCategoryMovie}, // 电影/HD
+	"420": {indexers.OrganizerCategoryMovie}, // 电影/DVDiSo
+	"421": {indexers.OrganizerCategoryMovie}, // 电影/Blu-Ray
+	"439": {indexers.OrganizerCategoryMovie}, // 电影/Remux
+
+	// TV Series & Shows
+	"105": {indexers.OrganizerCategoryTVSeries}, // 影剧/综艺
+	"403": {indexers.OrganizerCategoryTVSeries}, // 影剧/综艺/SD
+	"402": {indexers.OrganizerCategoryTVSeries}, // 影剧/综艺/HD
+	"438": {indexers.OrganizerCategoryTVSeries}, // 影剧/综艺/BD
+	"435": {indexers.OrganizerCategoryTVSeries}, // 影剧/综艺/DVDiSo
+
+	// Documentary
+	"444": {indexers.OrganizerCategoryTVSeries}, // 紀錄
+	"404": {indexers.OrganizerCategoryTVSeries}, // 纪录
+
+	// Music
+	"110": {indexers.OrganizerCategoryMusic, indexers.OrganizerCategoryMusicVideo}, // Music
+	"434": {indexers.OrganizerCategoryMusic},                                       // Music(无损)
+	"406": {indexers.OrganizerCategoryMusicVideo},                                  // 演唱
+
+	// Anime
+	"449": {indexers.OrganizerCategoryTVSeries, indexers.OrganizerCategoryMovie}, // 動漫
+	"405": {indexers.OrganizerCategoryTVSeries, indexers.OrganizerCategoryMovie}, // 动画
+
+	// Others
+	"427": {indexers.OrganizerCategoryBook},      // 電子書
+	"442": {indexers.OrganizerCategoryAudioBook}, // 有聲書
+
+	// Adult Content
+	"115": {indexers.OrganizerCategoryBangoPorn, indexers.OrganizerCategoryPorn}, // AV(有码)
+	"410": {indexers.OrganizerCategoryBangoPorn, indexers.OrganizerCategoryPorn}, // AV(有码)/HD Censored
+	"424": {indexers.OrganizerCategoryBangoPorn, indexers.OrganizerCategoryPorn}, // AV(有码)/SD Censored
+	"437": {indexers.OrganizerCategoryBangoPorn, indexers.OrganizerCategoryPorn}, // AV(有码)/DVDiSo Censored
+	"431": {indexers.OrganizerCategoryBangoPorn, indexers.OrganizerCategoryPorn}, // AV(有码)/Blu-Ray Censored
+	"120": {indexers.OrganizerCategoryBangoPorn, indexers.OrganizerCategoryPorn}, // AV(无码)
+	"429": {indexers.OrganizerCategoryBangoPorn, indexers.OrganizerCategoryPorn}, // AV(无码)/HD Uncensored
+	"430": {indexers.OrganizerCategoryBangoPorn, indexers.OrganizerCategoryPorn}, // AV(无码)/SD Uncensored
+	"426": {indexers.OrganizerCategoryBangoPorn, indexers.OrganizerCategoryPorn}, // AV(无码)/DVDiSo Uncensored
+	"432": {indexers.OrganizerCategoryBangoPorn, indexers.OrganizerCategoryPorn}, // AV(无码)/Blu-Ray Uncensored
+	"436": {indexers.OrganizerCategoryBangoPorn, indexers.OrganizerCategoryPorn}, // AV(网站)/0Day
+	"440": {indexers.OrganizerCategoryBangoPorn, indexers.OrganizerCategoryPorn}, // AV(Gay)/HD
+	"445": {indexers.OrganizerCategoryPhotobook, indexers.OrganizerCategoryPorn}, // IV
+	"425": {indexers.OrganizerCategoryPorn},                                      // IV(写真影集)
+	"433": {indexers.OrganizerCategoryPhotobook},                                 // IV(写真图集)
+	"412": {indexers.OrganizerCategoryTVSeries, indexers.OrganizerCategoryMovie}, // H-动漫
+	"413": {indexers.OrganizerCategoryBook},                                      // H-漫画
+}
+
+func addOrganizerCategory(m map[string]*CategoryInfo) {
+	for categoryID, categoryInfo := range m {
+		if organizerCategories, exists := toOrganizerCategory[categoryID]; exists {
+			categoryInfo.OrganizerCategory = organizerCategories
+		} else {
+			categoryInfo.OrganizerCategory = []indexers.OrganizerCategory{}
+		}
 	}
 }
 

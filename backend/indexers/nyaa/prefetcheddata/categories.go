@@ -43,6 +43,24 @@ var (
 		}},
 	}
 
+	ToOrganizerCategory = map[string][]indexers.OrganizerCategory{
+		"1_0": {indexers.OrganizerCategoryTVSeries, indexers.OrganizerCategoryMovie},
+		"1_1": {indexers.OrganizerCategoryTVSeries, indexers.OrganizerCategoryMovie},
+		"1_2": {indexers.OrganizerCategoryTVSeries, indexers.OrganizerCategoryMovie},
+		"1_3": {indexers.OrganizerCategoryTVSeries, indexers.OrganizerCategoryMovie},
+		"1_4": {indexers.OrganizerCategoryTVSeries, indexers.OrganizerCategoryMovie},
+		"2_0": {indexers.OrganizerCategoryMusic},
+		"2_1": {indexers.OrganizerCategoryMusic},
+		"2_2": {indexers.OrganizerCategoryMusic},
+		"3_0": {indexers.OrganizerCategoryBook},
+		"3_1": {indexers.OrganizerCategoryBook},
+		"3_2": {indexers.OrganizerCategoryBook},
+		"3_3": {indexers.OrganizerCategoryBook},
+		"5_0": {indexers.OrganizerCategoryPhotobook},
+		"5_1": {indexers.OrganizerCategoryPhotobook},
+		"5_2": {indexers.OrganizerCategoryPhotobook},
+	}
+
 	Categories = FlattenCategory(CategoryTree)
 
 	CategoriesList = slices.SortedFunc(maps.Values(Categories), func(a, b indexers.Category) int {

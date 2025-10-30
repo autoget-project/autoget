@@ -7,6 +7,7 @@ import (
 
 	_ "embed"
 
+	"github.com/autoget-project/autoget/backend/indexers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -74,13 +75,13 @@ func TestToCategoryJSON(t *testing.T) {
 			},
 		},
 		CategoryInfos: map[string]*CategoryInfo{
-			"110":    {"Music", "normal", []string{"434"}},
-			"115":    {"AV(有码)", "adult", []string{"410", "440"}},
-			"410":    {"AV(有码)/HD Censored", "adult", []string{"410"}},
-			"434":    {"Music(无损)", "normal", []string{"434"}},
-			"440":    {"AV(Gay)/HD", "adult", []string{"440"}},
-			"adult":  {"adult", "adult", []string{}},
-			"normal": {"normal", "normal", []string{}},
+			"110":    {"Music", "normal", []string{"434"}, []indexers.OrganizerCategory{indexers.OrganizerCategoryMusic, indexers.OrganizerCategoryMusicVideo}},
+			"115":    {"AV(有码)", "adult", []string{"410", "440"}, []indexers.OrganizerCategory{indexers.OrganizerCategoryBangoPorn, indexers.OrganizerCategoryPorn}},
+			"410":    {"AV(有码)/HD Censored", "adult", []string{"410"}, []indexers.OrganizerCategory{indexers.OrganizerCategoryBangoPorn, indexers.OrganizerCategoryPorn}},
+			"434":    {"Music(无损)", "normal", []string{"434"}, []indexers.OrganizerCategory{indexers.OrganizerCategoryMusic}},
+			"440":    {"AV(Gay)/HD", "adult", []string{"440"}, []indexers.OrganizerCategory{indexers.OrganizerCategoryBangoPorn, indexers.OrganizerCategoryPorn}},
+			"adult":  {"adult", "adult", []string{}, []indexers.OrganizerCategory{}},
+			"normal": {"normal", "normal", []string{}, []indexers.OrganizerCategory{}},
 		},
 	}
 	assert.Equal(t, want, got)

@@ -26,6 +26,16 @@ var (
 		}},
 	}
 
+	ToOrganizerCategory = map[string][]indexers.OrganizerCategory{
+		"1_0": {indexers.OrganizerCategoryBook, indexers.OrganizerCategoryPhotobook, indexers.OrganizerCategoryTVSeries, indexers.OrganizerCategoryMovie},
+		"1_1": {indexers.OrganizerCategoryTVSeries, indexers.OrganizerCategoryMovie},
+		"1_2": {indexers.OrganizerCategoryBook, indexers.OrganizerCategoryPhotobook},
+		"1_5": {indexers.OrganizerCategoryPhotobook},
+		"2_0": {indexers.OrganizerCategoryPhotobook, indexers.OrganizerCategoryBangoPorn, indexers.OrganizerCategoryPorn},
+		"2_1": {indexers.OrganizerCategoryPhotobook},
+		"2_2": {indexers.OrganizerCategoryBangoPorn, indexers.OrganizerCategoryPorn},
+	}
+
 	Categories = nPrefetcheddata.FlattenCategory(CategoryTree)
 
 	CategoriesList = slices.SortedFunc(maps.Values(Categories), func(a, b indexers.Category) int {
