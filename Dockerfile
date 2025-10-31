@@ -35,15 +35,12 @@ FROM alpine:latest
 # Install runtime dependencies
 RUN apk --no-cache add ca-certificates tzdata
 
+# Create necessary directories
+RUN mkdir -p /html /app /config
+
 # Add user 1000:1000 as specified
 RUN addgroup -g 1000 -S appgroup && \
     adduser -u 1000 -S appuser -G appgroup
-
-# Switch to non-root user
-USER 1000:1000
-
-# Create necessary directories
-RUN mkdir -p /html /app /config
 
 # Copy frontend build dist to /html
 COPY --from=frontend-builder /frontend/dist /html
@@ -53,6 +50,9 @@ COPY --from=backend-builder /backend/autoget /app/
 
 # Set ownership
 RUN chown -R 1000:1000 /html /app /config
+
+# Switch to non-root user
+USER 1000:1000
 
 # Set working directory
 WORKDIR /app
