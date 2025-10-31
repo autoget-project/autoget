@@ -1,10 +1,11 @@
 import { Router } from '@lit-labs/router';
 import { LitElement, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { fetchIndexers, fetchIndexerCategories } from './utils/api.ts';
+import { fetchIndexers, fetchIndexerCategories, fetchDownloaders } from './utils/api.ts';
 
 import './views/search_view';
 import './views/indexer_view';
+import './views/downloader_view';
 import './views/404_view';
 
 @customElement('app-router')
@@ -12,13 +13,21 @@ export class AppRouter extends LitElement {
   @state()
   private indexers: string[] = [];
 
+  @state()
+  private downloaders: string[] = [];
+
   async connectedCallback() {
     super.connectedCallback();
     this.fetchIndexers();
+    this.fetchDownloaders();
   }
 
   private async fetchIndexers() {
     this.indexers = await fetchIndexers();
+  }
+
+  private async fetchDownloaders() {
+    this.downloaders = await fetchDownloaders();
   }
 
   private router = new Router(this, [
@@ -65,6 +74,22 @@ export class AppRouter extends LitElement {
           .category=${category || ''}
           .page=${page ? Number(page) : 1}
         ></indexer-view>`;
+      },
+    },
+    {
+      path: '/downloaders/:id',
+      render: ({ id }) => {
+        return html`<downloader-view .downloaderId=${id || ''}></downloader-view>`;
+      },
+      enter: async ({ id }) => {
+        if (this.downloaders.length === 0) {
+          await this.fetchDownloaders();
+        }
+        if (id === undefined || !this.downloaders.includes(id)) {
+          this.router.goto('/404');
+          return false;
+        }
+        return true;
       },
     },
     { path: '*', render: () => html`<not-found-view></not-found-view>` },

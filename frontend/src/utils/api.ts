@@ -84,3 +84,16 @@ export async function fetchIndexerResources(
     return null;
   }
 }
+
+export async function fetchDownloaders(): Promise<string[]> {
+  try {
+    const response = await fetch('/api/v1/downloaders');
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to fetch downloaders:', error);
+    return []; // Set to empty array on error
+  }
+}

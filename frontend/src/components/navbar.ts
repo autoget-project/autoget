@@ -1,7 +1,7 @@
 import { LitElement, html, unsafeCSS } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
-import { fetchIndexers } from '../utils/api';
+import { fetchIndexers, fetchDownloaders } from '../utils/api';
 import globalStyles from '/src/index.css?inline';
 
 @customElement('app-navbar')
@@ -11,12 +11,16 @@ export class AppNavbar extends LitElement {
   @state()
   private indexers: string[] = [];
 
+  @state()
+  private downloaders: string[] = [];
+
   @property({ type: String })
   activePage = '';
 
   async connectedCallback() {
     super.connectedCallback();
     this.indexers = await fetchIndexers();
+    this.downloaders = await fetchDownloaders();
   }
 
   render() {
@@ -36,7 +40,15 @@ export class AppNavbar extends LitElement {
           </div>
         </div>
         <div class="navbar-end">
-          <a href="/search" class="btn btn-ghost ${this.activePage === 'search' ? 'btn-active' : ''}">Search</a>
+          <div class="flex gap-2">
+            ${this.downloaders.map((downloader) => {
+              const isActive = this.activePage === downloader;
+              return html`<a href="/downloaders/${downloader}" class="btn btn-ghost ${isActive ? 'btn-active' : ''}"
+                >${downloader}</a
+              >`;
+            })}
+            <a href="/search" class="btn btn-ghost ${this.activePage === 'search' ? 'btn-active' : ''}">Search</a>
+          </div>
         </div>
       </div>
     `;
