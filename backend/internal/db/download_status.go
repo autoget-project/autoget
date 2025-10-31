@@ -46,6 +46,7 @@ const (
 	None OrganizePlanAction = iota
 	Accept
 	ManuallyOrganized
+	Failed
 )
 
 type DownloadStatus struct {
@@ -94,6 +95,12 @@ func (s *DownloadStatus) CleanupHistory() {
 			delete(s.UploadHistories, k)
 		}
 	}
+}
+
+func GetDownloadStatusByID(db *gorm.DB, id string) (*DownloadStatus, error) {
+	s := &DownloadStatus{}
+	err := db.First(s, "id = ?", id).Error
+	return s, err
 }
 
 func GetUnfinishedDownloadStatusByDownloader(db *gorm.DB, downloader string) ([]DownloadStatus, error) {

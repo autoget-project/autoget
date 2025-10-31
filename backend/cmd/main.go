@@ -85,7 +85,7 @@ func main() {
 		indexerMap[i.Name()] = i
 	}
 
-	service := handlers.NewService(cfg, db, indexerMap, downloaderMap)
+	service := handlers.NewService(cfg, db, indexerMap, downloaderMap, oc)
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()

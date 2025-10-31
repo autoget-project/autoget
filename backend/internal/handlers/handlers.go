@@ -10,6 +10,7 @@ import (
 	"github.com/autoget-project/autoget/backend/indexers"
 	"github.com/autoget-project/autoget/backend/internal/config"
 	"github.com/autoget-project/autoget/backend/internal/db"
+	"github.com/autoget-project/autoget/backend/organizer"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -18,16 +19,18 @@ type Service struct {
 	config *config.Config
 	db     *gorm.DB
 
-	indexers    map[string]indexers.IIndexer
-	downloaders map[string]downloaders.IDownloader
+	indexers        map[string]indexers.IIndexer
+	downloaders     map[string]downloaders.IDownloader
+	organizerClient *organizer.Client
 }
 
-func NewService(config *config.Config, db *gorm.DB, indexers map[string]indexers.IIndexer, downloaders map[string]downloaders.IDownloader) *Service {
+func NewService(config *config.Config, db *gorm.DB, indexers map[string]indexers.IIndexer, downloaders map[string]downloaders.IDownloader, organizerClient *organizer.Client) *Service {
 	s := &Service{
-		config:      config,
-		db:          db,
-		indexers:    indexers,
-		downloaders: downloaders,
+		config:          config,
+		db:              db,
+		indexers:        indexers,
+		downloaders:     downloaders,
+		organizerClient: organizerClient,
 	}
 
 	return s
@@ -43,6 +46,7 @@ func (s *Service) SetupRouter(router *gin.RouterGroup) {
 
 	router.GET("/downloaders", s.listDownloaders)
 	router.GET("/downloaders/:downloader", s.getDownloaderStatuses)
+	router.POST("/download/:id/organize", s.organizeDownload)
 
 	router.GET("/image", s.image)
 }
@@ -294,4 +298,92 @@ func (s *Service) image(c *gin.Context) {
 
 	defer resp.Body.Close()
 	c.DataFromReader(resp.StatusCode, resp.ContentLength, resp.Header.Get("Content-Type"), resp.Body, nil)
+}
+
+type organizeDownloadReq struct {
+	Action string `form:"action" binding:"required"`
+}
+
+func (s *Service) organizeDownload(c *gin.Context) {
+	downloadID := c.Param("id")
+
+	// Get the download status
+	downloadStatus, err := db.GetDownloadStatusByID(s.db, downloadID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(404, gin.H{"error": "Download not found"})
+		} else {
+			c.JSON(500, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	// Parse the action parameter
+	req := &organizeDownloadReq{}
+	if err := c.ShouldBindQuery(req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	switch req.Action {
+	case "accept_plan":
+		s.handleAcceptPlan(c, downloadStatus)
+	case "manual_organized":
+		s.handleManualOrganized(c, downloadStatus)
+	default:
+		c.JSON(400, gin.H{"error": "Invalid action. Valid actions: accept_plan, manual_organized"})
+	}
+}
+
+func (s *Service) handleAcceptPlan(c *gin.Context, downloadStatus *db.DownloadStatus) {
+	if downloadStatus.OrganizePlans == nil {
+		c.JSON(400, gin.H{"error": "No organize plan available"})
+		return
+	}
+
+	// Execute the plan
+	executeReq := &organizer.ExecuteRequest{
+		Plan: downloadStatus.OrganizePlans.Plan,
+	}
+
+	success, failedResp, err := s.organizerClient.Execute(executeReq)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Update the organize plan action based on execution result
+	if success {
+		downloadStatus.OrganizePlanAction = db.Accept
+	} else {
+		downloadStatus.OrganizePlanAction = db.Failed
+	}
+
+	// Update the download status
+	if err := db.SaveDownloadStatus(s.db, downloadStatus); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	if success {
+		c.JSON(200, gin.H{"status": "organization completed successfully"})
+	} else {
+		c.JSON(200, gin.H{
+			"status": "organization partially completed",
+			"failed": failedResp,
+		})
+	}
+}
+
+func (s *Service) handleManualOrganized(c *gin.Context, downloadStatus *db.DownloadStatus) {
+	// Set the organize plan action to manually organized
+	downloadStatus.OrganizePlanAction = db.ManuallyOrganized
+
+	// Update the download status
+	if err := db.SaveDownloadStatus(s.db, downloadStatus); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"status": "marked as manually organized"})
 }

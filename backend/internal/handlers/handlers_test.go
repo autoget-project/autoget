@@ -11,6 +11,7 @@ import (
 	"github.com/autoget-project/autoget/backend/indexers"
 	"github.com/autoget-project/autoget/backend/internal/db"
 	"github.com/autoget-project/autoget/backend/internal/errors"
+	"github.com/autoget-project/autoget/backend/organizer"
 	"github.com/gin-gonic/gin"
 	"github.com/robfig/cron/v3"
 	"github.com/stretchr/testify/assert"
@@ -546,4 +547,215 @@ func TestGetDownloaderStatuses(t *testing.T) {
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
 		assert.Equal(t, "Invalid state. Valid states: downloading, seeding, stopped, planned", response["error"])
 	})
+}
+
+func TestService_organizeDownload_NotFound(t *testing.T) {
+	_, router, _, _ := testSetup(t)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/download/nonexistent/organize?action=accept_plan", nil)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.Equal(t, "Download not found", response["error"])
+}
+
+func TestService_organizeDownload_InvalidAction(t *testing.T) {
+	_, router, _, testDB := testSetup(t)
+
+	// Create a test download status
+	downloadStatus := &db.DownloadStatus{
+		ID:        "test-hash",
+		Downloader: "test-downloader",
+		State:      db.DownloadStarted,
+	}
+	err := testDB.Create(downloadStatus).Error
+	require.NoError(t, err)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/download/test-hash/organize?action=invalid_action", nil)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.Contains(t, response["error"], "Invalid action")
+}
+
+func TestService_handleManualOrganized_Success(t *testing.T) {
+	_, router, _, testDB := testSetup(t)
+
+	// Create a test download status
+	downloadStatus := &db.DownloadStatus{
+		ID:        "test-hash",
+		Downloader: "test-downloader",
+		State:      db.DownloadStarted,
+		OrganizePlanAction: db.None,
+	}
+	err := testDB.Create(downloadStatus).Error
+	require.NoError(t, err)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/download/test-hash/organize?action=manual_organized", nil)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.Equal(t, "marked as manually organized", response["status"])
+
+	// Verify the database was updated
+	var updatedStatus db.DownloadStatus
+	err = testDB.First(&updatedStatus, "id = ?", "test-hash").Error
+	require.NoError(t, err)
+	assert.Equal(t, db.ManuallyOrganized, updatedStatus.OrganizePlanAction)
+}
+
+func TestService_handleAcceptPlan_NoPlan(t *testing.T) {
+	_, router, _, testDB := testSetup(t)
+
+	// Create a test download status without a plan
+	downloadStatus := &db.DownloadStatus{
+		ID:        "test-hash",
+		Downloader: "test-downloader",
+		State:      db.DownloadStarted,
+		OrganizePlans: nil,
+	}
+	err := testDB.Create(downloadStatus).Error
+	require.NoError(t, err)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/download/test-hash/organize?action=accept_plan", nil)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.Equal(t, "No organize plan available", response["error"])
+}
+
+func TestService_handleAcceptPlan_Success(t *testing.T) {
+	serv, router, _, testDB := testSetup(t)
+
+	// Mock organizer server
+	mockOrganizerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/v1/execute", r.URL.Path)
+
+		var req organizer.ExecuteRequest
+		err := json.NewDecoder(r.Body).Decode(&req)
+		require.NoError(t, err)
+		assert.Len(t, req.Plan, 1)
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer mockOrganizerServer.Close()
+
+	// Create organizer client
+	organizerClient, err := organizer.NewClient(mockOrganizerServer.URL, nil)
+	require.NoError(t, err)
+	serv.organizerClient = organizerClient
+
+	// Create a test download status with a plan
+	testPlan := []organizer.PlanAction{
+		{File: "/path/to/file.txt", Action: organizer.ActionMove, Target: "/new/path/file.txt"},
+	}
+	downloadStatus := &db.DownloadStatus{
+		ID:        "test-hash",
+		Downloader: "test-downloader",
+		State:      db.DownloadStarted,
+		OrganizePlans: &organizer.PlanResponse{Plan: testPlan},
+		OrganizePlanAction: db.None,
+	}
+	err = testDB.Create(downloadStatus).Error
+	require.NoError(t, err)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/download/test-hash/organize?action=accept_plan", nil)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.Equal(t, "organization completed successfully", response["status"])
+
+	// Verify the database was updated
+	var updatedStatus db.DownloadStatus
+	err = testDB.First(&updatedStatus, "id = ?", "test-hash").Error
+	require.NoError(t, err)
+	assert.Equal(t, db.Accept, updatedStatus.OrganizePlanAction)
+}
+
+func TestService_handleAcceptPlan_PartialFailure(t *testing.T) {
+	serv, router, _, testDB := testSetup(t)
+
+	// Mock organizer server that returns partial failure
+	expectedFailures := []organizer.PlanFailed{
+		{
+			PlanAction: organizer.PlanAction{File: "file.txt", Action: organizer.ActionMove, Target: "new/file.txt"},
+			Reason:     "permission denied",
+		},
+	}
+
+	mockOrganizerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/v1/execute", r.URL.Path)
+
+		var req organizer.ExecuteRequest
+		err := json.NewDecoder(r.Body).Decode(&req)
+		require.NoError(t, err)
+
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(organizer.ExecuteResponse{FailedMoves: expectedFailures})
+	}))
+	defer mockOrganizerServer.Close()
+
+	// Create organizer client
+	organizerClient, err := organizer.NewClient(mockOrganizerServer.URL, nil)
+	require.NoError(t, err)
+	serv.organizerClient = organizerClient
+
+	// Create a test download status with a plan
+	testPlan := []organizer.PlanAction{
+		{File: "/path/to/file.txt", Action: organizer.ActionMove, Target: "/new/path/file.txt"},
+	}
+	downloadStatus := &db.DownloadStatus{
+		ID:        "test-hash",
+		Downloader: "test-downloader",
+		State:      db.DownloadStarted,
+		OrganizePlans: &organizer.PlanResponse{Plan: testPlan},
+		OrganizePlanAction: db.None,
+	}
+	err = testDB.Create(downloadStatus).Error
+	require.NoError(t, err)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/download/test-hash/organize?action=accept_plan", nil)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.Equal(t, "organization partially completed", response["status"])
+	assert.NotNil(t, response["failed"])
+
+	// Verify the database was updated with Failed status
+	var updatedStatus db.DownloadStatus
+	err = testDB.First(&updatedStatus, "id = ?", "test-hash").Error
+	require.NoError(t, err)
+	assert.Equal(t, db.Failed, updatedStatus.OrganizePlanAction)
 }

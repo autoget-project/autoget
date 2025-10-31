@@ -131,6 +131,15 @@ GET /downloaders
 GET /downloaders/{downloader}?state={state}
 ```
 
+#### Organize Download
+```http
+POST /download/{download_id}/organize?action={action}
+```
+
+Actions:
+- `accept_plan` - Execute the organization plan using the organizer service
+- `manual_organized` - Mark the download as manually organized
+
 ### Utility Endpoints
 
 #### Image Proxy
