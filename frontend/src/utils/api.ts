@@ -105,7 +105,6 @@ export interface DownloadItem {
   Downloader: string;
   DownloadProgress: number;
   State: number;
-  UploadHistories: any[] | null;
   ResIndexer: string;
   ResTitle: string;
   ResTitle2: string;

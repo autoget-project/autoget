@@ -43,7 +43,7 @@ export class DownloaderView extends LitElement {
     await this.loadDownloadItems();
   }
 
-  protected async updated(changedProperties: Map<string, any>) {
+  protected async updated(changedProperties: Map<string, unknown>) {
     if (changedProperties.has('activeTab') || changedProperties.has('downloaderId')) {
       await this.loadDownloadItems();
     }
