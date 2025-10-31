@@ -102,7 +102,7 @@ func GetUnfinishedDownloadStatusByDownloader(db *gorm.DB, downloader string) ([]
 
 func GetDownloadStatusByDownloaderAndState(db *gorm.DB, downloader string, state DownloadState) ([]DownloadStatus, error) {
 	var ss []DownloadStatus
-	err := db.Where("downloader = ?", downloader).Where("state == ?", state).Find(&ss).Error
+	err := db.Where("downloader = ?", downloader).Where("state = ?", state).Find(&ss).Error
 	return ss, err
 }
 
