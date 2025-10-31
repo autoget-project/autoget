@@ -42,6 +42,7 @@ func (s *Service) SetupRouter(router *gin.RouterGroup) {
 	router.GET("/indexers/:indexer/registerSearch", s.indexerRegisterSearch)
 
 	router.GET("/downloaders", s.listDownloaders)
+	router.GET("/downloaders/:downloader", s.getDownloaderStatuses)
 
 	router.GET("/image", s.image)
 }
@@ -218,6 +219,50 @@ func (s *Service) listDownloaders(c *gin.Context) {
 	}
 	slices.Sort(resp)
 	c.JSON(200, resp)
+}
+
+func (s *Service) getDownloaderStatuses(c *gin.Context) {
+	downloaderName := c.Param("downloader")
+
+	// Check if downloader exists
+	_, ok := s.downloaders[downloaderName]
+	if !ok {
+		c.JSON(404, gin.H{"error": "Downloader not found"})
+		return
+	}
+
+	state := c.Query("state")
+	if state == "" {
+		c.JSON(400, gin.H{"error": "State parameter is required. Valid states: downloading, seeding, stopped, planned"})
+		return
+	}
+
+	var statuses []db.DownloadStatus
+	var err error
+
+	switch state {
+	case "downloading":
+		statuses, err = db.GetUnfinishedDownloadStatusByDownloader(s.db, downloaderName)
+	case "seeding":
+		// For seeding, we want downloads that are in seeding state
+		statuses, err = db.GetDownloadStatusByDownloaderAndState(s.db, downloaderName, db.DownloadSeeding)
+	case "stopped":
+		// For stopped, we want downloads that are stopped
+		statuses, err = db.GetDownloadStatusByDownloaderAndState(s.db, downloaderName, db.DownloadStopped)
+	case "planned":
+		// For planned, we want downloads that are moved and have been planned for organization
+		statuses, err = db.GetMovedAndOrganizeStateDownloadStatusByDownloader(s.db, downloaderName, db.Planed)
+	default:
+		c.JSON(400, gin.H{"error": "Invalid state. Valid states: downloading, seeding, stopped, planned"})
+		return
+	}
+
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, statuses)
 }
 
 func (s *Service) image(c *gin.Context) {

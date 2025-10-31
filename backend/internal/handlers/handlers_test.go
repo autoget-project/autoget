@@ -487,3 +487,63 @@ func TestListDownloaders(t *testing.T) {
 	assert.Len(t, downloaders, 1)
 	assert.Contains(t, downloaders, "mock")
 }
+
+func TestGetDownloaderStatuses(t *testing.T) {
+	_, router, _, _ := testSetup(t)
+
+	t.Run("non-existent downloader", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/downloaders/nonexistent", nil)
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("valid downloader without state filter should return 400", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/downloaders/mock", nil)
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		var response map[string]string
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+		assert.Equal(t, "State parameter is required. Valid states: downloading, seeding, stopped, planned", response["error"])
+	})
+
+	t.Run("valid downloader with state filter", func(t *testing.T) {
+		testCases := []struct {
+			state string
+		}{
+			{"downloading"},
+			{"seeding"},
+			{"stopped"},
+			{"planned"},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.state, func(t *testing.T) {
+				w := httptest.NewRecorder()
+				req := httptest.NewRequest("GET", "/downloaders/mock?state="+tc.state, nil)
+				router.ServeHTTP(w, req)
+
+				assert.Equal(t, http.StatusOK, w.Code)
+
+				var statuses []db.DownloadStatus
+				require.NoError(t, json.Unmarshal(w.Body.Bytes(), &statuses))
+			})
+		}
+	})
+
+	t.Run("invalid state filter", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/downloaders/mock?state=invalid", nil)
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		var response map[string]string
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+		assert.Equal(t, "Invalid state. Valid states: downloading, seeding, stopped, planned", response["error"])
+	})
+}
