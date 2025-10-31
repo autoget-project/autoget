@@ -5,6 +5,7 @@ import { DateTime } from 'luxon';
 import { fetchIndexerResources, type Resource, type ResourcesResponse } from '../utils/api';
 import { formatBytes, formatCreatedDate } from '../utils/format';
 import globalStyles from '/src/index.css?inline';
+import './download_button.js';
 
 @customElement('resource-list')
 export class ResourceList extends LitElement {
@@ -99,18 +100,6 @@ export class ResourceList extends LitElement {
     }
   }
 
-  private async handleDownloadClick(indexerId: string, resourceId: string) {
-    const url = `/api/v1/indexers/${indexerId}/resources/${resourceId}/download`;
-    try {
-      const response = await fetch(url, { method: 'GET' });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-    } catch (error) {
-      console.error('Error initiating download:', error);
-    }
-  }
-
   private renderResourceCard(resource: Resource): TemplateResult {
     return html`
       <div class="image-card rounded-lg overflow-hidden shadow-lg border border-gray-700 bg-gray-100 mb-2">
@@ -123,15 +112,15 @@ export class ResourceList extends LitElement {
             />`
           : ''}
         <div class="p-2">
-          <h3 class="text font-medium line-clamp-4 text-balance break-all border-b-1 border-b-gray-400">
+          <h3 class="text font-medium line-clamp-4 text-balance break-all border-b border-b-gray-400">
             ${resource.title || 'Untitled Resource'}
           </h3>
           ${resource.title2
-            ? html`<p class="text font-normal line-clamp-4 text-balance break-all border-b-1 border-b-gray-400">
+            ? html`<p class="text font-normal line-clamp-4 text-balance break-all border-b border-b-gray-400">
                 ${resource.title2}
               </p>`
             : ''}
-          <div class="flex flex-wrap gap-1 mt-1 mb-1 pb-1 border-b-1 border-b-gray-400">
+          <div class="flex flex-wrap gap-1 mt-1 mb-1 pb-1 border-b border-b-gray-400">
             <span class="badge badge-outline badge-primary">${resource.category}</span>
             <span class="badge badge-outline badge-secondary">${formatBytes(resource.size)}</span>
             ${resource.resolution
@@ -153,16 +142,14 @@ export class ResourceList extends LitElement {
             </span>
           </div>
           ${resource.labels && resource.labels.length > 0
-            ? html` <div class="flex flex-wrap gap-1 mt-1 mb-1 pb-1 border-b-1 border-b-gray-400">
+            ? html` <div class="flex flex-wrap gap-1 mt-1 mb-1 pb-1 border-b border-b-gray-400">
                 ${resource.labels.map(
                   (label: string) => html` <span class="badge badge-outline badge-neutral">${label}</span> `,
                 )}
               </div>`
             : ''}
           <div class="flex flex-row basis-full justify-end">
-            <button class="btn btn-xs btn-info" @click=${() => this.handleDownloadClick(this.indexerId, resource.id)}>
-              Download
-            </button>
+            <download-button indexerId="${this.indexerId}" resourceId="${resource.id}"></download-button>
           </div>
         </div>
       </div>
@@ -182,7 +169,7 @@ export class ResourceList extends LitElement {
 
     return html`
       <div class="columns-2 sm:columns-2 md:columns-3 lg:columns-4 xl:columns-5 gap-2">
-        ${columns.map((colItems) => html` <div class="flex flex-col flex-grow gap-2">${colItems}</div> `)}
+        ${columns.map((colItems) => html` <div class="flex flex-col grow gap-2">${colItems}</div> `)}
       </div>
     `;
   }
