@@ -354,9 +354,9 @@ func (s *Service) handleAcceptPlan(c *gin.Context, downloadStatus *db.DownloadSt
 
 	// Update the organize plan action based on execution result
 	if success {
-		downloadStatus.OrganizePlanAction = db.Accept
+		downloadStatus.OrganizeState = db.Organized
 	} else {
-		downloadStatus.OrganizePlanAction = db.Failed
+		downloadStatus.OrganizeState = db.ExecutePlanFailed
 	}
 
 	// Update the download status
@@ -377,7 +377,7 @@ func (s *Service) handleAcceptPlan(c *gin.Context, downloadStatus *db.DownloadSt
 
 func (s *Service) handleManualOrganized(c *gin.Context, downloadStatus *db.DownloadStatus) {
 	// Set the organize plan action to manually organized
-	downloadStatus.OrganizePlanAction = db.ManuallyOrganized
+	downloadStatus.OrganizeState = db.Organized
 
 	// Update the download status
 	if err := db.SaveDownloadStatus(s.db, downloadStatus); err != nil {

@@ -118,7 +118,7 @@ func (c *Client) updateDownloadProgress(torrentsByHash map[string]*transmissionr
 			continue
 		}
 
-		s.DownloadProgress = int32(*t.PercentDone * 1000)
+		s.DownloadProgress = uint16(*t.PercentDone * 1000)
 		if *t.Status == transmissionrpc.TorrentStatusSeed {
 			s.State = db.DownloadSeeding
 		}

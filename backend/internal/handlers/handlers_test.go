@@ -593,10 +593,10 @@ func TestService_handleManualOrganized_Success(t *testing.T) {
 
 	// Create a test download status
 	downloadStatus := &db.DownloadStatus{
-		ID:        "test-hash",
-		Downloader: "test-downloader",
-		State:      db.DownloadStarted,
-		OrganizePlanAction: db.None,
+		ID:            "test-hash",
+		Downloader:    "test-downloader",
+		State:         db.DownloadStarted,
+		OrganizeState: db.Unplaned,
 	}
 	err := testDB.Create(downloadStatus).Error
 	require.NoError(t, err)
@@ -616,7 +616,7 @@ func TestService_handleManualOrganized_Success(t *testing.T) {
 	var updatedStatus db.DownloadStatus
 	err = testDB.First(&updatedStatus, "id = ?", "test-hash").Error
 	require.NoError(t, err)
-	assert.Equal(t, db.ManuallyOrganized, updatedStatus.OrganizePlanAction)
+	assert.Equal(t, db.Organized, updatedStatus.OrganizeState)
 }
 
 func TestService_handleAcceptPlan_NoPlan(t *testing.T) {
@@ -671,11 +671,11 @@ func TestService_handleAcceptPlan_Success(t *testing.T) {
 		{File: "/path/to/file.txt", Action: organizer.ActionMove, Target: "/new/path/file.txt"},
 	}
 	downloadStatus := &db.DownloadStatus{
-		ID:        "test-hash",
-		Downloader: "test-downloader",
-		State:      db.DownloadStarted,
+		ID:            "test-hash",
+		Downloader:    "test-downloader",
+		State:         db.DownloadStarted,
 		OrganizePlans: &organizer.PlanResponse{Plan: testPlan},
-		OrganizePlanAction: db.None,
+		OrganizeState: db.Unplaned,
 	}
 	err = testDB.Create(downloadStatus).Error
 	require.NoError(t, err)
@@ -695,7 +695,7 @@ func TestService_handleAcceptPlan_Success(t *testing.T) {
 	var updatedStatus db.DownloadStatus
 	err = testDB.First(&updatedStatus, "id = ?", "test-hash").Error
 	require.NoError(t, err)
-	assert.Equal(t, db.Accept, updatedStatus.OrganizePlanAction)
+	assert.Equal(t, db.Organized, updatedStatus.OrganizeState)
 }
 
 func TestService_handleAcceptPlan_PartialFailure(t *testing.T) {
@@ -732,11 +732,11 @@ func TestService_handleAcceptPlan_PartialFailure(t *testing.T) {
 		{File: "/path/to/file.txt", Action: organizer.ActionMove, Target: "/new/path/file.txt"},
 	}
 	downloadStatus := &db.DownloadStatus{
-		ID:        "test-hash",
-		Downloader: "test-downloader",
-		State:      db.DownloadStarted,
+		ID:            "test-hash",
+		Downloader:    "test-downloader",
+		State:         db.DownloadStarted,
 		OrganizePlans: &organizer.PlanResponse{Plan: testPlan},
-		OrganizePlanAction: db.None,
+		OrganizeState: db.Unplaned,
 	}
 	err = testDB.Create(downloadStatus).Error
 	require.NoError(t, err)
@@ -757,5 +757,5 @@ func TestService_handleAcceptPlan_PartialFailure(t *testing.T) {
 	var updatedStatus db.DownloadStatus
 	err = testDB.First(&updatedStatus, "id = ?", "test-hash").Error
 	require.NoError(t, err)
-	assert.Equal(t, db.Failed, updatedStatus.OrganizePlanAction)
+	assert.Equal(t, db.ExecutePlanFailed, updatedStatus.OrganizeState)
 }

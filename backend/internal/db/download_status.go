@@ -11,7 +11,7 @@ const (
 	StoreMaxDays = 30
 )
 
-type DownloadState uint
+type DownloadState uint16
 
 const (
 	DownloadStarted DownloadState = iota
@@ -20,19 +20,20 @@ const (
 	DownloadDeleted
 )
 
-type MoveState uint
+type MoveState uint16
 
 const (
 	UnMoved MoveState = iota
 	Moved
 )
 
-type OrganizeState uint
+type OrganizeState uint16
 
 const (
 	Unplaned OrganizeState = iota
 	Planed
 	Organized
+	ExecutePlanFailed
 )
 
 type OrganizePlan struct {
@@ -40,22 +41,13 @@ type OrganizePlan struct {
 	To   string `json:"to"`
 }
 
-type OrganizePlanAction uint
-
-const (
-	None OrganizePlanAction = iota
-	Accept
-	ManuallyOrganized
-	Failed
-)
-
 type DownloadStatus struct {
 	ID        string `gorm:"primarykey"` // hash
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
 	Downloader       string        `gorm:"index:idx_downloader_state;index:idx_downloader_movestate_organizestate"`
-	DownloadProgress int32         // in x/1000
+	DownloadProgress uint16        // in x/1000
 	State            DownloadState `gorm:"index:idx_downloader_state;index:idx_downloader_state_movestate"`
 
 	UploadHistories map[string]int64 `gorm:"serializer:json"`
@@ -71,8 +63,7 @@ type DownloadStatus struct {
 
 	OrganizeState OrganizeState `gorm:"index:idx_downloader_movestate_organizestate"`
 
-	OrganizePlans      *organizer.PlanResponse `gorm:"serializer:json"`
-	OrganizePlanAction OrganizePlanAction
+	OrganizePlans *organizer.PlanResponse `gorm:"serializer:json"`
 }
 
 func (s *DownloadStatus) AddToday(b int64) {
