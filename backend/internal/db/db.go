@@ -1,6 +1,7 @@
 package db
 
 import (
+	"os"
 	"time"
 
 	"github.com/glebarez/sqlite"
@@ -18,7 +19,7 @@ var (
 			&logger,
 			glog.Config{
 				SlowThreshold:             100 * time.Millisecond,
-				LogLevel:                  glog.Info,
+				LogLevel:                  logLevel(),
 				IgnoreRecordNotFoundError: false,
 				ParameterizedQueries:      false,
 				Colorful:                  false,
@@ -27,6 +28,13 @@ var (
 		PrepareStmt: true,
 	}
 )
+
+func logLevel() glog.LogLevel {
+	if os.Getenv("DB_DEBUG") != "" {
+		return glog.Info
+	}
+	return glog.Warn
+}
 
 func Pg(dsn string) (*gorm.DB, error) {
 	db, err := gorm.Open(postgres.Open(dsn), gormConfig)
