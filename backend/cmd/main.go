@@ -90,6 +90,7 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 	rg := r.Group("/api/v1")
+	handlers.ServeStatic(r)
 	service.SetupRouter(rg)
 
 	srv := &http.Server{
