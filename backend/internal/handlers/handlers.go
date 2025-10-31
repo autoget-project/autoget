@@ -211,24 +211,13 @@ func (s *Service) indexerRegisterSearch(c *gin.Context) {
 	}
 }
 
-type listDownloadersRespItem struct {
-	TorrentsDir string `json:"torrents_dir"`
-	DownloadDir string `json:"download_dir"`
-}
-
-type listDownloadersResp struct {
-	Map map[string]listDownloadersRespItem `json:"downloaders"`
-}
-
 func (s *Service) listDownloaders(c *gin.Context) {
-	m := map[string]listDownloadersRespItem{}
-	for name, dl := range s.downloaders {
-		m[name] = listDownloadersRespItem{
-			TorrentsDir: dl.TorrentsDir(),
-			DownloadDir: dl.DownloadDir(),
-		}
+	resp := []string{}
+	for k := range s.downloaders {
+		resp = append(resp, k)
 	}
-	c.JSON(200, listDownloadersResp{Map: m})
+	slices.Sort(resp)
+	c.JSON(200, resp)
 }
 
 func (s *Service) image(c *gin.Context) {

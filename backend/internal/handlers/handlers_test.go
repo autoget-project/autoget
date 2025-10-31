@@ -481,10 +481,9 @@ func TestListDownloaders(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	resp := &listDownloadersResp{}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), resp))
+	var downloaders []string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &downloaders))
 
-	assert.Len(t, resp.Map, 1)
-	assert.Equal(t, "/torrents", resp.Map["mock"].TorrentsDir)
-	assert.Equal(t, "/downloads", resp.Map["mock"].DownloadDir)
+	assert.Len(t, downloaders, 1)
+	assert.Contains(t, downloaders, "mock")
 }
