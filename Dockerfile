@@ -27,7 +27,7 @@ RUN go mod download
 
 # Copy backend source and build
 COPY backend/ ./
-RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o autoget ./cmd
+RUN GOOS=linux go build -o autoget ./cmd/main.go
 
 # Step 3: Final image
 FROM alpine:latest
