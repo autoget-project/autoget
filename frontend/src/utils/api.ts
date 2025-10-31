@@ -97,3 +97,75 @@ export async function fetchDownloaders(): Promise<string[]> {
     return []; // Set to empty array on error
   }
 }
+
+export interface DownloadItem {
+  ID: string;
+  CreatedAt: string;
+  UpdatedAt: string;
+  Downloader: string;
+  DownloadProgress: number;
+  State: number;
+  UploadHistories: any[] | null;
+  ResIndexer: string;
+  ResTitle: string;
+  ResTitle2: string;
+  Category: string;
+  FileList: string[];
+  Metadata: {
+    actors: string[];
+    category: string;
+    description: string;
+    dmm_id: string;
+    labels: string[];
+    organizer_category: string[];
+    title: string;
+  };
+  MoveState: number;
+  OrganizeState: number;
+  OrganizePlans: PlanResponse | null;
+}
+
+export type DownloadState = 'downloading' | 'seeding' | 'stopped' | 'planned';
+
+export async function fetchDownloaderItems(downloaderName: string, state: DownloadState): Promise<DownloadItem[]> {
+  try {
+    const response = await fetch(`/api/v1/downloaders/${downloaderName}?state=${state}`);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to fetch downloader items:', error);
+    return []; // Set to empty array on error
+  }
+}
+
+export type ActionType = 'move' | 'skip';
+
+export interface PlanAction {
+  file: string; // Exact original path
+  action: ActionType; // "move" or "skip"
+  target?: string; // Target path for "move" action
+}
+
+export interface PlanResponse {
+  plan?: PlanAction[];
+  error?: string;
+}
+
+export type OrganizeAction = 'accept_plan' | 'manual_organized';
+
+export async function organizeDownload(downloadId: string, action: OrganizeAction): Promise<boolean> {
+  try {
+    const response = await fetch(`/api/v1/download/${downloadId}/organize?action=${action}`, {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return true;
+  } catch (error) {
+    console.error('Failed to organize download:', error);
+    return false;
+  }
+}
