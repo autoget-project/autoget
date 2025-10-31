@@ -209,11 +209,11 @@ export class DownloaderView extends LitElement {
             <div class="flex items-center gap-4">
               <div
                 class="radial-progress"
-                style="--value:${item.DownloadProgress};"
-                aria-valuenow=${item.DownloadProgress}
+                style="--value:${item.DownloadProgress/10};"
+                aria-valuenow=${item.DownloadProgress/10}
                 role="progressbar"
               >
-                ${item.DownloadProgress}%
+                ${item.DownloadProgress/10}%
               </div>
               <div class="card-actions">
                 ${this.activeTab === 'planned'
@@ -300,7 +300,7 @@ export class DownloaderView extends LitElement {
       <div class="flex flex-col h-screen">
         <app-navbar .activePage=${this.downloaderId}></app-navbar>
 
-        <div class="flex flex-row flex-grow overflow-hidden">
+        <div class="flex flex-row grow overflow-hidden">
           <div class="flex-1 flex flex-col overflow-hidden">
             <!-- Tabs -->
             <div class="bg-base-100 border-b border-base-300">
