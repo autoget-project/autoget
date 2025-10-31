@@ -14,7 +14,7 @@ sukebei:
 downloaders:
   transmission:
     transmission:
-      url: http://transmission
+      url: http://transmission/transmission/rpc
       torrents_dir: "/tmp/torrents"
       download_dir: "/tmp/downloads"
       finished_dir: "/tmp/finished"
@@ -23,7 +23,7 @@ downloaders:
       upload_at_least_in_mb: 200
   transmission_vpn:
     transmission:
-      url: http://transmission_vpn
+      url: http://transmission_vpn/transmission/rpc
       torrents_dir: "/tmp/torrents"
       download_dir: "/tmp/downloads"
       finished_dir: "/tmp/finished"
