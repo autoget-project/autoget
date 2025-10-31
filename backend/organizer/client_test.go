@@ -1,7 +1,6 @@
 package organizer
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -66,7 +65,7 @@ func TestClient_Plan(t *testing.T) {
 			Metadata: map[string]interface{}{"key": "value"},
 		}
 
-		resp, err := client.Plan(context.Background(), req)
+		resp, err := client.Plan(req)
 		require.NoError(t, err)
 		require.NotNil(t, resp)
 		assert.Empty(t, resp.Error)
@@ -83,7 +82,7 @@ func TestClient_Plan(t *testing.T) {
 		client, err := NewClient(server.URL, nil)
 		require.NoError(t, err)
 
-		resp, err := client.Plan(context.Background(), &PlanRequest{})
+		resp, err := client.Plan(&PlanRequest{})
 		require.NoError(t, err)
 		require.NotNil(t, resp)
 		assert.Equal(t, "internal organizer error", resp.Error)
@@ -99,7 +98,7 @@ func TestClient_Plan(t *testing.T) {
 		client, err := NewClient(server.URL, nil)
 		require.NoError(t, err)
 
-		resp, err := client.Plan(context.Background(), &PlanRequest{})
+		resp, err := client.Plan(&PlanRequest{})
 		require.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Contains(t, err.Error(), "plan request failed with status 500: server failure")
@@ -112,7 +111,7 @@ func TestClient_Plan(t *testing.T) {
 		client, err := NewClient(server.URL, nil)
 		require.NoError(t, err)
 
-		resp, err := client.Plan(context.Background(), &PlanRequest{})
+		resp, err := client.Plan(&PlanRequest{})
 		require.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Contains(t, err.Error(), "failed to send plan request")
@@ -128,7 +127,7 @@ func TestClient_Plan(t *testing.T) {
 		client, err := NewClient(server.URL, nil)
 		require.NoError(t, err)
 
-		resp, err := client.Plan(context.Background(), &PlanRequest{})
+		resp, err := client.Plan(&PlanRequest{})
 		require.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Contains(t, err.Error(), "failed to decode plan response")
@@ -158,7 +157,7 @@ func TestClient_Execute(t *testing.T) {
 			Plan: []PlanAction{{File: "file.txt", Action: ActionMove, Target: "new/file.txt"}},
 		}
 
-		success, failedResp, err := client.Execute(context.Background(), req)
+		success, failedResp, err := client.Execute(req)
 		require.NoError(t, err)
 		assert.True(t, success)
 		assert.Nil(t, failedResp)
@@ -188,7 +187,7 @@ func TestClient_Execute(t *testing.T) {
 			},
 		}
 
-		success, failedResp, err := client.Execute(context.Background(), req)
+		success, failedResp, err := client.Execute(req)
 		require.NoError(t, err)
 		assert.False(t, success)
 		require.NotNil(t, failedResp)
@@ -205,7 +204,7 @@ func TestClient_Execute(t *testing.T) {
 		client, err := NewClient(server.URL, nil)
 		require.NoError(t, err)
 
-		success, failedResp, err := client.Execute(context.Background(), &ExecuteRequest{})
+		success, failedResp, err := client.Execute(&ExecuteRequest{})
 		require.Error(t, err)
 		assert.False(t, success)
 		assert.Nil(t, failedResp)

@@ -12,6 +12,7 @@ import (
 
 	"github.com/autoget-project/autoget/backend/downloaders/config"
 	"github.com/autoget-project/autoget/backend/internal/db"
+	"github.com/autoget-project/autoget/backend/organizer"
 	"github.com/hekmon/transmissionrpc/v3"
 	"github.com/robfig/cron/v3"
 	"github.com/rs/zerolog/log"
@@ -25,13 +26,14 @@ var (
 )
 
 type Client struct {
-	client *transmissionrpc.Client
-	name   string
-	db     *gorm.DB
-	cfg    *config.DownloaderConfig
+	client          *transmissionrpc.Client
+	name            string
+	db              *gorm.DB
+	organizerClient *organizer.Client
+	cfg             *config.DownloaderConfig
 }
 
-func New(name string, cfg *config.DownloaderConfig, db *gorm.DB) (*Client, error) {
+func New(name string, cfg *config.DownloaderConfig, db *gorm.DB, organizerClient *organizer.Client) (*Client, error) {
 	u, err := url.Parse(cfg.Transmission.URL)
 	if err != nil {
 		return nil, err
@@ -49,10 +51,11 @@ func New(name string, cfg *config.DownloaderConfig, db *gorm.DB) (*Client, error
 	}
 
 	return &Client{
-		client: client,
-		name:   name,
-		db:     db,
-		cfg:    cfg,
+		client:          client,
+		name:            name,
+		db:              db,
+		organizerClient: organizerClient,
+		cfg:             cfg,
 	}, nil
 }
 
@@ -82,6 +85,27 @@ func (c *Client) ProgressChecker() {
 
 	torrentsByHash := toTorrentsByHash(torrents)
 
+	c.updateDownloadProgress(torrentsByHash)
+
+	// check if transmission is actively downloading.
+	stats, err := c.client.SessionStats(context.Background())
+	if err != nil {
+		logger.Err(err).Str("name", c.name).Msg("failed to get session stats")
+	}
+
+	// if downloadSpeed > 2M/s, consider transimission is still busy
+	if stats.DownloadSpeed > 2*1000*1000 {
+		return
+	}
+
+	// start copys
+	c.copyFinishedDownloads(torrentsByHash)
+
+	// create organizer plan
+	c.createOrganizerPlan()
+}
+
+func (c *Client) updateDownloadProgress(torrentsByHash map[string]*transmissionrpc.Torrent) {
 	statuses, err := db.GetUnfinishedDownloadStatusByDownloader(c.db, c.name)
 	if err != nil {
 		logger.Error().Err(err).Str("name", c.name).Msg("failed to get download status")
@@ -100,20 +124,10 @@ func (c *Client) ProgressChecker() {
 		}
 		db.SaveDownloadStatus(c.db, &s)
 	}
+}
 
-	// check if transmission is actively downloading.
-	stats, err := c.client.SessionStats(context.Background())
-	if err != nil {
-		logger.Err(err).Str("name", c.name).Msg("failed to get session stats")
-	}
-
-	// if downloadSpeed > 2M/s, consider transimission is still busy
-	if stats.DownloadSpeed > 2*1000*1000 {
-		return
-	}
-
-	// start copys
-	statuses, err = db.GetFinishedUnmoveedDownloadStatusByDownloader(c.db, c.name)
+func (c *Client) copyFinishedDownloads(torrentsByHash map[string]*transmissionrpc.Torrent) {
+	statuses, err := db.GetFinishedUnmoveedDownloadStatusByDownloader(c.db, c.name)
 	if err != nil {
 		logger.Error().Err(err).Str("name", c.name).Msg("failed to get seeding download status")
 		return
@@ -125,45 +139,65 @@ func (c *Client) ProgressChecker() {
 			continue
 		}
 
-		success := true
-		for _, f := range t.Files {
-			from := filepath.Join(*t.DownloadDir, f.Name)
-			target := filepath.Join(c.cfg.Transmission.FinishedDir, s.ID, f.Name)
-
-			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-				success = false
-				logger.Error().Err(err).Str("name", c.name).Msg("failed to create parent directory for copied file")
-				break
-			}
-
-			fromFile, err := os.Open(from)
-			if err != nil {
-				success = false
-				logger.Error().Err(err).Str("name", c.name).Msg("failed to open file")
-				break
-			}
-			defer fromFile.Close()
-
-			targetFile, err := os.Create(target)
-			if err != nil {
-				success = false
-				logger.Error().Err(err).Str("name", c.name).Msg("failed to create file")
-				break
-			}
-			defer targetFile.Close()
-
-			_, err = io.Copy(targetFile, fromFile)
-			if err != nil {
-				success = false
-				logger.Error().Err(err).Str("name", c.name).Msg("failed to copy file")
-				break
-			}
-		}
-
-		if success {
+		if c.copyTorrentFiles(t, &s) {
 			s.MoveState = db.Moved
 			db.SaveDownloadStatus(c.db, &s)
 		}
+	}
+}
+
+func (c *Client) copyTorrentFiles(t *transmissionrpc.Torrent, s *db.DownloadStatus) bool {
+	for _, f := range t.Files {
+		from := filepath.Join(*t.DownloadDir, f.Name)
+		target := filepath.Join(c.cfg.Transmission.FinishedDir, s.ID, f.Name)
+
+		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			logger.Error().Err(err).Str("name", c.name).Msg("failed to create parent directory for copied file")
+			return false
+		}
+
+		fromFile, err := os.Open(from)
+		if err != nil {
+			logger.Error().Err(err).Str("name", c.name).Msg("failed to open file")
+			return false
+		}
+		defer fromFile.Close()
+
+		targetFile, err := os.Create(target)
+		if err != nil {
+			logger.Error().Err(err).Str("name", c.name).Msg("failed to create file")
+			return false
+		}
+		defer targetFile.Close()
+
+		_, err = io.Copy(targetFile, fromFile)
+		if err != nil {
+			logger.Error().Err(err).Str("name", c.name).Msg("failed to copy file")
+			return false
+		}
+	}
+	return true
+}
+
+func (c *Client) createOrganizerPlan() {
+	statuses, err := db.GetMovedAndOrganizeStateDownloadStatusByDownloader(c.db, c.name, db.Unplaned)
+	if err != nil {
+		logger.Error().Err(err).Str("name", c.name).Msg("failed to get moved & unplaned download status")
+		return
+	}
+
+	for _, st := range statuses {
+		resp, err := c.organizerClient.Plan(&organizer.PlanRequest{
+			Files:    st.FileList,
+			Metadata: st.Metadata,
+		})
+		if err != nil {
+			logger.Error().Err(err).Str("name", c.name).Msg("failed to create organizer plan")
+			continue
+		}
+		st.OrganizePlans = resp
+		st.OrganizeState = db.Planed
+		db.SaveDownloadStatus(c.db, &st)
 	}
 }
 

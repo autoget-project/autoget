@@ -12,6 +12,7 @@ import (
 
 	"github.com/autoget-project/autoget/backend/downloaders/config"
 	"github.com/autoget-project/autoget/backend/internal/db"
+	"github.com/autoget-project/autoget/backend/organizer"
 	"github.com/hekmon/transmissionrpc/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -95,7 +96,7 @@ func TestCheckDailySeeding(t *testing.T) {
 		},
 	}
 
-	client, err := New("test", conf, d)
+	client, err := New("test", conf, d, nil)
 	require.NoError(t, err)
 
 	today := time.Now().Format("2006-01-02")
@@ -268,7 +269,36 @@ func TestProgressChecker(t *testing.T) {
 		},
 	}
 
-	client, err := New("test", conf, d)
+	// Create fake organizer server
+	organizerServ := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/v1/plan", r.URL.Path)
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		var req organizer.PlanRequest
+		err := json.NewDecoder(r.Body).Decode(&req)
+		require.NoError(t, err)
+
+		// Return plan for torrent with ID "3"
+		if len(req.Files) > 0 && req.Files[0] == "file1.mkv" {
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(organizer.PlanResponse{
+				Plan: []organizer.PlanAction{
+					{File: "/finished/3/file1.mkv", Action: organizer.ActionMove, Target: "/movies/movie1.mkv"},
+					{File: "/finished/3/file2.srt", Action: organizer.ActionMove, Target: "/movies/movie1.srt"},
+				},
+			})
+		} else {
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(organizer.PlanResponse{Plan: []organizer.PlanAction{}})
+		}
+	}))
+	t.Cleanup(func() { organizerServ.Close() })
+
+	organizerClient, err := organizer.NewClient(organizerServ.URL, nil)
+	require.NoError(t, err)
+
+	client, err := New("test", conf, d, organizerClient)
 	require.NoError(t, err)
 
 	// r1 is downloading
@@ -300,9 +330,22 @@ func TestProgressChecker(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(downloadDir, "sub"), 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(downloadDir, r2SubFileName), []byte(r2SubFileContent), 0644))
 
+	// r3 is moved but needs organizer planning
+	r3 := &db.DownloadStatus{
+		ID:            "3",
+		Downloader:    "test",
+		State:         db.DownloadSeeding,
+		MoveState:     db.Moved,
+		OrganizeState: db.Unplaned,
+		FileList:      []string{"file1.mkv", "file2.srt"},
+		Metadata:      map[string]interface{}{"title": "Test Movie"},
+	}
+	require.NoError(t, d.Create(r3).Error)
+
 	percentDone1 := 0.5
 	percentDone2 := 1.0
-	downloadSpeed := int64(1000)
+	// Set download speed less than 2MB/s to trigger organizer planning
+	downloadSpeed := int64(1000 * 1000) // 1MB/s
 	activeTorrentCount := int64(1)
 
 	fake.resp = []any{
@@ -312,6 +355,10 @@ func TestProgressChecker(t *testing.T) {
 				newTorrentWithProgress(2, "2", transmissionrpc.TorrentStatusSeed, percentDone2, downloadDir, []transmissionrpc.TorrentFile{
 					{Name: r2FileName, Length: int64(len(r2FileContent))},
 					{Name: r2SubFileName, Length: int64(len(r2SubFileContent))},
+				}),
+				newTorrentWithProgress(3, "3", transmissionrpc.TorrentStatusSeed, 1.0, downloadDir, []transmissionrpc.TorrentFile{
+					{Name: "file1.mkv", Length: 1000},
+					{Name: "file2.srt", Length: 100},
 				}),
 			},
 		},
@@ -350,4 +397,145 @@ func TestProgressChecker(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, r2SubFileContent, string(copiedSubContent))
 	}
+
+	{
+		// r3 should have organizer plan created
+		r := &db.DownloadStatus{}
+		require.NoError(t, d.First(r, "id = ?", "3").Error)
+		assert.Equal(t, db.Planed, r.OrganizeState)
+		assert.NotEmpty(t, r.OrganizePlans)
+		assert.Len(t, r.OrganizePlans.Plan, 2)
+
+		// Verify the plan actions
+		actions := r.OrganizePlans.Plan
+		assert.Equal(t, "/finished/3/file1.mkv", actions[0].File)
+		assert.Equal(t, organizer.ActionMove, actions[0].Action)
+		assert.Equal(t, "/movies/movie1.mkv", actions[0].Target)
+
+		assert.Equal(t, "/finished/3/file2.srt", actions[1].File)
+		assert.Equal(t, organizer.ActionMove, actions[1].Action)
+		assert.Equal(t, "/movies/movie1.srt", actions[1].Target)
+	}
+}
+
+func TestCreateOrganizerPlan(t *testing.T) {
+	d, err := db.SqliteForTest()
+	require.NoError(t, err)
+
+	// Create fake organizer server
+	organizerServ := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/v1/plan", r.URL.Path)
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		var req organizer.PlanRequest
+		err := json.NewDecoder(r.Body).Decode(&req)
+		require.NoError(t, err)
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(organizer.PlanResponse{
+			Plan: []organizer.PlanAction{
+				{File: "movie.mkv", Action: organizer.ActionMove, Target: "/movies/Test Movie.mkv"},
+				{File: "subtitle.srt", Action: organizer.ActionSkip},
+			},
+		})
+	}))
+	t.Cleanup(func() { organizerServ.Close() })
+
+	organizerClient, err := organizer.NewClient(organizerServ.URL, nil)
+	require.NoError(t, err)
+
+	conf := &config.DownloaderConfig{
+		Transmission: &config.TransmissionConfig{},
+	}
+	client, err := New("test", conf, d, organizerClient)
+	require.NoError(t, err)
+
+	t.Run("successful plan creation", func(t *testing.T) {
+		// Create a download status that needs planning
+		status := &db.DownloadStatus{
+			ID:            "test1",
+			Downloader:    "test",
+			State:         db.DownloadSeeding,
+			MoveState:     db.Moved,
+			OrganizeState: db.Unplaned,
+			FileList:      []string{"movie.mkv", "subtitle.srt"},
+			Metadata:      map[string]interface{}{"title": "Test Movie"},
+		}
+		require.NoError(t, d.Create(status).Error)
+
+		client.createOrganizerPlan()
+
+		// Verify the plan was created
+		updated := &db.DownloadStatus{}
+		require.NoError(t, d.First(updated, "id = ?", "test1").Error)
+		assert.Equal(t, db.Planed, updated.OrganizeState)
+		assert.NotNil(t, updated.OrganizePlans)
+		assert.Len(t, updated.OrganizePlans.Plan, 2)
+
+		// Verify plan content
+		actions := updated.OrganizePlans.Plan
+		assert.Equal(t, "movie.mkv", actions[0].File)
+		assert.Equal(t, organizer.ActionMove, actions[0].Action)
+		assert.Equal(t, "/movies/Test Movie.mkv", actions[0].Target)
+
+		assert.Equal(t, "subtitle.srt", actions[1].File)
+		assert.Equal(t, organizer.ActionSkip, actions[1].Action)
+	})
+
+	t.Run("organizer service error", func(t *testing.T) {
+		// Create a failing organizer server
+		failingServ := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("organizer service error"))
+		}))
+		t.Cleanup(func() { failingServ.Close() })
+
+		failingClient, err := organizer.NewClient(failingServ.URL, nil)
+		require.NoError(t, err)
+
+		clientWithFailingOrganizer, err := New("test", conf, d, failingClient)
+		require.NoError(t, err)
+
+		// Create a download status that needs planning
+		status := &db.DownloadStatus{
+			ID:            "test2",
+			Downloader:    "test",
+			State:         db.DownloadSeeding,
+			MoveState:     db.Moved,
+			OrganizeState: db.Unplaned,
+			FileList:      []string{"movie.mkv"},
+			Metadata:      map[string]interface{}{"title": "Test Movie"},
+		}
+		require.NoError(t, d.Create(status).Error)
+
+		clientWithFailingOrganizer.createOrganizerPlan()
+
+		// Verify the status remains unchanged due to error
+		updated := &db.DownloadStatus{}
+		require.NoError(t, d.First(updated, "id = ?", "test2").Error)
+		assert.Equal(t, db.Unplaned, updated.OrganizeState)
+		assert.Nil(t, updated.OrganizePlans)
+	})
+
+	t.Run("already planned torrents are skipped", func(t *testing.T) {
+		// Create a download status that's already planned
+		status := &db.DownloadStatus{
+			ID:            "test3",
+			Downloader:    "test",
+			State:         db.DownloadSeeding,
+			MoveState:     db.Moved,
+			OrganizeState: db.Planed,
+			FileList:      []string{"movie.mkv"},
+			Metadata:      map[string]interface{}{"title": "Test Movie"},
+		}
+		require.NoError(t, d.Create(status).Error)
+
+		client.createOrganizerPlan()
+
+		// Verify no new requests were made to organizer service
+		updated := &db.DownloadStatus{}
+		require.NoError(t, d.First(updated, "id = ?", "test3").Error)
+		assert.Equal(t, db.Planed, updated.OrganizeState)
+	})
 }

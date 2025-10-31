@@ -3,6 +3,7 @@ package db
 import (
 	"time"
 
+	"github.com/autoget-project/autoget/backend/organizer"
 	"gorm.io/gorm"
 )
 
@@ -24,6 +25,13 @@ type MoveState uint
 const (
 	UnMoved MoveState = iota
 	Moved
+)
+
+type OrganizeState uint
+
+const (
+	Unplaned OrganizeState = iota
+	Planed
 	Organized
 )
 
@@ -37,7 +45,7 @@ type OrganizePlanAction uint
 const (
 	None OrganizePlanAction = iota
 	Accept
-	Reject
+	ManuallyOrganized
 )
 
 type DownloadStatus struct {
@@ -45,7 +53,7 @@ type DownloadStatus struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	Downloader       string        `gorm:"index:idx_downloader_state"`
+	Downloader       string        `gorm:"index:idx_downloader_state;index:idx_downloader_movestate_organizestate"`
 	DownloadProgress int32         // in x/1000
 	State            DownloadState `gorm:"index:idx_downloader_state;index:idx_downloader_state_movestate"`
 
@@ -58,9 +66,11 @@ type DownloadStatus struct {
 	FileList   []string               `gorm:"serializer:json"`
 	Metadata   map[string]interface{} `gorm:"serializer:json"`
 
-	MoveState MoveState `gorm:"index:idx_downloader_state_movestate"`
+	MoveState MoveState `gorm:"index:idx_downloader_state_movestate;index:idx_downloader_movestate_organizestate"`
 
-	OrganizePlans      []OrganizePlan `gorm:"serializer:json"`
+	OrganizeState OrganizeState `gorm:"index:idx_downloader_movestate_organizestate"`
+
+	OrganizePlans      *organizer.PlanResponse `gorm:"serializer:json"`
 	OrganizePlanAction OrganizePlanAction
 }
 
@@ -101,6 +111,12 @@ func GetFinishedUnmoveedDownloadStatusByDownloader(db *gorm.DB, downloader strin
 func GetStoppedMovedDownloadStatusByDownloader(db *gorm.DB, downloader string) ([]DownloadStatus, error) {
 	var ss []DownloadStatus
 	err := db.Where("downloader = ?", downloader).Where("state = ?", DownloadStopped).Where("move_state >= ?", Moved).Find(&ss).Error
+	return ss, err
+}
+
+func GetMovedAndOrganizeStateDownloadStatusByDownloader(db *gorm.DB, downloader string, organizeState OrganizeState) ([]DownloadStatus, error) {
+	var ss []DownloadStatus
+	err := db.Where("downloader = ?", downloader).Where("move_state = ?", Moved).Where("organize_state = ?", organizeState).Find(&ss).Error
 	return ss, err
 }
 

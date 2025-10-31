@@ -18,6 +18,7 @@ import (
 	"github.com/autoget-project/autoget/backend/internal/db"
 	"github.com/autoget-project/autoget/backend/internal/handlers"
 	"github.com/autoget-project/autoget/backend/internal/notify/telegram"
+	"github.com/autoget-project/autoget/backend/organizer"
 	"github.com/gin-gonic/gin"
 	"github.com/robfig/cron/v3"
 	"github.com/rs/zerolog/log"
@@ -46,12 +47,17 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to connect to database")
 	}
 
+	oc, err := organizer.NewClient(cfg.OrganizerService, http.DefaultClient)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to create organizer client")
+	}
+
 	cronjob := cron.New()
 	cronjob.Start()
 
 	downloaderMap := map[string]downloaders.IDownloader{}
 	for name, dlCfg := range cfg.Downloaders {
-		downloader, err := downloaders.New(name, dlCfg, db)
+		downloader, err := downloaders.New(name, dlCfg, db, oc)
 		if err != nil {
 			log.Fatal().Err(err).Msg("failed to create downloader")
 		}
