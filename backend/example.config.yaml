@@ -1,0 +1,29 @@
+port: 8888
+pg_dsn: user=pg password=your_password dbname=your_db host=db_ip port=5432 sslmode=disable
+telegram:
+  token: bot_token
+  chat_id: your_chat_id
+organizer_service: http://organizer_service
+mteam:
+  api_key: your_key
+  downloader: transmission
+nyaa:
+  downloader: transmission_vpn
+sukebei:
+  downloader: transmission_vpn
+downloaders:
+  transmission:
+    transmission:
+      url: http://transmission
+      torrents_dir: "/tmp/torrents"
+      download_dir: "/tmp/downloads"
+      finished_dir: "/tmp/finished"
+    seeding_policy:
+      interval_in_days: 5
+      upload_at_least_in_mb: 200
+  transmission_vpn:
+    transmission:
+      url: http://transmission_vpn
+      torrents_dir: "/tmp/torrents"
+      download_dir: "/tmp/downloads"
+      finished_dir: "/tmp/finished"
