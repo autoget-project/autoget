@@ -63,8 +63,10 @@ func (c *Client) RegisterCronjobs(cron *cron.Cron) {
 	c.RegisterDailySeedingChecker(cron)
 
 	go func() {
-		time.Sleep(time.Minute)
-		c.ProgressChecker()
+		for {
+			time.Sleep(time.Minute)
+			c.ProgressChecker()
+		}
 	}()
 }
 
