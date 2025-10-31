@@ -73,6 +73,9 @@ export class SearchView extends LitElement {
   @state()
   private currentPage: number = 1;
 
+  @state()
+  private isSearching: boolean = false;
+
   async connectedCallback() {
     super.connectedCallback();
     this.indexers = await fetchIndexers();
@@ -153,6 +156,8 @@ export class SearchView extends LitElement {
       this.displayedCategoryLevels = this.selectedIndexer ? [this.allCategories] : [];
     }
 
+    // Reset searching state when URL changes (indicating search completed)
+    this.isSearching = false;
     this.requestUpdate();
   };
 
@@ -174,6 +179,11 @@ export class SearchView extends LitElement {
 
   private handleSearch(e: Event) {
     e.preventDefault();
+
+    // Set searching state to true when search is initiated
+    this.isSearching = true;
+    this.requestUpdate();
+
     const url = new URL(window.location.href);
     url.searchParams.set('keyword', this.searchQuery);
     url.searchParams.set('indexer', this.selectedIndexer);
@@ -220,7 +230,7 @@ export class SearchView extends LitElement {
     const selectedIdInLevel = this.selectedCategoryPath[level]?.id;
 
     return html`
-      <div id="level-${level}" class="flex-shrink-0 w-60 p-2 bg-gray-100 rounded-xl">
+      <div id="level-${level}" class="shrink-0 w-60 p-2 bg-gray-100 rounded-xl">
         <h3 class="font-semibold text-gray-700 mb-3">${levelTitle}</h3>
         <div id="category-list-${level}" class="flex flex-col space-y-2">
           ${categories.map(
@@ -286,7 +296,7 @@ export class SearchView extends LitElement {
               </div>
 
               <div class="collapse-content p-0 flex flex-row space-x-4">
-                <div class="flex-shrink-0 w-60 p-2 bg-gray-100 rounded-xl">
+                <div class="shrink-0 w-60 p-2 bg-gray-100 rounded-xl">
                   <h3 class="font-semibold text-gray-700 mb-3">Indexer</h3>
                   <div class="flex flex-col space-y-2">
                     ${this.indexers.map(
@@ -306,7 +316,7 @@ export class SearchView extends LitElement {
                   </div>
                 </div>
 
-                <div class="scroll-container overflow-x-auto flex space-x-4 pb-4 flex-grow">
+                <div class="scroll-container overflow-x-auto flex space-x-4 pb-4 grow">
                   ${this.displayedCategoryLevels.map((categories, index) =>
                     this.renderCategoryLevel(categories, index),
                   )}
@@ -314,8 +324,20 @@ export class SearchView extends LitElement {
               </div>
             </div>
 
+            ${this.isSearching
+              ? html`
+                  <div class="flex justify-center items-center py-8">
+                    <span class="loading loading-dots loading-lg"></span>
+                  </div>
+                `
+              : ''}
             ${this.currentKeyword || this.currentIndexer || this.currentCategory
               ? html`
+                  ${this.currentKeyword
+                    ? html`<h2 class="text-xl font-semibold mb-4 text-gray-800">
+                        Result For "${this.currentKeyword}"
+                      </h2>`
+                    : ''}
                   <resource-list
                     .keyword=${this.currentKeyword}
                     .indexerId=${this.currentIndexer}
