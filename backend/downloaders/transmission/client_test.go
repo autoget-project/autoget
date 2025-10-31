@@ -378,7 +378,7 @@ func TestProgressChecker(t *testing.T) {
 		// r1 progress updated
 		r := &db.DownloadStatus{}
 		require.NoError(t, d.First(r, "id = ?", "1").Error)
-		assert.Equal(t, int32(percentDone1*1000), r.DownloadProgress)
+		assert.Equal(t, uint16(percentDone1*1000), r.DownloadProgress)
 	}
 
 	{
