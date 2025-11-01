@@ -20,8 +20,8 @@ export class DownloaderView extends LitElement {
   @property({ type: String })
   public downloaderId: string = '';
 
-  @state()
-  private activeTab: string = 'downloading';
+  @property({ type: String })
+  public activeTab: string = 'downloading';
 
   @state()
   private downloadItems: DownloadItem[] = [];
@@ -45,6 +45,11 @@ export class DownloaderView extends LitElement {
 
   protected async updated(changedProperties: Map<string, unknown>) {
     if (changedProperties.has('activeTab') || changedProperties.has('downloaderId')) {
+      // Update URL when activeTab changes
+      if (changedProperties.has('activeTab') && this.downloaderId) {
+        const newUrl = `/downloaders/${this.downloaderId}/${this.activeTab}`;
+        history.pushState(null, '', newUrl);
+      }
       await this.loadDownloadItems();
     }
   }

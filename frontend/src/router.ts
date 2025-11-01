@@ -89,6 +89,31 @@ export class AppRouter extends LitElement {
           this.router.goto('/404');
           return false;
         }
+        // Redirect to default tab if no tab specified
+        this.router.goto(`/downloaders/${id}/downloading`);
+        history.replaceState(null, '', `/downloaders/${id}/downloading`);
+        return false;
+      },
+    },
+    {
+      path: '/downloaders/:id/:tab',
+      render: ({ id, tab }) => {
+        return html`<downloader-view .downloaderId=${id || ''} .activeTab=${tab || ''}></downloader-view>`;
+      },
+      enter: async ({ id, tab }) => {
+        if (this.downloaders.length === 0) {
+          await this.fetchDownloaders();
+        }
+        if (id === undefined || !this.downloaders.includes(id)) {
+          this.router.goto('/404');
+          return false;
+        }
+        // Validate tab parameter
+        const validTabs = ['downloading', 'seeding', 'stopped', 'planned'];
+        if (tab === undefined || !validTabs.includes(tab)) {
+          this.router.goto(`/downloaders/${id}/downloading`);
+          return false;
+        }
         return true;
       },
     },
