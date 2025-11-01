@@ -142,9 +142,8 @@ export class DownloaderView extends LitElement {
 
     return html`
       <div class="mt-4">
-        <div tabindex="0" class="collapse collapse-arrow bg-base-200">
-          <input type="checkbox" />
-          <div class="collapse-title text-lg font-medium">Organize Plan (${organizePlans.plan.length} items)</div>
+        <details tabindex="0" class="collapse collapse-arrow bg-base-200">
+          <summary class="collapse-title text-lg font-medium">Organize Plan (${organizePlans.plan.length} items)</summary>
           <div class="collapse-content">
             <div class="overflow-x-auto">
               <table class="table table-sm">
@@ -161,7 +160,7 @@ export class DownloaderView extends LitElement {
               </table>
             </div>
           </div>
-        </div>
+        </details>
       </div>
     `;
   }
