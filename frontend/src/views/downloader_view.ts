@@ -143,7 +143,9 @@ export class DownloaderView extends LitElement {
     return html`
       <div class="mt-4">
         <details tabindex="0" class="collapse collapse-arrow bg-base-200">
-          <summary class="collapse-title text-lg font-medium">Organize Plan (${organizePlans.plan.length} items)</summary>
+          <summary class="collapse-title text-lg font-medium">
+            Organize Plan (${organizePlans.plan.length} items)
+          </summary>
           <div class="collapse-content">
             <div class="overflow-x-auto">
               <table class="table table-sm">
@@ -203,18 +205,21 @@ export class DownloaderView extends LitElement {
               <div class="mt-3 text-sm text-base-content/60">
                 <p>Created: ${this.formatDate(item.CreatedAt)}</p>
               </div>
-              ${this.renderOrganizePlans(item.OrganizePlans)}
             </div>
             <div class="flex items-center gap-4">
-              <div
-                class="radial-progress"
-                style="--value:${item.DownloadProgress / 10};"
-                aria-valuenow=${item.DownloadProgress / 10}
-                role="progressbar"
-              >
-                ${item.DownloadProgress / 10}%
-              </div>
-              <div class="card-actions">
+              ${this.activeTab === 'downloading'
+                ? html`
+                    <div
+                      class="radial-progress"
+                      style="--value:${item.DownloadProgress / 10};"
+                      aria-valuenow=${item.DownloadProgress / 10}
+                      role="progressbar"
+                    >
+                      ${item.DownloadProgress / 10}%
+                    </div>
+                  `
+                : html``}
+              <div class="card-actions flex-col gap-2">
                 ${this.activeTab === 'planned'
                   ? html`
                       <button
@@ -227,13 +232,14 @@ export class DownloaderView extends LitElement {
                         class="btn btn-sm btn-secondary"
                         @click=${() => this.handleOrganizeAction(item.ID, 'manual_organized')}
                       >
-                        Mark Manual Organized
+                        Manual Organized
                       </button>
                     `
                   : html``}
               </div>
             </div>
           </div>
+          ${this.renderOrganizePlans(item.OrganizePlans)}
         </div>
       </div>
     `;
