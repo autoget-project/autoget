@@ -209,11 +209,11 @@ export class DownloaderView extends LitElement {
             <div class="flex items-center gap-4">
               <div
                 class="radial-progress"
-                style="--value:${item.DownloadProgress/10};"
-                aria-valuenow=${item.DownloadProgress/10}
+                style="--value:${item.DownloadProgress / 10};"
+                aria-valuenow=${item.DownloadProgress / 10}
                 role="progressbar"
               >
-                ${item.DownloadProgress/10}%
+                ${item.DownloadProgress / 10}%
               </div>
               <div class="card-actions">
                 ${this.activeTab === 'planned'
