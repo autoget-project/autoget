@@ -215,7 +215,7 @@ export class DownloaderView extends LitElement {
               ${this.activeTab === 'downloading'
                 ? html`
                     <div
-                      class="radial-progress"
+                      class="radial-progress text-primary"
                       style="--value:${item.DownloadProgress / 10};"
                       aria-valuenow=${item.DownloadProgress / 10}
                       role="progressbar"
@@ -234,7 +234,7 @@ export class DownloaderView extends LitElement {
                         Accept Plan
                       </button>
                       <button
-                        class="btn btn-sm btn-secondary"
+                        class="btn btn-sm btn-neutral"
                         @click=${() => this.handleOrganizeAction(item.ID, 'manual_organized')}
                       >
                         Manual Organized
