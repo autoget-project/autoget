@@ -17,7 +17,8 @@
     "daisyui": "^5.3.10",
     "lit": "^3.3.1",
     "luxon": "^3.7.2",
-    "tailwindcss": "^4.1.16"
+    "tailwindcss": "^4.1.16",
+    "urlpattern-polyfill": "^10.1.0"
   },
   "devDependencies": {
     "@eslint/css": "^0.14.0",
