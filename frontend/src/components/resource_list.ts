@@ -102,7 +102,9 @@ export class ResourceList extends LitElement {
 
   private renderResourceCard(resource: Resource): TemplateResult {
     return html`
-      <div class="image-card rounded-lg overflow-hidden shadow-lg border border-gray-700 bg-gray-100 mb-2">
+      <div
+        class="image-card rounded-lg overflow-hidden shadow-lg border border-gray-700 bg-gray-100 dark:bg-gray-800 dark:border-gray-600 mb-2"
+      >
         ${resource.images && resource.images.length > 0
           ? html`<img
               src="${resource.images[0]}"
@@ -112,15 +114,19 @@ export class ResourceList extends LitElement {
             />`
           : ''}
         <div class="p-2">
-          <h3 class="text font-medium line-clamp-4 text-balance break-all border-b border-b-gray-400">
+          <h3
+            class="text-gray-900 dark:text-gray-100 font-medium line-clamp-4 text-balance break-all border-b border-b-gray-400 dark:border-gray-600"
+          >
             ${resource.title || 'Untitled Resource'}
           </h3>
           ${resource.title2
-            ? html`<p class="text font-normal line-clamp-4 text-balance break-all border-b border-b-gray-400">
+            ? html`<p
+                class="text-gray-800 dark:text-gray-200 font-normal line-clamp-4 text-balance break-all border-b border-b-gray-400 dark:border-gray-600"
+              >
                 ${resource.title2}
               </p>`
             : ''}
-          <div class="flex flex-wrap gap-1 mt-1 mb-1 pb-1 border-b border-b-gray-400">
+          <div class="flex flex-wrap gap-1 mt-1 mb-1 pb-1 border-b border-b-gray-400 dark:border-gray-600">
             <span class="badge badge-outline badge-primary">${resource.category}</span>
             <span class="badge badge-outline badge-secondary">${formatBytes(resource.size)}</span>
             ${resource.resolution
@@ -142,7 +148,7 @@ export class ResourceList extends LitElement {
             </span>
           </div>
           ${resource.labels && resource.labels.length > 0
-            ? html` <div class="flex flex-wrap gap-1 mt-1 mb-1 pb-1 border-b border-b-gray-400">
+            ? html` <div class="flex flex-wrap gap-1 mt-1 mb-1 pb-1 border-b border-b-gray-400 dark:border-gray-600">
                 ${resource.labels.map(
                   (label: string) => html` <span class="badge badge-outline badge-neutral">${label}</span> `,
                 )}
