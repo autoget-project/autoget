@@ -27,10 +27,18 @@ export class DownloaderView extends LitElement {
   private downloadItems: DownloadItem[] = [];
 
   @state()
-  private loading: boolean = false;
+  private loading: boolean = true;
+
+  @state()
+  private initialLoad: boolean = true;
 
   @state()
   private error: string | null = null;
+
+  @state()
+  private refreshInterval: number = 20; // Default to 20 seconds
+
+  private refreshTimer: number | null = null;
 
   private readonly tabs = [
     { id: 'downloading', label: 'Downloading' },
@@ -41,6 +49,12 @@ export class DownloaderView extends LitElement {
 
   protected async firstUpdated() {
     await this.loadDownloadItems();
+    this.startRefreshTimer();
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this.stopRefreshTimer();
   }
 
   protected async updated(changedProperties: Map<string, unknown>) {
@@ -57,21 +71,65 @@ export class DownloaderView extends LitElement {
   private async loadDownloadItems() {
     if (!this.downloaderId) return;
 
-    this.loading = true;
     this.error = null;
 
     try {
-      this.downloadItems = await fetchDownloaderItems(this.downloaderId, this.activeTab as DownloadState);
+      const newItems = await fetchDownloaderItems(this.downloaderId, this.activeTab as DownloadState);
+
+      // Only update if data has actually changed or if it's the initial load
+      if (this.initialLoad || !this.arraysEqual(this.downloadItems, newItems)) {
+        this.downloadItems = newItems;
+        this.initialLoad = false;
+      }
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'Failed to load download items';
-      this.downloadItems = [];
+      // Only clear items on error if there are no items yet
+      if (this.downloadItems.length === 0) {
+        this.downloadItems = [];
+      }
+      this.initialLoad = false;
     } finally {
       this.loading = false;
     }
   }
 
+  private arraysEqual(a: DownloadItem[], b: DownloadItem[]): boolean {
+    if (a.length !== b.length) return false;
+
+    // Create a map for quick lookup by ID
+    const aMap = new Map(a.map((item) => [item.ID, item]));
+    const bMap = new Map(b.map((item) => [item.ID, item]));
+
+    // Check if all IDs match
+    if (aMap.size !== bMap.size) return false;
+
+    // Check each item's key properties
+    for (const [id, aItem] of aMap) {
+      const bItem = bMap.get(id);
+      if (!bItem) return false;
+
+      // Compare key properties that affect display
+      if (
+        aItem.DownloadProgress !== bItem.DownloadProgress ||
+        aItem.MoveState !== bItem.MoveState ||
+        aItem.OrganizeState !== bItem.OrganizeState ||
+        aItem.State !== bItem.State ||
+        aItem.UpdatedAt !== bItem.UpdatedAt ||
+        JSON.stringify(aItem.OrganizePlans) !== JSON.stringify(bItem.OrganizePlans)
+      ) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   private handleTabChange(tabId: string) {
-    this.activeTab = tabId;
+    if (this.activeTab !== tabId) {
+      this.activeTab = tabId;
+      this.initialLoad = true; // Reset for new tab
+      this.loading = true;
+    }
   }
 
   private formatDate(dateString: string): string {
@@ -117,6 +175,26 @@ export class DownloaderView extends LitElement {
     } catch (error) {
       console.error('Error organizing download:', error);
     }
+  }
+
+  private startRefreshTimer() {
+    this.stopRefreshTimer(); // Clear any existing timer
+    this.refreshTimer = setInterval(() => {
+      this.loadDownloadItems();
+    }, this.refreshInterval * 1000);
+  }
+
+  private stopRefreshTimer() {
+    if (this.refreshTimer !== null) {
+      clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+  }
+
+  private handleRefreshIntervalChange(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    this.refreshInterval = parseInt(select.value);
+    this.startRefreshTimer(); // Restart timer with new interval
   }
 
   private renderOrganizePlans(organizePlans: PlanResponse | null) {
@@ -314,18 +392,35 @@ export class DownloaderView extends LitElement {
           <div class="flex-1 flex flex-col overflow-hidden">
             <!-- Tabs -->
             <div class="bg-base-100 border-b border-base-300">
-              <div role="tablist" class="tabs tabs-box">
-                ${this.tabs.map(
-                  (tab) => html`
-                    <button
-                      role="tab"
-                      class="tab ${this.activeTab === tab.id ? 'tab-active' : ''}"
-                      @click=${() => this.handleTabChange(tab.id)}
-                    >
-                      ${tab.label}
-                    </button>
-                  `,
-                )}
+              <div class="flex items-center justify-between px-4">
+                <div role="tablist" class="tabs tabs-box">
+                  ${this.tabs.map(
+                    (tab) => html`
+                      <button
+                        role="tab"
+                        class="tab ${this.activeTab === tab.id ? 'tab-active' : ''}"
+                        @click=${() => this.handleTabChange(tab.id)}
+                      >
+                        ${tab.label}
+                      </button>
+                    `,
+                  )}
+                </div>
+
+                <!-- Refresh Dropdown -->
+                <div class="flex items-center gap-2">
+                  <span class="text-sm text-base-content/70">Refresh:</span>
+                  <select
+                    class="select select-bordered select-sm"
+                    @change=${this.handleRefreshIntervalChange}
+                    .value=${String(this.refreshInterval)}
+                  >
+                    <option value="10">10s</option>
+                    <option value="20">20s</option>
+                    <option value="30">30s</option>
+                    <option value="60">60s</option>
+                  </select>
+                </div>
               </div>
             </div>
 
