@@ -127,22 +127,22 @@ export class ResourceList extends LitElement {
               </p>`
             : ''}
           <div class="flex flex-wrap gap-1 mt-1 mb-1 pb-1 border-b border-b-gray-400 dark:border-gray-600">
-            <span class="badge badge-outline badge-primary">${resource.category}</span>
-            <span class="badge badge-outline badge-secondary">${formatBytes(resource.size)}</span>
+            <span class="badge badge-outline badge-primary line-clamp-1">${resource.category}</span>
+            <span class="badge badge-outline badge-secondary line-clamp-1">${formatBytes(resource.size)}</span>
             ${resource.resolution
-              ? html`<span class="badge badge-outline badge-info">${resource.resolution}</span>`
+              ? html`<span class="badge badge-outline badge-info line-clamp-1">${resource.resolution}</span>`
               : ''}
-            ${resource.free ? html`<span class="badge badge-success">Free</span>` : ''}
+            ${resource.free ? html`<span class="badge badge-success line-clamp-1">Free</span>` : ''}
             <span
               class="badge ${DateTime.now().diff(DateTime.fromSeconds(resource.createdDate, { zone: 'utc' }), 'weeks')
                 .weeks < 1
                 ? 'badge-accent'
-                : 'badge-neutral'}"
+                : 'badge-neutral'} line-clamp-1"
             >
               <span class="icon-[mingcute--time-line]"></span>
               ${formatCreatedDate(resource.createdDate)}
             </span>
-            <span class="badge badge-info">
+            <span class="badge badge-info line-clamp-1">
               <span class="icon-[icons8--up-round]"></span>
               ${resource.seeders}
             </span>
@@ -150,7 +150,9 @@ export class ResourceList extends LitElement {
           ${resource.labels && resource.labels.length > 0
             ? html` <div class="flex flex-wrap gap-1 mt-1 mb-1 pb-1 border-b border-b-gray-400 dark:border-gray-600">
                 ${resource.labels.map(
-                  (label: string) => html` <span class="badge badge-outline badge-neutral">${label}</span> `,
+                  (label: string) => html`
+                    <span class="badge badge-outline badge-accent line-clamp-1">${label}</span>
+                  `,
                 )}
               </div>`
             : ''}
