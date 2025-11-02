@@ -152,7 +152,7 @@ export interface PlanResponse {
   error?: string;
 }
 
-export type OrganizeAction = 'accept_plan' | 'manual_organized';
+export type OrganizeAction = 'accept_plan' | 'manual_organized' | 're_plan';
 
 export async function organizeDownload(downloadId: string, action: OrganizeAction): Promise<boolean> {
   try {

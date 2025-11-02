@@ -330,8 +330,10 @@ func (s *Service) organizeDownload(c *gin.Context) {
 		s.handleAcceptPlan(c, downloadStatus)
 	case "manual_organized":
 		s.handleManualOrganized(c, downloadStatus)
+	case "re_plan":
+		s.handleRePlan(c, downloadStatus)
 	default:
-		c.JSON(400, gin.H{"error": "Invalid action. Valid actions: accept_plan, manual_organized"})
+		c.JSON(400, gin.H{"error": "Invalid action. Valid actions: accept_plan, manual_organized, re_plan"})
 	}
 }
 
@@ -387,4 +389,32 @@ func (s *Service) handleManualOrganized(c *gin.Context, downloadStatus *db.Downl
 	}
 
 	c.JSON(200, gin.H{"status": "marked as manually organized"})
+}
+
+func (s *Service) handleRePlan(c *gin.Context, downloadStatus *db.DownloadStatus) {
+	// Generate a new organizer plan
+	resp, err := s.organizerClient.Plan(&organizer.PlanRequest{
+		Dir:      downloadStatus.ID,
+		Files:    downloadStatus.FileList,
+		Metadata: downloadStatus.Metadata,
+	})
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Update the organize plan and state
+	downloadStatus.OrganizePlans = resp
+	downloadStatus.OrganizeState = db.Planed
+
+	// Update the download status
+	if err := db.SaveDownloadStatus(s.db, downloadStatus); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"status": "re_plan completed successfully",
+		"plan":   resp,
+	})
 }

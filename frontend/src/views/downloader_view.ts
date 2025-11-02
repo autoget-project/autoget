@@ -311,6 +311,9 @@ export class DownloaderView extends LitElement {
                       >
                         Accept Plan
                       </button>
+                      <button class="btn btn-sm btn-info" @click=${() => this.handleOrganizeAction(item.ID, 're_plan')}>
+                        Re-plan
+                      </button>
                       <button
                         class="btn btn-sm btn-neutral"
                         @click=${() => this.handleOrganizeAction(item.ID, 'manual_organized')}
