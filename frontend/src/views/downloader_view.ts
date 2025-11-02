@@ -45,6 +45,7 @@ export class DownloaderView extends LitElement {
     { id: 'seeding', label: 'Seeding' },
     { id: 'stopped', label: 'Stopped' },
     { id: 'planned', label: 'Planned' },
+    { id: 'failed', label: 'Failed' },
   ];
 
   protected async firstUpdated() {
@@ -155,8 +156,10 @@ export class DownloaderView extends LitElement {
         return { label: 'Planned', color: 'info' };
       case 2: // Organized
         return { label: 'Organized', color: 'success' };
-      case 3: // ExecutePlanFailed
-        return { label: 'Plan Failed', color: 'error' };
+      case 3: // CreatePlanFailed
+        return { label: 'Create Failed', color: 'error' };
+      case 4: // ExecutePlanFailed
+        return { label: 'Execute Failed', color: 'error' };
       default:
         return { label: 'Unknown', color: 'neutral' };
     }
@@ -321,7 +324,22 @@ export class DownloaderView extends LitElement {
                         Manual Organized
                       </button>
                     `
-                  : html``}
+                  : this.activeTab === 'failed'
+                    ? html`
+                        <button
+                          class="btn btn-sm btn-info"
+                          @click=${() => this.handleOrganizeAction(item.ID, 're_plan')}
+                        >
+                          Re-plan
+                        </button>
+                        <button
+                          class="btn btn-sm btn-neutral"
+                          @click=${() => this.handleOrganizeAction(item.ID, 'manual_organized')}
+                        >
+                          Manual Organized
+                        </button>
+                      `
+                    : html``}
               </div>
             </div>
           </div>
@@ -337,6 +355,7 @@ export class DownloaderView extends LitElement {
       seeding: 'Seeding Torrents',
       stopped: 'Stopped Downloads',
       planned: 'Planned Downloads',
+      failed: 'Failed Downloads',
     };
 
     const emptyMessages = {
@@ -344,6 +363,7 @@ export class DownloaderView extends LitElement {
       seeding: 'No torrents are currently seeding.',
       stopped: 'No stopped downloads.',
       planned: 'No planned downloads.',
+      failed: 'No failed downloads.',
     };
 
     return html`

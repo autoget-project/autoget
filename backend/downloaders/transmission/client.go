@@ -201,6 +201,8 @@ func (c *Client) createOrganizerPlan() {
 		})
 		if err != nil {
 			logger.Error().Err(err).Str("name", c.name).Msg("failed to create organizer plan")
+			st.OrganizeState = db.CreatePlanFailed
+			db.SaveDownloadStatus(c.db, &st)
 			continue
 		}
 		st.OrganizePlans = resp

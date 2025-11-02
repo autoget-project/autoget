@@ -33,6 +33,7 @@ const (
 	Unplaned OrganizeState = iota
 	Planed
 	Organized
+	CreatePlanFailed
 	ExecutePlanFailed
 )
 

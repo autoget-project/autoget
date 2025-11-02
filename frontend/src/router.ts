@@ -109,7 +109,7 @@ export class AppRouter extends LitElement {
           return false;
         }
         // Validate tab parameter
-        const validTabs = ['downloading', 'seeding', 'stopped', 'planned'];
+        const validTabs = ['downloading', 'seeding', 'stopped', 'planned', 'failed'];
         if (tab === undefined || !validTabs.includes(tab)) {
           this.router.goto(`/downloaders/${id}/downloading`);
           return false;

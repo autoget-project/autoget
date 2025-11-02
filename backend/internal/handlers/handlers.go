@@ -237,7 +237,7 @@ func (s *Service) getDownloaderStatuses(c *gin.Context) {
 
 	state := c.Query("state")
 	if state == "" {
-		c.JSON(400, gin.H{"error": "State parameter is required. Valid states: downloading, seeding, stopped, planned"})
+		c.JSON(400, gin.H{"error": "State parameter is required. Valid states: downloading, seeding, stopped, planned, failed"})
 		return
 	}
 
@@ -256,8 +256,27 @@ func (s *Service) getDownloaderStatuses(c *gin.Context) {
 	case "planned":
 		// For planned, we want downloads that are moved and have been planned for organization
 		statuses, err = db.GetMovedAndOrganizeStateDownloadStatusByDownloader(s.db, downloaderName, db.Planed)
+	case "failed":
+		// For failed, we want downloads that have failed during either plan creation or execution
+		// Get both create_plan_failed and execute_plan_failed statuses
+		var createFailedStatuses, executeFailedStatuses []db.DownloadStatus
+
+		createFailedStatuses, err = db.GetMovedAndOrganizeStateDownloadStatusByDownloader(s.db, downloaderName, db.CreatePlanFailed)
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		executeFailedStatuses, err = db.GetMovedAndOrganizeStateDownloadStatusByDownloader(s.db, downloaderName, db.ExecutePlanFailed)
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Combine both lists
+		statuses = append(createFailedStatuses, executeFailedStatuses...)
 	default:
-		c.JSON(400, gin.H{"error": "Invalid state. Valid states: downloading, seeding, stopped, planned"})
+		c.JSON(400, gin.H{"error": "Invalid state. Valid states: downloading, seeding, stopped, planned, failed"})
 		return
 	}
 
@@ -399,6 +418,12 @@ func (s *Service) handleRePlan(c *gin.Context, downloadStatus *db.DownloadStatus
 		Metadata: downloadStatus.Metadata,
 	})
 	if err != nil {
+		// Update the state to CreatePlanFailed when re-planning fails
+		downloadStatus.OrganizeState = db.CreatePlanFailed
+		if saveErr := db.SaveDownloadStatus(s.db, downloadStatus); saveErr != nil {
+			c.JSON(500, gin.H{"error": saveErr.Error()})
+			return
+		}
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
