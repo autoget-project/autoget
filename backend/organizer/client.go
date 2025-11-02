@@ -42,6 +42,14 @@ type ExecuteRequest struct {
 	Plan []PlanAction `json:"plan"`
 }
 
+// ReplanRequest is the request body for the replan-with-hint endpoint.
+type ReplanRequest struct {
+	Files            []string      `json:"files"`
+	Metadata         map[string]interface{} `json:"metadata,omitempty"`
+	PreviousResponse *PlanResponse `json:"previous_response"`
+	UserHint         string        `json:"user_hint"`
+}
+
 // PlanFailed represents a PlanAction that failed during execution.
 type PlanFailed struct {
 	PlanAction
@@ -146,4 +154,38 @@ func (c *Client) Execute(req *ExecuteRequest) (bool, *ExecuteResponse, error) {
 		return false, nil, fmt.Errorf("failed to decode execute response: %w", err)
 	}
 	return false, &execResp, nil
+}
+
+// ReplanWithHint sends a request to the /v1/replan-with-hint endpoint to get a revised organization plan.
+func (c *Client) ReplanWithHint(req *ReplanRequest) (*PlanResponse, error) {
+	replanURL := c.baseURL.JoinPath("/v1/replan-with-hint")
+
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal replan request: %w", err)
+	}
+
+	httpReq, err := http.NewRequest(http.MethodPost, replanURL.String(), bytes.NewBuffer(reqBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create replan request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send replan request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("replan request failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var planResp PlanResponse
+	if err := json.NewDecoder(resp.Body).Decode(&planResp); err != nil {
+		return nil, fmt.Errorf("failed to decode replan response: %w", err)
+	}
+
+	return &planResp, nil
 }

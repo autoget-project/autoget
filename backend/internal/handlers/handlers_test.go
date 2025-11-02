@@ -863,3 +863,188 @@ func TestService_handleRePlan_OrganizerError(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, response["error"], "organizer service error")
 }
+
+func TestService_handleRePlan_WithUserHint_Success(t *testing.T) {
+	serv, router, _, testDB := testSetup(t)
+
+	// Mock organizer server for ReplanWithHint
+	expectedPlan := []organizer.PlanAction{
+		{File: "file1.txt", Action: organizer.ActionMove, Target: "/organized/file1.txt"},
+		{File: "file2.txt", Action: organizer.ActionSkip},
+	}
+
+	mockOrganizerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/v1/replan-with-hint", r.URL.Path)
+
+		var req organizer.ReplanRequest
+		err := json.NewDecoder(r.Body).Decode(&req)
+		require.NoError(t, err)
+		assert.Equal(t, "move file1.txt to movies folder", req.UserHint)
+		assert.Contains(t, req.Files, "file1.txt")
+		assert.Contains(t, req.Files, "file2.txt")
+		assert.NotNil(t, req.PreviousResponse)
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(organizer.PlanResponse{Plan: expectedPlan})
+	}))
+	defer mockOrganizerServer.Close()
+
+	// Create organizer client
+	organizerClient, err := organizer.NewClient(mockOrganizerServer.URL, nil)
+	require.NoError(t, err)
+	serv.organizerClient = organizerClient
+
+	// Create a test download status with existing plan
+	testFiles := []string{"file1.txt", "file2.txt"}
+	testMetadata := map[string]interface{}{"title": "Test Download"}
+	existingPlan := &organizer.PlanResponse{
+		Plan: []organizer.PlanAction{
+			{File: "file1.txt", Action: organizer.ActionSkip},
+		},
+	}
+	downloadStatus := &db.DownloadStatus{
+		ID:            "test-hash",
+		Downloader:    "test-downloader",
+		State:         db.DownloadStarted,
+		FileList:      testFiles,
+		Metadata:      testMetadata,
+		OrganizePlans: existingPlan,
+		OrganizeState: db.Organized,
+	}
+	err = testDB.Create(downloadStatus).Error
+	require.NoError(t, err)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/download/test-hash/organize?action=re_plan&user_hint=move+file1.txt+to+movies+folder", nil)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.Equal(t, "re_plan completed successfully", response["status"])
+	assert.NotNil(t, response["plan"])
+
+	// Verify the database was updated
+	var updatedStatus db.DownloadStatus
+	err = testDB.First(&updatedStatus, "id = ?", "test-hash").Error
+	require.NoError(t, err)
+	assert.Equal(t, db.Planed, updatedStatus.OrganizeState)
+	assert.NotNil(t, updatedStatus.OrganizePlans)
+}
+
+func TestService_handleRePlan_WithUserHint_Error(t *testing.T) {
+	serv, router, _, testDB := testSetup(t)
+
+	// Mock organizer server that returns an error for ReplanWithHint
+	mockOrganizerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/v1/replan-with-hint", r.URL.Path)
+
+		var req organizer.ReplanRequest
+		err := json.NewDecoder(r.Body).Decode(&req)
+		require.NoError(t, err)
+		assert.Equal(t, "invalid hint", req.UserHint)
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(organizer.PlanResponse{Error: "replan with hint failed"})
+	}))
+	defer mockOrganizerServer.Close()
+
+	// Create organizer client
+	organizerClient, err := organizer.NewClient(mockOrganizerServer.URL, nil)
+	require.NoError(t, err)
+	serv.organizerClient = organizerClient
+
+	// Create a test download status
+	downloadStatus := &db.DownloadStatus{
+		ID:            "test-hash",
+		Downloader:    "test-downloader",
+		State:         db.DownloadStarted,
+		FileList:      []string{"file1.txt"},
+		OrganizeState: db.Organized,
+	}
+	err = testDB.Create(downloadStatus).Error
+	require.NoError(t, err)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/download/test-hash/organize?action=re_plan&user_hint=invalid+hint", nil)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var response map[string]string
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.Contains(t, response["error"], "replan with hint failed")
+
+	// Verify the database was updated with CreatePlanFailed status
+	var updatedStatus db.DownloadStatus
+	err = testDB.First(&updatedStatus, "id = ?", "test-hash").Error
+	require.NoError(t, err)
+	assert.Equal(t, db.CreatePlanFailed, updatedStatus.OrganizeState)
+}
+
+func TestService_handleRePlan_EmptyUserHint_UsesRegularPlan(t *testing.T) {
+	serv, router, _, testDB := testSetup(t)
+
+	// Mock organizer server for regular Plan endpoint
+	expectedPlan := []organizer.PlanAction{
+		{File: "file1.txt", Action: organizer.ActionMove, Target: "/organized/file1.txt"},
+	}
+
+	mockOrganizerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/v1/plan", r.URL.Path)
+
+		var req organizer.PlanRequest
+		err := json.NewDecoder(r.Body).Decode(&req)
+		require.NoError(t, err)
+		assert.Equal(t, "test-hash", req.Dir)
+		assert.Contains(t, req.Files, "file1.txt")
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(organizer.PlanResponse{Plan: expectedPlan})
+	}))
+	defer mockOrganizerServer.Close()
+
+	// Create organizer client
+	organizerClient, err := organizer.NewClient(mockOrganizerServer.URL, nil)
+	require.NoError(t, err)
+	serv.organizerClient = organizerClient
+
+	// Create a test download status
+	testFiles := []string{"file1.txt"}
+	testMetadata := map[string]interface{}{"title": "Test Download"}
+	downloadStatus := &db.DownloadStatus{
+		ID:            "test-hash",
+		Downloader:    "test-downloader",
+		State:         db.DownloadStarted,
+		FileList:      testFiles,
+		Metadata:      testMetadata,
+		OrganizeState: db.Organized,
+	}
+	err = testDB.Create(downloadStatus).Error
+	require.NoError(t, err)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/download/test-hash/organize?action=re_plan&user_hint=", nil)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.Equal(t, "re_plan completed successfully", response["status"])
+	assert.NotNil(t, response["plan"])
+
+	// Verify the database was updated
+	var updatedStatus db.DownloadStatus
+	err = testDB.First(&updatedStatus, "id = ?", "test-hash").Error
+	require.NoError(t, err)
+	assert.Equal(t, db.Planed, updatedStatus.OrganizeState)
+	assert.NotNil(t, updatedStatus.OrganizePlans)
+}

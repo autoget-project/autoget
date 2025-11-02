@@ -411,12 +411,29 @@ func (s *Service) handleManualOrganized(c *gin.Context, downloadStatus *db.Downl
 }
 
 func (s *Service) handleRePlan(c *gin.Context, downloadStatus *db.DownloadStatus) {
-	// Generate a new organizer plan
-	resp, err := s.organizerClient.Plan(&organizer.PlanRequest{
-		Dir:      downloadStatus.ID,
-		Files:    downloadStatus.FileList,
-		Metadata: downloadStatus.Metadata,
-	})
+	// Get user_hint from query parameter (optional)
+	userHint := c.Query("user_hint")
+
+	var resp *organizer.PlanResponse
+	var err error
+
+	if userHint != "" {
+		// Use ReplanWithHint when user_hint is provided
+		resp, err = s.organizerClient.ReplanWithHint(&organizer.ReplanRequest{
+			Files:            downloadStatus.FileList,
+			Metadata:         downloadStatus.Metadata,
+			PreviousResponse: downloadStatus.OrganizePlans,
+			UserHint:         userHint,
+		})
+	} else {
+		// Use regular Plan when user_hint is empty (keep current logic)
+		resp, err = s.organizerClient.Plan(&organizer.PlanRequest{
+			Dir:      downloadStatus.ID,
+			Files:    downloadStatus.FileList,
+			Metadata: downloadStatus.Metadata,
+		})
+	}
+
 	if err != nil {
 		// Update the state to CreatePlanFailed when re-planning fails
 		downloadStatus.OrganizeState = db.CreatePlanFailed

@@ -154,9 +154,18 @@ export interface PlanResponse {
 
 export type OrganizeAction = 'accept_plan' | 'manual_organized' | 're_plan';
 
-export async function organizeDownload(downloadId: string, action: OrganizeAction): Promise<boolean> {
+export async function organizeDownload(
+  downloadId: string,
+  action: OrganizeAction,
+  userHint?: string,
+): Promise<boolean> {
   try {
-    const response = await fetch(`/api/v1/download/${downloadId}/organize?action=${action}`, {
+    let url = `/api/v1/download/${downloadId}/organize?action=${action}`;
+    if (userHint && action === 're_plan') {
+      url += `&user_hint=${encodeURIComponent(userHint)}`;
+    }
+
+    const response = await fetch(url, {
       method: 'POST',
     });
     if (!response.ok) {

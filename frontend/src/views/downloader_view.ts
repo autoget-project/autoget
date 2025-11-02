@@ -38,6 +38,9 @@ export class DownloaderView extends LitElement {
   @state()
   private refreshInterval: number = 20; // Default to 20 seconds
 
+  @state()
+  private userHints: Map<string, string> = new Map(); // Store user hints per download ID
+
   private refreshTimer: number | null = null;
 
   private readonly tabs = [
@@ -165,10 +168,14 @@ export class DownloaderView extends LitElement {
     }
   }
 
-  private async handleOrganizeAction(downloadId: string, action: OrganizeAction) {
+  private async handleOrganizeAction(downloadId: string, action: OrganizeAction, userHint?: string) {
     try {
-      const success = await organizeDownload(downloadId, action);
+      const success = await organizeDownload(downloadId, action, userHint);
       if (success) {
+        // Clear the user hint for this download if the action was successful
+        if (userHint) {
+          this.userHints.delete(downloadId);
+        }
         // Refresh the data after successful action
         await this.loadDownloadItems();
       } else {
@@ -178,6 +185,17 @@ export class DownloaderView extends LitElement {
     } catch (error) {
       console.error('Error organizing download:', error);
     }
+  }
+
+  private handleUserHintChange(downloadId: string, event: Event) {
+    const input = event.target as HTMLTextAreaElement;
+    this.userHints.set(downloadId, input.value);
+    this.requestUpdate();
+  }
+
+  private async handleReplanWithHint(downloadId: string) {
+    const userHint = this.userHints.get(downloadId) || '';
+    await this.handleOrganizeAction(downloadId, 're_plan', userHint);
   }
 
   private startRefreshTimer() {
@@ -200,7 +218,7 @@ export class DownloaderView extends LitElement {
     this.startRefreshTimer(); // Restart timer with new interval
   }
 
-  private renderOrganizePlans(organizePlans: PlanResponse | null) {
+  private renderOrganizePlans(organizePlans: PlanResponse | null, downloadId: string) {
     if (!organizePlans || !organizePlans.plan || organizePlans.plan.length === 0) {
       return html``;
     }
@@ -226,6 +244,8 @@ export class DownloaderView extends LitElement {
       `;
     }
 
+    const currentUserHint = this.userHints.get(downloadId) || '';
+
     return html`
       <div class="mt-4">
         <details tabindex="0" class="collapse collapse-arrow bg-base-200">
@@ -233,7 +253,7 @@ export class DownloaderView extends LitElement {
             Organize Plan (${organizePlans.plan.length} items)
           </summary>
           <div class="collapse-content">
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto mb-4">
               <table class="table table-sm">
                 <thead>
                   <tr>
@@ -246,6 +266,37 @@ export class DownloaderView extends LitElement {
                   ${organizePlans.plan.map((planAction: PlanAction) => this.renderPlanAction(planAction))}
                 </tbody>
               </table>
+            </div>
+
+            <!-- Feedback Section -->
+            <div class="border-t border-base-300 pt-4">
+              <h4 class="text-sm font-medium mb-2">Provide Feedback for Re-planning:</h4>
+              <div class="flex flex-col gap-2">
+                <textarea
+                  class="textarea textarea-bordered textarea-sm h-16"
+                  placeholder="E.g., 'Move movie files to /Movies/Action folder', 'Skip subtitle files', 'Rename files to match title'"
+                  .value=${currentUserHint}
+                  @input=${(e: Event) => this.handleUserHintChange(downloadId, e)}
+                ></textarea>
+                <div class="flex gap-2">
+                  <button
+                    class="btn btn-sm btn-primary"
+                    @click=${() => this.handleReplanWithHint(downloadId)}
+                    ?disabled=${!currentUserHint.trim()}
+                  >
+                    Feedback & Re-plan
+                  </button>
+                  <button
+                    class="btn btn-sm btn-ghost"
+                    @click=${() => {
+                      this.userHints.delete(downloadId);
+                      this.requestUpdate();
+                    }}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </details>
@@ -343,7 +394,7 @@ export class DownloaderView extends LitElement {
               </div>
             </div>
           </div>
-          ${this.renderOrganizePlans(item.OrganizePlans)}
+          ${this.renderOrganizePlans(item.OrganizePlans, item.ID)}
         </div>
       </div>
     `;
