@@ -103,7 +103,7 @@ export class ResourceList extends LitElement {
   private renderResourceCard(resource: Resource): TemplateResult {
     return html`
       <div
-        class="image-card rounded-lg overflow-hidden shadow-lg border border-gray-700 bg-gray-100 dark:bg-gray-800 dark:border-gray-600 mb-2"
+        class="image-card rounded-lg overflow-hidden shadow-lg border border-gray-700 bg-gray-100 dark:bg-gray-800 dark:border-gray-600"
       >
         ${resource.images && resource.images.length > 0
           ? html`<img
@@ -177,7 +177,7 @@ export class ResourceList extends LitElement {
 
     return html`
       <div class="columns-2 sm:columns-2 md:columns-3 lg:columns-4 xl:columns-5 gap-2">
-        ${columns.map((colItems) => html` <div class="flex flex-col grow gap-2">${colItems}</div> `)}
+        ${columns.map((colItems) => html` <div class="break-inside-avoid mb-2 space-y-2">${colItems}</div> `)}
       </div>
     `;
   }
