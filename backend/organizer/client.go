@@ -18,6 +18,7 @@ const (
 
 // PlanRequest is the request body for the plan endpoint.
 type PlanRequest struct {
+	Dir      string                 `json:"dir"`
 	Files    []string               `json:"files"`
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
@@ -37,6 +38,7 @@ type PlanResponse struct {
 
 // ExecuteRequest is the request body for the execute endpoint.
 type ExecuteRequest struct {
+	Dir  string       `json:"dir"`
 	Plan []PlanAction `json:"plan"`
 }
 

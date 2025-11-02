@@ -50,6 +50,7 @@ func TestClient_Plan(t *testing.T) {
 			var req PlanRequest
 			err := json.NewDecoder(r.Body).Decode(&req)
 			require.NoError(t, err)
+			assert.Equal(t, "test-dir-id", req.Dir)
 			assert.Equal(t, []string{"file1.txt"}, req.Files)
 
 			w.WriteHeader(http.StatusOK)
@@ -61,6 +62,7 @@ func TestClient_Plan(t *testing.T) {
 		require.NoError(t, err)
 
 		req := &PlanRequest{
+			Dir:      "test-dir-id",
 			Files:    []string{"file1.txt"},
 			Metadata: map[string]interface{}{"key": "value"},
 		}
@@ -144,6 +146,7 @@ func TestClient_Execute(t *testing.T) {
 			var req ExecuteRequest
 			err := json.NewDecoder(r.Body).Decode(&req)
 			require.NoError(t, err)
+			assert.Equal(t, "test-dir-id", req.Dir)
 			assert.Len(t, req.Plan, 1)
 
 			w.WriteHeader(http.StatusOK)
@@ -154,6 +157,7 @@ func TestClient_Execute(t *testing.T) {
 		require.NoError(t, err)
 
 		req := &ExecuteRequest{
+			Dir:  "test-dir-id",
 			Plan: []PlanAction{{File: "file.txt", Action: ActionMove, Target: "new/file.txt"}},
 		}
 
@@ -181,6 +185,7 @@ func TestClient_Execute(t *testing.T) {
 		require.NoError(t, err)
 
 		req := &ExecuteRequest{
+			Dir: "test-dir-id",
 			Plan: []PlanAction{
 				{File: "file1.txt", Action: ActionMove, Target: "new/file1.txt"},
 				{File: "file2.txt", Action: ActionMove, Target: "new/file2.txt"},

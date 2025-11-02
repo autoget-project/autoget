@@ -278,6 +278,7 @@ func TestProgressChecker(t *testing.T) {
 		var req organizer.PlanRequest
 		err := json.NewDecoder(r.Body).Decode(&req)
 		require.NoError(t, err)
+		assert.NotEmpty(t, req.Dir)
 
 		// Return plan for torrent with ID "3"
 		if len(req.Files) > 0 && req.Files[0] == "file1.mkv" {
@@ -431,6 +432,7 @@ func TestCreateOrganizerPlan(t *testing.T) {
 		var req organizer.PlanRequest
 		err := json.NewDecoder(r.Body).Decode(&req)
 		require.NoError(t, err)
+		assert.NotEmpty(t, req.Dir)
 
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(organizer.PlanResponse{

@@ -655,6 +655,7 @@ func TestService_handleAcceptPlan_Success(t *testing.T) {
 		var req organizer.ExecuteRequest
 		err := json.NewDecoder(r.Body).Decode(&req)
 		require.NoError(t, err)
+		assert.Equal(t, "test-hash", req.Dir)
 		assert.Len(t, req.Plan, 1)
 
 		w.WriteHeader(http.StatusOK)
@@ -716,6 +717,7 @@ func TestService_handleAcceptPlan_PartialFailure(t *testing.T) {
 		var req organizer.ExecuteRequest
 		err := json.NewDecoder(r.Body).Decode(&req)
 		require.NoError(t, err)
+		assert.Equal(t, "test-hash", req.Dir)
 
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(organizer.ExecuteResponse{FailedMoves: expectedFailures})

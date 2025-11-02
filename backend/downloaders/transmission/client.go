@@ -149,6 +149,7 @@ func (c *Client) copyFinishedDownloads(torrentsByHash map[string]*transmissionrp
 }
 
 func (c *Client) copyTorrentFiles(t *transmissionrpc.Torrent, s *db.DownloadStatus) bool {
+	files := []string{}
 	for _, f := range t.Files {
 		from := filepath.Join(*t.DownloadDir, f.Name)
 		target := filepath.Join(c.cfg.Transmission.FinishedDir, s.ID, f.Name)
@@ -177,7 +178,11 @@ func (c *Client) copyTorrentFiles(t *transmissionrpc.Torrent, s *db.DownloadStat
 			logger.Error().Err(err).Str("name", c.name).Msg("failed to copy file")
 			return false
 		}
+
+		files = append(files, f.Name)
 	}
+	// add files based on path from transmission.
+	s.FileList = files
 	return true
 }
 
@@ -190,6 +195,7 @@ func (c *Client) createOrganizerPlan() {
 
 	for _, st := range statuses {
 		resp, err := c.organizerClient.Plan(&organizer.PlanRequest{
+			Dir:      st.ID,
 			Files:    st.FileList,
 			Metadata: st.Metadata,
 		})

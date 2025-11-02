@@ -343,6 +343,7 @@ func (s *Service) handleAcceptPlan(c *gin.Context, downloadStatus *db.DownloadSt
 
 	// Execute the plan
 	executeReq := &organizer.ExecuteRequest{
+		Dir:  downloadStatus.ID,
 		Plan: downloadStatus.OrganizePlans.Plan,
 	}
 
