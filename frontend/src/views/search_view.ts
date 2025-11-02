@@ -230,13 +230,13 @@ export class SearchView extends LitElement {
     const selectedIdInLevel = this.selectedCategoryPath[level]?.id;
 
     return html`
-      <div id="level-${level}" class="shrink-0 w-60 p-2 bg-gray-100 rounded-xl">
-        <h3 class="font-semibold text-gray-700 mb-3">${levelTitle}</h3>
+      <div id="level-${level}" class="shrink-0 w-60 p-2 bg-gray-100 dark:bg-gray-700 rounded-xl">
+        <h3 class="font-semibold text-gray-700 dark:text-gray-300 mb-3">${levelTitle}</h3>
         <div id="category-list-${level}" class="flex flex-col space-y-2">
           ${categories.map(
             (category) => html`
               <div
-                class="category-item p-2 rounded-lg border border-gray-300 text-left font-medium flex items-center justify-between transition-colors bg-white hover:bg-gray-100 ${selectedIdInLevel ===
+                class="category-item p-2 rounded-lg border border-gray-300 dark:border-gray-600 text-left font-medium flex items-center justify-between transition-colors bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 ${selectedIdInLevel ===
                 category.id
                   ? 'active'
                   : ''}"
@@ -244,7 +244,7 @@ export class SearchView extends LitElement {
               >
                 <span>${category.name}</span>
                 ${category.subCategories && category.subCategories.length > 0
-                  ? html`<span class="ml-2 text-gray-400 font-bold">›</span>`
+                  ? html`<span class="ml-2 text-gray-400 dark:text-gray-500 font-bold">›</span>`
                   : ''}
               </div>
             `,
@@ -259,10 +259,10 @@ export class SearchView extends LitElement {
       <div class="flex flex-col h-screen">
         <app-navbar activePage="search"></app-navbar>
         <div
-          class="p-2 bg-slate-50 text-gray-800 flex flex-col items-center overflow-y-auto"
+          class="p-2 bg-slate-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 flex flex-col items-center overflow-y-auto"
           @scroll=${(e: Event) => scrollableOnScroll(e.currentTarget as HTMLElement)}
         >
-          <div class="bg-white p-1 sm:p-6 rounded-2xl shadow-xl w-full max-w-6xl">
+          <div class="bg-white dark:bg-gray-800 p-1 sm:p-6 rounded-2xl shadow-xl w-full max-w-6xl">
             <form @submit=${this.handleSearch} class="mb-2">
               <div class="join w-full">
                 <input
@@ -296,20 +296,20 @@ export class SearchView extends LitElement {
               </div>
 
               <div class="collapse-content p-0 flex flex-row space-x-4">
-                <div class="shrink-0 w-60 p-2 bg-gray-100 rounded-xl">
-                  <h3 class="font-semibold text-gray-700 mb-3">Indexer</h3>
+                <div class="shrink-0 w-60 p-2 bg-gray-100 dark:bg-gray-700 rounded-xl">
+                  <h3 class="font-semibold text-gray-700 dark:text-gray-300 mb-3">Indexer</h3>
                   <div class="flex flex-col space-y-2">
                     ${this.indexers.map(
                       (indexer) => html`
                         <div
-                          class="category-item p-2 rounded-lg border border-gray-300 text-left font-medium flex items-center justify-between transition-colors bg-white hover:bg-gray-100 ${this
+                          class="category-item p-2 rounded-lg border border-gray-300 dark:border-gray-600 text-left font-medium flex items-center justify-between transition-colors bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 ${this
                             .selectedIndexer === indexer
                             ? 'active'
                             : ''}"
                           @click=${() => this.handleIndexerChange(indexer)}
                         >
                           <span>${indexer}</span>
-                          <span class="ml-2 text-gray-400 font-bold">›</span>
+                          <span class="ml-2 text-gray-400 dark:text-gray-500 font-bold">›</span>
                         </div>
                       `,
                     )}
@@ -334,7 +334,7 @@ export class SearchView extends LitElement {
             ${this.currentKeyword || this.currentIndexer || this.currentCategory
               ? html`
                   ${this.currentKeyword
-                    ? html`<h2 class="text-xl font-semibold mb-4 text-gray-800">
+                    ? html`<h2 class="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-200">
                         Result For "${this.currentKeyword}"
                       </h2>`
                     : ''}
