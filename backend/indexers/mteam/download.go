@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/autoget-project/autoget/backend/indexers"
 	"github.com/autoget-project/autoget/backend/internal/errors"
@@ -37,8 +38,12 @@ func (m *MTeam) Download(id string) (*indexers.DownloadResult, *errors.HTTPStatu
 
 	destFilePath := filepath.Join(m.torrentsDir, name+"."+id+".torrent")
 
-	me, _, err := helpers.DownloadTorrentFileFromURL(http.DefaultClient, resp.Data, destFilePath)
+	me, _, err := helpers.DownloadTorrentFileFromURL(http.DefaultClient, resp.Data, destFilePath, m.db)
 	if err != nil {
+		// Check if this is a duplicate download error
+		if strings.Contains(err.Error(), "duplicate download:") {
+			return nil, errors.NewHTTPStatusError(http.StatusConflict, err.Error())
+		}
 		return nil, errors.NewHTTPStatusError(http.StatusInternalServerError, err.Error())
 	}
 

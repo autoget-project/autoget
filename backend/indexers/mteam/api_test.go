@@ -6,6 +6,7 @@ import (
 
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/autoget-project/autoget/backend/indexers"
+	"github.com/autoget-project/autoget/backend/internal/db"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -159,9 +160,11 @@ func TestDownload(t *testing.T) {
 	}
 
 	dir := t.TempDir()
+	d, err := db.SqliteForTest()
+	require.NoError(t, err)
 	m := NewMTeam(&Config{
 		APIKey: apiKey,
-	}, MTeamTypeNormal, dir, nil, nil)
+	}, MTeamTypeNormal, dir, d, nil)
 	require.NotNil(t, m)
 
 	res, err := m.Download("913855")

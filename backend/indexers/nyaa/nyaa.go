@@ -418,8 +418,12 @@ func (c *Client) Download(id string) (*indexers.DownloadResult, *errors.HTTPStat
 		return nil, errors.NewHTTPStatusError(http.StatusInternalServerError, fmt.Sprintf("failed to join path: %v", err))
 	}
 
-	meta, _, err := helpers.DownloadTorrentFileFromURL(c.httpClient, url, filepath.Join(c.torrentsDir, fileName))
+	meta, _, err := helpers.DownloadTorrentFileFromURL(c.httpClient, url, filepath.Join(c.torrentsDir, fileName), c.db)
 	if err != nil {
+		// Check if this is a duplicate download error
+		if strings.Contains(err.Error(), "duplicate download:") {
+			return nil, errors.NewHTTPStatusError(http.StatusConflict, err.Error())
+		}
 		return nil, errors.NewHTTPStatusError(http.StatusInternalServerError, err.Error())
 	}
 

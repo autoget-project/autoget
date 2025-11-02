@@ -509,7 +509,7 @@ func TestGetDownloaderStatuses(t *testing.T) {
 
 		var response map[string]string
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
-		assert.Equal(t, "State parameter is required. Valid states: downloading, seeding, stopped, planned", response["error"])
+		assert.Equal(t, "State parameter is required. Valid states: downloading, seeding, stopped, planned, failed", response["error"])
 	})
 
 	t.Run("valid downloader with state filter", func(t *testing.T) {
@@ -545,7 +545,7 @@ func TestGetDownloaderStatuses(t *testing.T) {
 
 		var response map[string]string
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
-		assert.Equal(t, "Invalid state. Valid states: downloading, seeding, stopped, planned", response["error"])
+		assert.Equal(t, "Invalid state. Valid states: downloading, seeding, stopped, planned, failed", response["error"])
 	})
 }
 

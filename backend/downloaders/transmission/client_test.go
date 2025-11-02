@@ -513,10 +513,10 @@ func TestCreateOrganizerPlan(t *testing.T) {
 
 		clientWithFailingOrganizer.createOrganizerPlan()
 
-		// Verify the status remains unchanged due to error
+		// Verify the status changed to error
 		updated := &db.DownloadStatus{}
 		require.NoError(t, d.First(updated, "id = ?", "test2").Error)
-		assert.Equal(t, db.Unplaned, updated.OrganizeState)
+		assert.Equal(t, db.CreatePlanFailed, updated.OrganizeState)
 		assert.Nil(t, updated.OrganizePlans)
 	})
 

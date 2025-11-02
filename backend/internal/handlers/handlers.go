@@ -154,7 +154,7 @@ func (s *Service) indexerDownload(c *gin.Context) {
 
 	res, err := indexer.Download(resourceID)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		c.JSON(err.Code, gin.H{"error": err.Message})
 		return
 	}
 

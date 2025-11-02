@@ -153,7 +153,9 @@ func TestList(t *testing.T) {
 
 func TestDownload(t *testing.T) {
 	dir := t.TempDir()
-	n := NewClient(&Config{UseProxy: true}, dir, nil, nil)
+	d, err := db.SqliteForTest()
+	require.NoError(t, err)
+	n := NewClient(&Config{UseProxy: true}, dir, d, nil)
 	got, err := n.Download("1980585")
 	require.Nil(t, err)
 	assert.NotEmpty(t, got.TorrentFilePath)
