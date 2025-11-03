@@ -253,45 +253,47 @@ export class DownloaderView extends LitElement {
             Organize Plan (${organizePlans.plan.length} items)
           </summary>
           <div class="collapse-content">
-            <!-- Feedback Section -->
-            <div class="pb-4">
-              <h4 class="text-sm font-medium mb-2">Provide feedback for re-creating plan:</h4>
-              <div class="flex gap-2">
-                <input
-                  type="text"
-                  class="input input-bordered input-sm flex-1"
-                  placeholder="E.g., 'Move movie files to /Movies/Action folder', 'Skip subtitle files'"
-                  .value=${currentUserHint}
-                  @input=${(e: Event) => this.handleUserHintChange(downloadId, e)}
-                  @keyup=${(e: KeyboardEvent) => {
-                    if (e.key === 'Enter' && currentUserHint.trim()) {
-                      this.handleReplanWithHint(downloadId);
-                    }
-                  }}
-                />
-                <button
-                  class="btn btn-sm btn-primary btn-square"
-                  @click=${() => this.handleReplanWithHint(downloadId)}
-                  ?disabled=${!currentUserHint.trim()}
-                  title="Send feedback"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    class="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
+            <!-- Feedback Section - Only show in planned tab -->
+            ${this.activeTab === 'planned' ? html`
+              <div class="pb-4">
+                <h4 class="text-sm font-medium mb-2">Provide feedback for re-creating plan:</h4>
+                <div class="flex gap-2">
+                  <input
+                    type="text"
+                    class="input input-bordered input-sm flex-1"
+                    placeholder="E.g., 'Move movie files to /Movies/Action folder', 'Skip subtitle files'"
+                    .value=${currentUserHint}
+                    @input=${(e: Event) => this.handleUserHintChange(downloadId, e)}
+                    @keyup=${(e: KeyboardEvent) => {
+                      if (e.key === 'Enter' && currentUserHint.trim()) {
+                        this.handleReplanWithHint(downloadId);
+                      }
+                    }}
+                  />
+                  <button
+                    class="btn btn-sm btn-primary btn-square"
+                    @click=${() => this.handleReplanWithHint(downloadId)}
+                    ?disabled=${!currentUserHint.trim()}
+                    title="Send feedback"
                   >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                    />
-                  </svg>
-                </button>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                      />
+                    </svg>
+                  </button>
+                </div>
               </div>
-            </div>
+            ` : ''}
 
             <div class="border-t border-base-300 pt-4">
               <div class="overflow-x-auto">
@@ -478,7 +480,7 @@ export class DownloaderView extends LitElement {
             <!-- Tabs -->
             <div class="bg-base-100 border-b border-base-300">
               <div class="flex items-center justify-between px-4">
-                <div role="tablist" class="tabs tabs-box">
+                <div role="tablist" class="tabs tabs-border">
                   ${this.tabs.map(
                     (tab) => html`
                       <button
