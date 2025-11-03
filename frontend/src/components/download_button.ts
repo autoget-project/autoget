@@ -1,6 +1,7 @@
 import { html, LitElement, css, type TemplateResult, unsafeCSS } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import globalStyles from '/src/index.css?inline';
+import { downloadResource } from '../utils/api.js';
 
 @customElement('download-button')
 export class DownloadButton extends LitElement {
@@ -37,15 +38,15 @@ export class DownloadButton extends LitElement {
     this.hasFailed = false;
     this.requestUpdate();
 
-    const url = `/api/v1/indexers/${this.indexerId}/resources/${this.resourceId}/download`;
     try {
-      const response = await fetch(url, { method: 'GET' });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      const success = await downloadResource(this.indexerId, this.resourceId);
+      if (success) {
+        // On success, show added state
+        this.isAdded = true;
+      } else {
+        // On error, show failed state
+        this.hasFailed = true;
       }
-
-      // On success, show added state
-      this.isAdded = true;
     } catch (error) {
       console.error('Error initiating download:', error);
       // On error, show failed state

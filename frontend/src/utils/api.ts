@@ -204,3 +204,18 @@ export async function organizeDownload(
     return false;
   }
 }
+
+export async function downloadResource(indexerId: string, resourceId: string): Promise<boolean> {
+  try {
+    const response = await fetch(`/api/v1/indexers/${indexerId}/resources/${resourceId}/download`, {
+      method: 'GET',
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return true;
+  } catch (error) {
+    console.error('Error initiating download:', error);
+    return false;
+  }
+}

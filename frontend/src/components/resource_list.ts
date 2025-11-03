@@ -32,6 +32,9 @@ export class ResourceList extends LitElement {
   @state()
   private columnCount: number = 1; // Default to 1 column
 
+  @state()
+  private isLoading: boolean = false;
+
   connectedCallback() {
     super.connectedCallback();
     window.addEventListener('resize', this.handleResize);
@@ -77,7 +80,9 @@ export class ResourceList extends LitElement {
 
   private async fetchIndexerResources() {
     if (this.indexerId) {
+      this.isLoading = true;
       const response = await fetchIndexerResources(this.indexerId, this.category, this.keyword, this.page);
+      this.isLoading = false;
       if (response) {
         this.resources = response;
         this.totalPages = response.pagination.totalPages;
@@ -88,6 +93,7 @@ export class ResourceList extends LitElement {
     } else {
       this.resources = null;
       this.totalPages = 1;
+      this.isLoading = false;
     }
   }
 
@@ -165,8 +171,22 @@ export class ResourceList extends LitElement {
   }
 
   private renderColumns(): TemplateResult {
+    // Show loading spinner when fetching data
+    if (this.isLoading) {
+      return html`
+        <div class="flex justify-center items-center py-20">
+          <span class="loading loading-spinner loading-lg"></span>
+        </div>
+      `;
+    }
+
+    // Show no resources message when no data is available
     if (!this.resources || !this.resources.resources || this.resources.resources.length === 0) {
-      return html`<p>No resources found or loading...</p>`;
+      return html`
+        <div class="flex justify-center items-center py-20">
+          <p class="text-gray-500 dark:text-gray-400">No resources found</p>
+        </div>
+      `;
     }
 
     const columns: TemplateResult[][] = Array.from({ length: this.columnCount }, () => []);
