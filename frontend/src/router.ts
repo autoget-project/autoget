@@ -1,7 +1,7 @@
 import { Router } from '@lit-labs/router';
 import { LitElement, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { fetchIndexers, fetchIndexerCategories, fetchDownloaders } from './utils/api.ts';
+import { fetchIndexers, fetchIndexerCategories, fetchDownloaders, type DownloaderInfo } from './utils/api.ts';
 
 import './views/search_view';
 import './views/indexer_view';
@@ -14,7 +14,7 @@ export class AppRouter extends LitElement {
   private indexers: string[] = [];
 
   @state()
-  private downloaders: string[] = [];
+  private downloaders: DownloaderInfo[] = [];
 
   async connectedCallback() {
     super.connectedCallback();
@@ -85,7 +85,8 @@ export class AppRouter extends LitElement {
         if (this.downloaders.length === 0) {
           await this.fetchDownloaders();
         }
-        if (id === undefined || !this.downloaders.includes(id)) {
+        const downloaderNames = this.downloaders.map((d) => d.name);
+        if (id === undefined || !downloaderNames.includes(id)) {
           this.router.goto('/404');
           return false;
         }
@@ -104,7 +105,8 @@ export class AppRouter extends LitElement {
         if (this.downloaders.length === 0) {
           await this.fetchDownloaders();
         }
-        if (id === undefined || !this.downloaders.includes(id)) {
+        const downloaderNames = this.downloaders.map((d) => d.name);
+        if (id === undefined || !downloaderNames.includes(id)) {
           this.router.goto('/404');
           return false;
         }

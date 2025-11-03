@@ -85,7 +85,14 @@ export async function fetchIndexerResources(
   }
 }
 
-export async function fetchDownloaders(): Promise<string[]> {
+export interface DownloaderInfo {
+  name: string;
+  count_of_downloading: number;
+  count_of_planned: number;
+  count_of_failed: number;
+}
+
+export async function fetchDownloaders(): Promise<DownloaderInfo[]> {
   try {
     const response = await fetch('/api/v1/downloaders');
     if (!response.ok) {
@@ -124,18 +131,38 @@ export interface DownloadItem {
   OrganizePlans: PlanResponse | null;
 }
 
-export type DownloadState = 'downloading' | 'seeding' | 'stopped' | 'planned';
+export interface DownloaderState {
+  count_of_downloading: number;
+  count_of_planned: number;
+  count_of_failed: number;
+}
 
-export async function fetchDownloaderItems(downloaderName: string, state: DownloadState): Promise<DownloadItem[]> {
+export interface DownloaderStatusResponse {
+  state: DownloaderState;
+  resources: DownloadItem[];
+}
+
+export type DownloadState = 'downloading' | 'seeding' | 'stopped' | 'planned' | 'failed';
+
+export async function fetchDownloaderItems(
+  downloaderName: string,
+  state: DownloadState,
+): Promise<DownloaderStatusResponse> {
   try {
     const response = await fetch(`/api/v1/downloaders/${downloaderName}?state=${state}`);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    return await response.json();
+    const data = await response.json();
+
+    // Ensure the response has the expected structure
+    return {
+      state: data.state || { count_of_downloading: 0, count_of_planned: 0, count_of_failed: 0 },
+      resources: data.resources || [],
+    };
   } catch (error) {
     console.error('Failed to fetch downloader items:', error);
-    return []; // Set to empty array on error
+    return { state: { count_of_downloading: 0, count_of_planned: 0, count_of_failed: 0 }, resources: [] };
   }
 }
 

@@ -216,13 +216,54 @@ func (s *Service) indexerRegisterSearch(c *gin.Context) {
 	}
 }
 
+type DownloaderInfoResponse struct {
+	Name               string `json:"name"`
+	CountOfDownloading int64  `json:"count_of_downloading"`
+	CountOfPlanned     int64  `json:"count_of_planned"`
+	CountOfFailed      int64  `json:"count_of_failed"`
+}
+
 func (s *Service) listDownloaders(c *gin.Context) {
-	resp := []string{}
-	for k := range s.downloaders {
-		resp = append(resp, k)
+	// Get all downloader names from the service configuration
+	var downloaderNames []string
+	for name := range s.downloaders {
+		downloaderNames = append(downloaderNames, name)
 	}
-	slices.Sort(resp)
-	c.JSON(200, resp)
+
+	// Get state counts for all configured downloaders
+	downloadersState, err := db.GetAllDownloadersStateCountsWithNames(s.db, downloaderNames)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Convert to proper response struct
+	var response []DownloaderInfoResponse
+	for _, item := range downloadersState {
+		name, _ := item["name"].(string)
+		countOfDownloading, _ := item["count_of_downloading"].(int64)
+		countOfPlanned, _ := item["count_of_planned"].(int64)
+		countOfFailed, _ := item["count_of_failed"].(int64)
+
+		response = append(response, DownloaderInfoResponse{
+			Name:               name,
+			CountOfDownloading: countOfDownloading,
+			CountOfPlanned:     countOfPlanned,
+			CountOfFailed:      countOfFailed,
+		})
+	}
+
+	// Sort by name
+	slices.SortFunc(response, func(a, b DownloaderInfoResponse) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+
+	c.JSON(200, response)
+}
+
+type DownloaderStatusResponse struct {
+	State     db.DownloaderStateCounts `json:"state"`
+	Resources []db.DownloadStatus      `json:"resources"`
 }
 
 func (s *Service) getDownloaderStatuses(c *gin.Context) {
@@ -285,7 +326,19 @@ func (s *Service) getDownloaderStatuses(c *gin.Context) {
 		return
 	}
 
-	c.JSON(200, statuses)
+	// Get state counts for this downloader
+	stateCounts, err := db.GetDownloaderStateCounts(s.db, downloaderName)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	response := DownloaderStatusResponse{
+		State:     *stateCounts,
+		Resources: statuses,
+	}
+
+	c.JSON(200, response)
 }
 
 func (s *Service) image(c *gin.Context) {

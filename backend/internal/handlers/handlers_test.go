@@ -482,11 +482,14 @@ func TestListDownloaders(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var downloaders []string
+	var downloaders []DownloaderInfoResponse
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &downloaders))
 
 	assert.Len(t, downloaders, 1)
-	assert.Contains(t, downloaders, "mock")
+	assert.Equal(t, "mock", downloaders[0].Name)
+	assert.Equal(t, int64(0), downloaders[0].CountOfDownloading)
+	assert.Equal(t, int64(0), downloaders[0].CountOfPlanned)
+	assert.Equal(t, int64(0), downloaders[0].CountOfFailed)
 }
 
 func TestGetDownloaderStatuses(t *testing.T) {
@@ -530,8 +533,16 @@ func TestGetDownloaderStatuses(t *testing.T) {
 
 				assert.Equal(t, http.StatusOK, w.Code)
 
-				var statuses []db.DownloadStatus
-				require.NoError(t, json.Unmarshal(w.Body.Bytes(), &statuses))
+				var response DownloaderStatusResponse
+				require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+
+				// Check state structure
+				assert.Equal(t, int64(0), response.State.CountOfDownloading)
+				assert.Equal(t, int64(0), response.State.CountOfPlanned)
+				assert.Equal(t, int64(0), response.State.CountOfFailed)
+
+				// Check resources structure
+				assert.NotNil(t, response.Resources)
 			})
 		}
 	})

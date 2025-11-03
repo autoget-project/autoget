@@ -11,6 +11,7 @@ import {
   type OrganizeAction,
   type PlanAction,
   type PlanResponse,
+  type DownloaderState,
 } from '../utils/api.ts';
 
 @customElement('downloader-view')
@@ -25,6 +26,9 @@ export class DownloaderView extends LitElement {
 
   @state()
   private downloadItems: DownloadItem[] = [];
+
+  @state()
+  private downloaderState: DownloaderState | null = null;
 
   @state()
   private loading: boolean = true;
@@ -78,11 +82,24 @@ export class DownloaderView extends LitElement {
     this.error = null;
 
     try {
-      const newItems = await fetchDownloaderItems(this.downloaderId, this.activeTab as DownloadState);
+      const response = await fetchDownloaderItems(this.downloaderId, this.activeTab as DownloadState);
+
+      // Handle case where response might be undefined or malformed
+      if (!response) {
+        throw new Error('No response received from server');
+      }
+
+      const resources = response.resources || [];
+      const state = response.state || { count_of_downloading: 0, count_of_planned: 0, count_of_failed: 0 };
 
       // Only update if data has actually changed or if it's the initial load
-      if (this.initialLoad || !this.arraysEqual(this.downloadItems, newItems)) {
-        this.downloadItems = newItems;
+      if (
+        this.initialLoad ||
+        !this.arraysEqual(this.downloadItems, resources) ||
+        !this.statesEqual(this.downloaderState, state)
+      ) {
+        this.downloadItems = resources;
+        this.downloaderState = state;
         this.initialLoad = false;
       }
     } catch (err) {
@@ -90,6 +107,7 @@ export class DownloaderView extends LitElement {
       // Only clear items on error if there are no items yet
       if (this.downloadItems.length === 0) {
         this.downloadItems = [];
+        this.downloaderState = null;
       }
       this.initialLoad = false;
     } finally {
@@ -126,6 +144,44 @@ export class DownloaderView extends LitElement {
     }
 
     return true;
+  }
+
+  private statesEqual(a: DownloaderState | null, b: DownloaderState | null): boolean {
+    if (!a && !b) return true;
+    if (!a || !b) return false;
+    return (
+      a.count_of_downloading === b.count_of_downloading &&
+      a.count_of_planned === b.count_of_planned &&
+      a.count_of_failed === b.count_of_failed
+    );
+  }
+
+  private getTabCount(tabId: string): number {
+    if (!this.downloaderState) return 0;
+
+    switch (tabId) {
+      case 'downloading':
+        return this.downloaderState.count_of_downloading;
+      case 'planned':
+        return this.downloaderState.count_of_planned;
+      case 'failed':
+        return this.downloaderState.count_of_failed;
+      default:
+        return 0;
+    }
+  }
+
+  private getTabBadgeColor(tabId: string): string {
+    switch (tabId) {
+      case 'downloading':
+        return 'badge-success';
+      case 'planned':
+        return 'badge-info';
+      case 'failed':
+        return 'badge-error';
+      default:
+        return 'badge-neutral';
+    }
   }
 
   private handleTabChange(tabId: string) {
@@ -254,46 +310,48 @@ export class DownloaderView extends LitElement {
           </summary>
           <div class="collapse-content">
             <!-- Feedback Section - Only show in planned tab -->
-            ${this.activeTab === 'planned' ? html`
-              <div class="pb-4">
-                <h4 class="text-sm font-medium mb-2">Provide feedback for re-creating plan:</h4>
-                <div class="flex gap-2">
-                  <input
-                    type="text"
-                    class="input input-bordered input-sm flex-1"
-                    placeholder="E.g., 'Move movie files to /Movies/Action folder', 'Skip subtitle files'"
-                    .value=${currentUserHint}
-                    @input=${(e: Event) => this.handleUserHintChange(downloadId, e)}
-                    @keyup=${(e: KeyboardEvent) => {
-                      if (e.key === 'Enter' && currentUserHint.trim()) {
-                        this.handleReplanWithHint(downloadId);
-                      }
-                    }}
-                  />
-                  <button
-                    class="btn btn-sm btn-primary btn-square"
-                    @click=${() => this.handleReplanWithHint(downloadId)}
-                    ?disabled=${!currentUserHint.trim()}
-                    title="Send feedback"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      class="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+            ${this.activeTab === 'planned'
+              ? html`
+                  <div class="pb-4">
+                    <h4 class="text-sm font-medium mb-2">Provide feedback for re-creating plan:</h4>
+                    <div class="flex gap-2">
+                      <input
+                        type="text"
+                        class="input input-bordered input-sm flex-1"
+                        placeholder="E.g., 'Move movie files to /Movies/Action folder', 'Skip subtitle files'"
+                        .value=${currentUserHint}
+                        @input=${(e: Event) => this.handleUserHintChange(downloadId, e)}
+                        @keyup=${(e: KeyboardEvent) => {
+                          if (e.key === 'Enter' && currentUserHint.trim()) {
+                            this.handleReplanWithHint(downloadId);
+                          }
+                        }}
                       />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            ` : ''}
+                      <button
+                        class="btn btn-sm btn-primary btn-square"
+                        @click=${() => this.handleReplanWithHint(downloadId)}
+                        ?disabled=${!currentUserHint.trim()}
+                        title="Send feedback"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          class="h-4 w-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                `
+              : ''}
 
             <div class="border-t border-base-300 pt-4">
               <div class="overflow-x-auto">
@@ -481,17 +539,22 @@ export class DownloaderView extends LitElement {
             <div class="bg-base-100 border-b border-base-300">
               <div class="flex items-center justify-between px-4">
                 <div role="tablist" class="tabs tabs-border">
-                  ${this.tabs.map(
-                    (tab) => html`
+                  ${this.tabs.map((tab) => {
+                    const count = this.getTabCount(tab.id);
+                    const badgeColor = this.getTabBadgeColor(tab.id);
+                    return html`
                       <button
                         role="tab"
                         class="tab ${this.activeTab === tab.id ? 'tab-active' : ''}"
                         @click=${() => this.handleTabChange(tab.id)}
                       >
                         ${tab.label}
+                        ${count > 0
+                          ? html`<span class="badge badge-outline badge-xs ${badgeColor} ml-2">${count}</span>`
+                          : ''}
                       </button>
-                    `,
-                  )}
+                    `;
+                  })}
                 </div>
 
                 <!-- Refresh Dropdown -->
