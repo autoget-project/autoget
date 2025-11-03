@@ -137,12 +137,12 @@ export class ResourceList extends LitElement {
               class="badge ${DateTime.now().diff(DateTime.fromSeconds(resource.createdDate, { zone: 'utc' }), 'weeks')
                 .weeks < 1
                 ? 'badge-accent'
-                : 'badge-neutral'} line-clamp-1"
+                : 'badge-neutral'}"
             >
               <span class="icon-[mingcute--time-line]"></span>
               ${formatCreatedDate(resource.createdDate)}
             </span>
-            <span class="badge badge-info line-clamp-1">
+            <span class="badge badge-info">
               <span class="icon-[icons8--up-round]"></span>
               ${resource.seeders}
             </span>
