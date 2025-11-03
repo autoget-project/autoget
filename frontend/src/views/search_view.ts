@@ -76,6 +76,9 @@ export class SearchView extends LitElement {
   @state()
   private isSearching: boolean = false;
 
+  @state()
+  private showIndexerWarning: boolean = false;
+
   async connectedCallback() {
     super.connectedCallback();
     this.indexers = await fetchIndexers();
@@ -164,6 +167,7 @@ export class SearchView extends LitElement {
   private async handleIndexerChange(indexer: string) {
     this.selectedIndexer = indexer;
     this.selectedCategoryPath = [];
+    this.showIndexerWarning = false; // Hide warning when indexer is selected
     await this.fetchAndDisplayCategories();
   }
 
@@ -179,6 +183,16 @@ export class SearchView extends LitElement {
 
   private handleSearch(e: Event) {
     e.preventDefault();
+
+    // Check if indexer is selected
+    if (!this.selectedIndexer) {
+      this.showIndexerWarning = true;
+      this.requestUpdate();
+      return;
+    }
+
+    // Hide warning if indexer is selected
+    this.showIndexerWarning = false;
 
     // Set searching state to true when search is initiated
     this.isSearching = true;
@@ -324,6 +338,26 @@ export class SearchView extends LitElement {
               </div>
             </div>
 
+            ${this.showIndexerWarning
+              ? html`
+                  <div class="alert alert-warning mt-4">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="stroke-current shrink-0 h-6 w-6"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                      />
+                    </svg>
+                    <span>Please choose indexer to search</span>
+                  </div>
+                `
+              : ''}
             ${this.isSearching
               ? html`
                   <div class="flex justify-center items-center py-8">
