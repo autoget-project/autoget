@@ -253,49 +253,60 @@ export class DownloaderView extends LitElement {
             Organize Plan (${organizePlans.plan.length} items)
           </summary>
           <div class="collapse-content">
-            <div class="overflow-x-auto mb-4">
-              <table class="table table-sm">
-                <thead>
-                  <tr>
-                    <th>Action</th>
-                    <th>Original Path</th>
-                    <th>Target</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${organizePlans.plan.map((planAction: PlanAction) => this.renderPlanAction(planAction))}
-                </tbody>
-              </table>
-            </div>
-
             <!-- Feedback Section -->
-            <div class="border-t border-base-300 pt-4">
-              <h4 class="text-sm font-medium mb-2">Provide Feedback for Re-planning:</h4>
-              <div class="flex flex-col gap-2">
-                <textarea
-                  class="textarea textarea-bordered textarea-sm h-16"
-                  placeholder="E.g., 'Move movie files to /Movies/Action folder', 'Skip subtitle files', 'Rename files to match title'"
+            <div class="pb-4">
+              <h4 class="text-sm font-medium mb-2">Provide feedback for re-creating plan:</h4>
+              <div class="flex gap-2">
+                <input
+                  type="text"
+                  class="input input-bordered input-sm flex-1"
+                  placeholder="E.g., 'Move movie files to /Movies/Action folder', 'Skip subtitle files'"
                   .value=${currentUserHint}
                   @input=${(e: Event) => this.handleUserHintChange(downloadId, e)}
-                ></textarea>
-                <div class="flex gap-2">
-                  <button
-                    class="btn btn-sm btn-primary"
-                    @click=${() => this.handleReplanWithHint(downloadId)}
-                    ?disabled=${!currentUserHint.trim()}
+                  @keyup=${(e: KeyboardEvent) => {
+                    if (e.key === 'Enter' && currentUserHint.trim()) {
+                      this.handleReplanWithHint(downloadId);
+                    }
+                  }}
+                />
+                <button
+                  class="btn btn-sm btn-primary btn-square"
+                  @click=${() => this.handleReplanWithHint(downloadId)}
+                  ?disabled=${!currentUserHint.trim()}
+                  title="Send feedback"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
                   >
-                    Feedback & Re-plan
-                  </button>
-                  <button
-                    class="btn btn-sm btn-ghost"
-                    @click=${() => {
-                      this.userHints.delete(downloadId);
-                      this.requestUpdate();
-                    }}
-                  >
-                    Clear
-                  </button>
-                </div>
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="border-t border-base-300 pt-4">
+              <div class="overflow-x-auto">
+                <table class="table table-sm">
+                  <thead>
+                    <tr>
+                      <th>Action</th>
+                      <th>Original Path</th>
+                      <th>Target</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${organizePlans.plan.map((planAction: PlanAction) => this.renderPlanAction(planAction))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
