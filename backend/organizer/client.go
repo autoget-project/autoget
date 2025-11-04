@@ -44,10 +44,10 @@ type ExecuteRequest struct {
 
 // ReplanRequest is the request body for the replan-with-hint endpoint.
 type ReplanRequest struct {
-	Files            []string      `json:"files"`
+	Files            []string               `json:"files"`
 	Metadata         map[string]interface{} `json:"metadata,omitempty"`
-	PreviousResponse *PlanResponse `json:"previous_response"`
-	UserHint         string        `json:"user_hint"`
+	PreviousResponse *PlanResponse          `json:"previous_response"`
+	UserHint         string                 `json:"user_hint"`
 }
 
 // PlanFailed represents a PlanAction that failed during execution.

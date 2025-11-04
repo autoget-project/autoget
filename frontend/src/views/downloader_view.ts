@@ -330,10 +330,15 @@ export class DownloaderView extends LitElement {
                       <button
                         class="btn btn-sm btn-primary btn-square"
                         @click=${() => this.handleReplanWithHint(downloadId)}
+                        @keyup=${(e: KeyboardEvent) => {
+                          if (e.key === 'Enter' && currentUserHint.trim()) {
+                            this.handleReplanWithHint(downloadId);
+                          }
+                        }}
                         ?disabled=${!currentUserHint.trim()}
                         title="Send feedback"
                       >
-                        Send
+                        <span class="icon-[tdesign--enter]" width="1.2em" height="1.2em"></span>
                       </button>
                     </div>
                   </div>
