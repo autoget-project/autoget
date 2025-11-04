@@ -326,7 +326,10 @@ export class DownloaderView extends LitElement {
                         ?disabled=${!currentUserHint.trim()}
                         title="Send feedback"
                       >
-                        <span class="icon-[ph--arrow-elbow-down-left-light]" style="width: 1.2em; height: 1.2em;"></span>
+                        <span
+                          class="icon-[ph--arrow-elbow-down-left-light]"
+                          style="width: 1.2em; height: 1.2em;"
+                        ></span>
                       </button>
                     </div>
                   </div>
@@ -414,15 +417,18 @@ export class DownloaderView extends LitElement {
                         class="btn btn-sm btn-success"
                         @click=${() => this.handleOrganizeAction(item.ID, 'accept_plan')}
                       >
+                        <span class="icon-[ph--check-bold]" style="width: 1.2em; height: 1.2em;"></span>
                         Accept Plan
                       </button>
                       <button class="btn btn-sm btn-info" @click=${() => this.handleOrganizeAction(item.ID, 're_plan')}>
+                        <span class="icon-[ph--arrow-clockwise-bold]" style="width: 1.2em; height: 1.2em;"></span>
                         Re-plan
                       </button>
                       <button
-                        class="btn btn-sm btn-neutral"
+                        class="btn btn-sm btn-primary"
                         @click=${() => this.handleOrganizeAction(item.ID, 'manual_organized')}
                       >
+                        <span class="icon-[ph--user-bold]" style="width: 1.2em; height: 1.2em;"></span>
                         Manual Organized
                       </button>
                     `
