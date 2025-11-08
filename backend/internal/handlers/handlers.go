@@ -47,6 +47,7 @@ func (s *Service) SetupRouter(router *gin.RouterGroup) {
 	router.GET("/downloaders", s.listDownloaders)
 	router.GET("/downloaders/:downloader", s.getDownloaderStatuses)
 	router.POST("/download/:id/organize", s.organizeDownload)
+	router.DELETE("/download/:id", s.deleteDownload)
 
 	router.GET("/image", s.image)
 }
@@ -512,4 +513,34 @@ func (s *Service) handleRePlan(c *gin.Context, downloadStatus *db.DownloadStatus
 		"status": "re_plan completed successfully",
 		"plan":   resp,
 	})
+}
+
+func (s *Service) deleteDownload(c *gin.Context) {
+	downloadID := c.Param("id")
+
+	// Get the download status to find which downloader to use
+	downloadStatus, err := db.GetDownloadStatusByID(s.db, downloadID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(404, gin.H{"error": "Download not found"})
+		} else {
+			c.JSON(500, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	// Get the downloader
+	downloader, ok := s.downloaders[downloadStatus.Downloader]
+	if !ok {
+		c.JSON(404, gin.H{"error": "Downloader not found"})
+		return
+	}
+
+	// Delete the torrent
+	if err := downloader.DeleteTorrent(downloadID); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"status": "deleted"})
 }

@@ -205,6 +205,21 @@ export async function organizeDownload(
   }
 }
 
+export async function deleteDownload(downloadId: string): Promise<boolean> {
+  try {
+    const response = await fetch(`/api/v1/download/${downloadId}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return true;
+  } catch (error) {
+    console.error('Error deleting download:', error);
+    return false;
+  }
+}
+
 export async function downloadResource(indexerId: string, resourceId: string): Promise<boolean> {
   try {
     const response = await fetch(`/api/v1/indexers/${indexerId}/resources/${resourceId}/download`, {

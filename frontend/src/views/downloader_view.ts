@@ -6,6 +6,7 @@ import globalStyles from '/src/index.css?inline';
 import {
   fetchDownloaderItems,
   organizeDownload,
+  deleteDownload,
   type DownloadItem,
   type DownloadState,
   type OrganizeAction,
@@ -254,6 +255,28 @@ export class DownloaderView extends LitElement {
     await this.handleOrganizeAction(downloadId, 're_plan', userHint);
   }
 
+  private async handleDeleteDownload(downloadId: string) {
+    // Show confirmation dialog
+    if (!confirm('Are you sure you want to delete this download? This will remove the torrent and delete all local data.')) {
+      return;
+    }
+
+    try {
+      const success = await deleteDownload(downloadId);
+      if (success) {
+        // Refresh the data after successful deletion
+        await this.loadDownloadItems();
+      } else {
+        // Show error message (could add a toast/notification here)
+        console.error('Failed to delete download');
+        alert('Failed to delete download. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error deleting download:', error);
+      alert('Error deleting download. Please try again.');
+    }
+  }
+
   private startRefreshTimer() {
     this.stopRefreshTimer(); // Clear any existing timer
     this.refreshTimer = setInterval(() => {
@@ -448,6 +471,15 @@ export class DownloaderView extends LitElement {
                         </button>
                       `
                     : html``}
+                <!-- Delete button for all tabs -->
+                <button
+                  class="btn btn-sm btn-error"
+                  @click=${() => this.handleDeleteDownload(item.ID)}
+                  title="Delete download and remove all local data"
+                >
+                  <span class="icon-[ph--trash-bold]" style="width: 1.2em; height: 1.2em;"></span>
+                  Delete
+                </button>
               </div>
             </div>
           </div>

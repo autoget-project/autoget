@@ -73,6 +73,7 @@ func (d *downloadersMock) DownloadDir() string {
 func (d *downloadersMock) RegisterCronjobs(cron *cron.Cron)            {}
 func (d *downloadersMock) RegisterDailySeedingChecker(cron *cron.Cron) {}
 func (d *downloadersMock) ProgressChecker()                            {}
+func (d *downloadersMock) DeleteTorrent(hash string) error               { return nil }
 
 func testSetup(t *testing.T) (*Service, *gin.Engine, *indexerMock, *gorm.DB) {
 	t.Helper()

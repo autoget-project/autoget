@@ -335,6 +335,45 @@ func (c *Client) TorrentsDir() string {
 	return c.cfg.Transmission.TorrentsDir
 }
 
+func (c *Client) DeleteTorrent(hash string) error {
+	torrents, err := c.client.TorrentGetAll(context.Background())
+	if err != nil {
+		logger.Error().Err(err).Str("name", c.name).Msg("failed to get all torrents")
+		return err
+	}
+
+	// Find the torrent by hash
+	var torrentID int64
+	for _, t := range torrents {
+		if *t.HashString == hash {
+			torrentID = *t.ID
+			break
+		}
+	}
+
+	if torrentID == 0 {
+		return errors.New("torrent not found")
+	}
+
+	// Delete the torrent from Transmission
+	if err := c.client.TorrentRemove(context.Background(), transmissionrpc.TorrentRemovePayload{
+		IDs:            []int64{torrentID},
+		DeleteLocalData: true,
+	}); err != nil {
+		logger.Error().Err(err).Str("name", c.name).Str("hash", hash).Msg("failed to delete torrent")
+		return err
+	}
+
+	// Update the download status in database
+	if err := db.UpdateDownloadStateForStatuses(c.db, []string{hash}, db.DownloadDeleted); err != nil {
+		logger.Error().Err(err).Str("name", c.name).Str("hash", hash).Msg("failed to update download status")
+		return err
+	}
+
+	logger.Info().Str("name", c.name).Str("hash", hash).Msg("successfully deleted torrent")
+	return nil
+}
+
 func (c *Client) DownloadDir() string {
 	return c.cfg.Transmission.DownloadDir
 }

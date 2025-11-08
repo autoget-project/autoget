@@ -16,6 +16,7 @@ type IDownloader interface {
 	ProgressChecker()
 	TorrentsDir() string
 	DownloadDir() string
+	DeleteTorrent(hash string) error
 }
 
 func New(name string, cfg *config.DownloaderConfig, db *gorm.DB, organizerClient *organizer.Client) (IDownloader, error) {
