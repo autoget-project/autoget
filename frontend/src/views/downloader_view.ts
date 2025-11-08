@@ -14,6 +14,7 @@ import {
   type PlanResponse,
   type DownloaderState,
 } from '../utils/api.ts';
+import { formatBytes } from '../utils/format.ts';
 
 @customElement('downloader-view')
 export class DownloaderView extends LitElement {
@@ -257,7 +258,9 @@ export class DownloaderView extends LitElement {
 
   private async handleDeleteDownload(downloadId: string) {
     // Show confirmation dialog
-    if (!confirm('Are you sure you want to delete this download? This will remove the torrent and delete all local data.')) {
+    if (
+      !confirm('Are you sure you want to delete this download? This will remove the torrent and delete all local data.')
+    ) {
       return;
     }
 
@@ -409,6 +412,9 @@ export class DownloaderView extends LitElement {
               <div class="flex flex-wrap gap-2 mt-2">
                 <span class="badge badge-neutral">${item.ResIndexer}</span>
                 <span class="badge badge-outline">${item.Category}</span>
+                ${item.Size
+                  ? html`<span class="badge badge-outline badge-secondary">${formatBytes(item.Size)}</span>`
+                  : ''}
                 <span class="badge badge-${this.getMoveStateLabel(item.MoveState).color}">
                   ${this.getMoveStateLabel(item.MoveState).label}
                 </span>
