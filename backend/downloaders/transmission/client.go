@@ -216,7 +216,7 @@ func (c *Client) RegisterDailySeedingChecker(cron *cron.Cron) {
 		return
 	}
 
-	cron.AddFunc("0 0 8 * * *", func() {
+	cron.AddFunc("0 8 * * *", func() {
 		c.checkDailySeeding()
 	})
 }
