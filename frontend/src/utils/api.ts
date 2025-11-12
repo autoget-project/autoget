@@ -126,6 +126,7 @@ export interface DownloadItem {
     organizer_category: string[];
     title: string;
   };
+  Size?: number;
   MoveState: number;
   OrganizeState: number;
   OrganizePlans: PlanResponse | null;

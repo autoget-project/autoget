@@ -13,6 +13,7 @@ import (
 	"github.com/autoget-project/autoget/backend/downloaders/config"
 	"github.com/autoget-project/autoget/backend/internal/db"
 	"github.com/autoget-project/autoget/backend/organizer"
+	"github.com/hekmon/cunits/v2"
 	"github.com/hekmon/transmissionrpc/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -63,12 +64,14 @@ func (f *fakeTransmission) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func newTorrent(id int64, hash string, status transmissionrpc.TorrentStatus, uploaded int64) transmissionrpc.Torrent {
 	name := fmt.Sprintf("Torrent %d", id)
+	totalSize := cunits.ImportInByte(1000)
 	return transmissionrpc.Torrent{
 		ID:           &id,
 		HashString:   &hash,
 		Status:       &status,
 		UploadedEver: &uploaded,
 		Name:         &name,
+		TotalSize:    &totalSize,
 	}
 }
 
@@ -226,6 +229,7 @@ func TestCheckDailySeeding(t *testing.T) {
 func newTorrentWithProgress(id int64, hash string, status transmissionrpc.TorrentStatus, percentDone float64, downloadDir string, files []transmissionrpc.TorrentFile) transmissionrpc.Torrent {
 	name := fmt.Sprintf("Torrent %d", id)
 	uploaded := int64(0)
+	totalSize := cunits.ImportInByte(1000)
 	return transmissionrpc.Torrent{
 		ID:           &id,
 		HashString:   &hash,
@@ -235,6 +239,7 @@ func newTorrentWithProgress(id int64, hash string, status transmissionrpc.Torren
 		DownloadDir:  &downloadDir,
 		Files:        files,
 		UploadedEver: &uploaded,
+		TotalSize:    &totalSize,
 	}
 }
 

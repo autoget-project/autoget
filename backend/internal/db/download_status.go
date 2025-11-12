@@ -52,6 +52,7 @@ type DownloadStatus struct {
 	State            DownloadState `gorm:"index:idx_downloader_state;index:idx_downloader_state_movestate"`
 
 	UploadHistories map[string]int64 `gorm:"serializer:json"`
+	Size             uint64
 
 	ResIndexer string
 	ResTitle   string

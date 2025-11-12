@@ -121,6 +121,7 @@ func (c *Client) updateDownloadProgress(torrentsByHash map[string]*transmissionr
 		}
 
 		s.DownloadProgress = uint16(*t.PercentDone * 1000)
+		s.Size = uint64(t.TotalSize.Byte())
 		if *t.Status == transmissionrpc.TorrentStatusSeed {
 			s.State = db.DownloadSeeding
 		}
@@ -357,7 +358,7 @@ func (c *Client) DeleteTorrent(hash string) error {
 
 	// Delete the torrent from Transmission
 	if err := c.client.TorrentRemove(context.Background(), transmissionrpc.TorrentRemovePayload{
-		IDs:            []int64{torrentID},
+		IDs:             []int64{torrentID},
 		DeleteLocalData: true,
 	}); err != nil {
 		logger.Error().Err(err).Str("name", c.name).Str("hash", hash).Msg("failed to delete torrent")
