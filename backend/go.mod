@@ -9,6 +9,7 @@ require (
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-telegram/bot v1.17.0
 	github.com/google/go-cmp v0.7.0
+	github.com/hekmon/cunits/v2 v2.1.1
 	github.com/hekmon/transmissionrpc/v3 v3.0.0
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/robfig/cron/v3 v3.0.1
@@ -16,7 +17,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/postgres v1.6.0
-	gorm.io/gorm v1.31.0
+	gorm.io/gorm v1.31.1
 )
 
 require (
@@ -40,7 +41,6 @@ require (
 	github.com/goccy/go-yaml v1.18.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
-	github.com/hekmon/cunits/v2 v2.1.1 // indirect
 	github.com/huandu/xstrings v1.5.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
