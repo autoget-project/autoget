@@ -214,15 +214,23 @@ func (c *Client) createOrganizerPlan() {
 
 func (c *Client) RegisterDailySeedingChecker(cron *cron.Cron) {
 	if c.cfg.SeedingPolicy == nil {
+		logger.Info().Str("name", c.name).Msg("seeding policy is not configured")
 		return
 	}
 
-	cron.AddFunc("0 8 * * *", func() {
+	jobID, err := cron.AddFunc("0 8 * * *", func() {
 		c.checkDailySeeding()
 	})
+	if err != nil {
+		logger.Error().Err(err).Str("name", c.name).Msg("failed to add cron job")
+		return
+	}
+	logger.Info().Str("name", c.name).Int64("jobID", int64(jobID)).Msg("added cron job")
 }
 
 func (c *Client) checkDailySeeding() {
+	logger.Info().Str("name", c.name).Msg("checking daily seeding")
+
 	torrents, err := c.client.TorrentGetAll(context.Background())
 	if err != nil {
 		logger.Error().Err(err).Str("name", c.name).Msg("failed to get all torrents")
@@ -259,6 +267,9 @@ func (c *Client) stopTorrents(torrents []transmissionrpc.Torrent) {
 			db.SaveDownloadStatus(c.db, ss)
 
 			continue
+		}
+		if ss.UploadHistories == nil {
+			ss.UploadHistories = make(map[string]int64)
 		}
 		ss.CleanupHistory()
 		ss.AddToday(uploaded)
