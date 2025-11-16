@@ -17,7 +17,7 @@ export class AppNavbar extends LitElement {
   @property({ type: String })
   activePage = '';
 
-  private refreshTimer: number | null = null;
+  private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private readonly refreshInterval = 20000; // 20 seconds
 
   async connectedCallback() {

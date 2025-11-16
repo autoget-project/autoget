@@ -47,7 +47,7 @@ export class DownloaderView extends LitElement {
   @state()
   private userHints: Map<string, string> = new Map(); // Store user hints per download ID
 
-  private refreshTimer: number | null = null;
+  private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   private readonly tabs = [
     { id: 'downloading', label: 'Downloading' },
