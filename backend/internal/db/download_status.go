@@ -52,7 +52,7 @@ type DownloadStatus struct {
 	State            DownloadState `gorm:"index:idx_downloader_state;index:idx_downloader_state_movestate"`
 
 	UploadHistories map[string]int64 `gorm:"serializer:json"`
-	Size             uint64
+	Size            uint64
 
 	ResIndexer string
 	ResTitle   string
@@ -201,7 +201,7 @@ func GetAllDownloadersStateCounts(db *gorm.DB) ([]map[string]interface{}, error)
 		}
 
 		item := map[string]interface{}{
-			"name":                downloader,
+			"name":                 downloader,
 			"count_of_downloading": counts.CountOfDownloading,
 			"count_of_planned":     counts.CountOfPlanned,
 			"count_of_failed":      counts.CountOfFailed,
@@ -223,7 +223,7 @@ func GetAllDownloadersStateCountsWithNames(db *gorm.DB, downloaderNames []string
 		}
 
 		item := map[string]interface{}{
-			"name":                downloader,
+			"name":                 downloader,
 			"count_of_downloading": counts.CountOfDownloading,
 			"count_of_planned":     counts.CountOfPlanned,
 			"count_of_failed":      counts.CountOfFailed,

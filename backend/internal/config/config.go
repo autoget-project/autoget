@@ -8,7 +8,7 @@ import (
 	"github.com/autoget-project/autoget/backend/indexers/mteam"
 	"github.com/autoget-project/autoget/backend/indexers/nyaa"
 	"github.com/autoget-project/autoget/backend/internal/notify/telegram"
-	"gopkg.in/yaml.v3"
+	"github.com/goccy/go-yaml"
 )
 
 type Config struct {
