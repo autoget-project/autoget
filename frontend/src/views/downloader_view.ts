@@ -410,8 +410,8 @@ export class DownloaderView extends LitElement {
               <h3 class="card-title text-lg">${item.ResTitle}</h3>
               ${item.ResTitle2 ? html`<p class="text-sm text-base-content/70 mt-1">${item.ResTitle2}</p>` : ''}
               <div class="flex flex-wrap gap-2 mt-2">
-                <span class="badge badge-neutral">${item.ResIndexer}</span>
-                <span class="badge badge-outline">${item.Category}</span>
+                ${item.ResIndexer ? html`<span class="badge badge-neutral">${item.ResIndexer}</span>` : ''}
+                ${item.Category ? html`<span class="badge badge-outline">${item.Category}</span>` : ''}
                 ${item.Size
                   ? html`<span class="badge badge-outline badge-secondary">${formatBytes(item.Size)}</span>`
                   : ''}
