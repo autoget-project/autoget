@@ -122,7 +122,7 @@ func GetStoppedMovedDownloadStatusByDownloader(db *gorm.DB, downloader string) (
 
 func GetMovedAndOrganizeStateDownloadStatusByDownloader(db *gorm.DB, downloader string, organizeState OrganizeState) ([]DownloadStatus, error) {
 	var ss []DownloadStatus
-	err := db.Where("downloader = ?", downloader).Where("move_state = ?", Moved).Where("organize_state = ?", organizeState).Find(&ss).Error
+	err := db.Where("downloader = ?", downloader).Where("state != ?", DownloadDeleted).Where("move_state = ?", Moved).Where("organize_state = ?", organizeState).Find(&ss).Error
 	return ss, err
 }
 
