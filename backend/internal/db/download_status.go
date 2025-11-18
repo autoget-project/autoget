@@ -160,7 +160,7 @@ func GetDownloaderStateCounts(db *gorm.DB, downloader string) (*DownloaderStateC
 	}
 
 	// Count planned (moved and organized state = Planed)
-	err = db.Model(&DownloadStatus{}).Where("downloader = ?", downloader).Where("move_state = ?", Moved).Where("organize_state = ?", Planed).Count(&counts.CountOfPlanned).Error
+	err = db.Model(&DownloadStatus{}).Where("downloader = ?", downloader).Where("state != ?", DownloadDeleted).Where("move_state = ?", Moved).Where("organize_state = ?", Planed).Count(&counts.CountOfPlanned).Error
 	if err != nil {
 		return nil, err
 	}
