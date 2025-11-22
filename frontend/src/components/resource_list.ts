@@ -162,6 +162,32 @@ export class ResourceList extends LitElement {
                 )}
               </div>`
             : ''}
+          ${resource.dbs && resource.dbs.length > 0
+            ? html` <div class="flex flex-wrap gap-3 mt-1 mb-1 pb-1 border-b border-b-gray-400 dark:border-gray-600">
+                ${resource.dbs.map((db: { db: string; link: string; rating: string }) => {
+                  if (db.db === 'douban' || db.db === 'imdb') {
+                    return html`
+                      <a
+                        href="${db.link}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="inline-flex items-center gap-2 transition-colors cursor-pointer"
+                        title="Open ${db.db.toUpperCase()} page in new tab"
+                      >
+                        <span
+                          class="${db.db === 'douban'
+                            ? 'icon-[simple-icons--douban] text-green-600'
+                            : 'icon-[fa--imdb]'}"
+                          style="width: 1.2em; height: 1.2em;"
+                        ></span>
+                        ${db.rating ? html`<span class="text-xs">(${db.rating} ⭐)</span>` : ''}
+                      </a>
+                    `;
+                  }
+                  return '';
+                })}
+              </div>`
+            : ''}
           <div class="flex flex-row basis-full justify-end">
             <download-button indexerId="${this.indexerId}" resourceId="${resource.id}"></download-button>
           </div>
