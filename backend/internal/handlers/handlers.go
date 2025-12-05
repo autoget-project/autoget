@@ -334,6 +334,11 @@ func (s *Service) getDownloaderStatuses(c *gin.Context) {
 		return
 	}
 
+	// sort statuses by create date, latest , ..., earliest
+	slices.SortFunc(statuses, func(a, b db.DownloadStatus) int {
+		return b.CreatedAt.Compare(a.CreatedAt)
+	})
+
 	response := DownloaderStatusResponse{
 		State:     *stateCounts,
 		Resources: statuses,
