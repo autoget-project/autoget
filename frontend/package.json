@@ -25,7 +25,7 @@
     "@eslint/js": "^9.39.0",
     "@eslint/json": "^0.13.1",
     "@eslint/markdown": "^7.5.0",
-    "@iconify/json": "^2.2.402",
+    "@iconify/json": "^2.2.416",
     "@iconify/tailwind4": "^1.1.0",
     "@types/luxon": "^3.7.1",
     "eslint": "^9.39.0",
