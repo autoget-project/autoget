@@ -4,7 +4,7 @@ go 1.25.3
 
 require (
 	github.com/PuerkitoBio/goquery v1.11.0
-	github.com/anacrolix/torrent v1.59.1
+	github.com/anacrolix/torrent v1.60.0
 	github.com/gin-gonic/gin v1.11.0
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-telegram/bot v1.17.0
