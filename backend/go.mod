@@ -8,7 +8,7 @@ require (
 	github.com/gin-gonic/gin v1.11.0
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-telegram/bot v1.17.0
-	github.com/goccy/go-yaml v1.19.0
+	github.com/goccy/go-yaml v1.19.1
 	github.com/google/go-cmp v0.7.0
 	github.com/hekmon/cunits/v2 v2.1.1
 	github.com/hekmon/transmissionrpc/v3 v3.0.0
