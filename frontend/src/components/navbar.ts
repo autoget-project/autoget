@@ -17,6 +17,18 @@ export class AppNavbar extends LitElement {
   @property({ type: String })
   activePage = '';
 
+  @property({ type: Boolean })
+  sidebarVisible = true;
+
+  private toggleSidebar() {
+    this.dispatchEvent(
+      new CustomEvent('sidebar-toggle', {
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private readonly refreshInterval = 20000; // 20 seconds
 
@@ -67,10 +79,22 @@ export class AppNavbar extends LitElement {
   }
 
   render() {
+    const isIndexerPage = this.indexers.includes(this.activePage);
     return html`
       <div class="navbar bg-base-200">
-        <div class="navbar-start">
-          <a href="/" class="btn-ghost">
+        <div class="navbar-start gap-1">
+          ${isIndexerPage
+            ? html`
+                <a class="btn btn-square btn-ghost" @click=${this.toggleSidebar}>
+                  <span
+                    class="icon-[mdi--chevron-left] w-8 h-8 transition-transform duration-300 ${this.sidebarVisible
+                      ? ''
+                      : 'rotate-180'}"
+                  ></span>
+                </a>
+              `
+            : ''}
+          <a href="/" class="btn btn-square btn-ghost">
             <img src="/icon.svg" alt="Icon" class="w-8 h-8" />
           </a>
           <div role="tablist" class="tabs tabs-border">

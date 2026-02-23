@@ -53,6 +53,13 @@ export class IndexerView extends LitElement {
   @property({ type: Number })
   public page: number = 1;
 
+  @state()
+  private sidebarVisible: boolean = true;
+
+  private handleSidebarToggle(): void {
+    this.sidebarVisible = !this.sidebarVisible;
+  }
+
   private renderCategory(category: Category): TemplateResult {
     const isActive = this.category === category.id;
     const activeClass = isActive ? 'menu-active' : '';
@@ -118,12 +125,19 @@ export class IndexerView extends LitElement {
   }
 
   render() {
+    const sidebarClass = this.sidebarVisible ? 'flex-2' : 'w-0';
     return html`
-      <div class="flex flex-col h-screen">
-        <app-navbar .activePage=${this.indexerId}></app-navbar>
+      <div class="flex flex-col h-screen" @sidebar-toggle=${this.handleSidebarToggle}>
+        <app-navbar .activePage=${this.indexerId} .sidebarVisible=${this.sidebarVisible}></app-navbar>
 
-        <div class="flex flex-row flex-grow overflow-hidden">
-          <div class="flex-2 bg-base-200 overflow-y-auto" id="left-panel-categories">
+        <div class="flex flex-row grow overflow-hidden">
+          <div
+            class="${sidebarClass} bg-base-200 overflow-y-auto transition-all duration-300 ease-in-out ${this
+              .sidebarVisible
+              ? ''
+              : 'opacity-0'}"
+            id="left-panel-categories"
+          >
             <ul class="menu bg-base-200 rounded-box w-full">
               ${this.categories.map((category) => this.renderCategory(category))}
             </ul>

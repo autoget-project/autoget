@@ -2,7 +2,7 @@
 {
 	http_port 8880
 }
-http://127.0.0.1:8880 {
+:8880 {
 	handle /api/* {
 		reverse_proxy 127.0.0.1:8888
 	}
