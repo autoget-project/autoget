@@ -77,7 +77,7 @@ AutoGet Backend provides a centralized system for:
 ## Quick Start
 
 ### Prerequisites
-- Go 1.25+
+- Go 1.26+
 - PostgreSQL
 - Transmission (for downloader functionality)
 
