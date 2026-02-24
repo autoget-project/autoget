@@ -37,6 +37,7 @@ export class AppNavbar extends LitElement {
     this.indexers = await fetchIndexers();
     this.downloaders = await fetchDownloaders();
     this.startRefreshTimer();
+    this.requestUpdate();
   }
 
   disconnectedCallback() {

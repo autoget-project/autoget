@@ -51,7 +51,7 @@ export class AppRouter extends LitElement {
         return html`<indexer-view .indexerId=${id || ''} category=""></indexer-view>`;
       },
       enter: async ({ id }) => {
-        if (this.indexers.length === 0) {
+        while (this.indexers.length === 0) {
           await this.fetchIndexers();
         }
         if (id === undefined || !this.indexers.includes(id)) {
