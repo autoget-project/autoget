@@ -1,6 +1,14 @@
+async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const response = await fetch(input, init);
+  if (response.status === 401) {
+    window.location.reload();
+  }
+  return response;
+}
+
 export async function fetchIndexers(): Promise<string[]> {
   try {
-    const response = await fetch('/api/v1/indexers');
+    const response = await apiFetch('/api/v1/indexers');
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -19,7 +27,7 @@ export interface Category {
 
 export async function fetchIndexerCategories(indexer: string): Promise<Category[]> {
   try {
-    const response = await fetch(`/api/v1/indexers/${indexer}/categories`);
+    const response = await apiFetch(`/api/v1/indexers/${indexer}/categories`);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -72,7 +80,7 @@ export async function fetchIndexerResources(
   pageSize: number = 100,
 ): Promise<ResourcesResponse | null> {
   try {
-    const response = await fetch(
+    const response = await apiFetch(
       `/api/v1/indexers/${indexer}/resources?category=${category}&keyword=${keyword}&page=${page}&pageSize=${pageSize}`,
     );
     if (!response.ok) {
@@ -94,7 +102,7 @@ export interface DownloaderInfo {
 
 export async function fetchDownloaders(): Promise<DownloaderInfo[]> {
   try {
-    const response = await fetch('/api/v1/downloaders');
+    const response = await apiFetch('/api/v1/downloaders');
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -150,7 +158,7 @@ export async function fetchDownloaderItems(
   state: DownloadState,
 ): Promise<DownloaderStatusResponse> {
   try {
-    const response = await fetch(`/api/v1/downloaders/${downloaderName}?state=${state}`);
+    const response = await apiFetch(`/api/v1/downloaders/${downloaderName}?state=${state}`);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -193,7 +201,7 @@ export async function organizeDownload(
       url += `&user_hint=${encodeURIComponent(userHint)}`;
     }
 
-    const response = await fetch(url, {
+    const response = await apiFetch(url, {
       method: 'POST',
     });
     if (!response.ok) {
@@ -208,7 +216,7 @@ export async function organizeDownload(
 
 export async function deleteDownload(downloadId: string): Promise<boolean> {
   try {
-    const response = await fetch(`/api/v1/download/${downloadId}`, {
+    const response = await apiFetch(`/api/v1/download/${downloadId}`, {
       method: 'DELETE',
     });
     if (!response.ok) {
@@ -223,7 +231,7 @@ export async function deleteDownload(downloadId: string): Promise<boolean> {
 
 export async function downloadResource(indexerId: string, resourceId: string): Promise<boolean> {
   try {
-    const response = await fetch(`/api/v1/indexers/${indexerId}/resources/${resourceId}/download`, {
+    const response = await apiFetch(`/api/v1/indexers/${indexerId}/resources/${resourceId}/download`, {
       method: 'GET',
     });
     if (!response.ok) {
