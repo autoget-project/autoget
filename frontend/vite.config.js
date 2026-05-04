@@ -7,4 +7,9 @@ export default defineConfig({
     port: 8889,
   },
   plugins: [tailwindcss()],
+  resolve: {
+    alias: {
+      daisyui: 'daisyui/index.js',
+    },
+  },
 });
