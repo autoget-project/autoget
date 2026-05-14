@@ -1,7 +1,8 @@
 async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const response = await fetch(input, init);
   if (response.status === 401) {
-    window.location.href = '/';
+    console.log('apiFetch: 401');
+    throw new Error(`HTTP error! status: ${response.status}`);
   }
   return response;
 }
