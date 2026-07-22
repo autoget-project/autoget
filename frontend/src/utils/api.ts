@@ -1,8 +1,12 @@
 async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const response = await fetch(input, init);
   if (response.status === 401) {
-    console.log('apiFetch: 401');
-    throw new Error(`HTTP error! status: ${response.status}`);
+    console.log('apiFetch: 401 received, redirecting to refresh session via SSO...');
+    const url = new URL(window.location.href);
+    url.searchParams.set('_auth_refresh', Date.now().toString());
+    window.location.href = url.toString();
+    // Return an unresolved promise so downstream code doesn't throw or trigger error toasts during navigation
+    return new Promise(() => {});
   }
   return response;
 }
