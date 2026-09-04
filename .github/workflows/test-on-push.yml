@@ -4,33 +4,76 @@ on:
   push:
     branches: [ main ]
 
+env:
+  GO_VERSION: '1.27.1'
+  GOIMPORTS_VERSION: latest
+  GOLANGCI_LINT_VERSION: latest
+  NODE_VERSION: '25'
+  PNPM_VERSION: '11.3.0'
+
 jobs:
-  test:
+  backend:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     steps:
-    - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-    - name: Set up Go
-      uses: actions/setup-go@v6
-      with:
-        go-version: '1.26'
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
 
-    - name: Set up Node
-      uses: actions/setup-node@v6
-      with:
-        node-version: 25
+      - name: Download dependencies
+        run: go mod download
 
-    - name: Run backend tests
-      run: |
-        go test -v ./...
-      working-directory: ./backend
-      env:
-        MTEAM_API_KEY: ${{ secrets.MTEAM_API_KEY }}
+      - name: Install goimports
+        run: go install golang.org/x/tools/cmd/goimports@${{ env.GOIMPORTS_VERSION }}
 
-    - name: Run frontend formatter check, linter and tests
-      run: |
-        npm ci
-        npx prettier --check .
-        npx eslint .
-        npx vitest run
-      working-directory: ./frontend
+      - name: Install golangci-lint
+        run: curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $(go env GOPATH)/bin ${{ env.GOLANGCI_LINT_VERSION }}
+
+      - name: Format check
+        run: |
+          test -z "$($(go env GOPATH)/bin/goimports -local github.com/autoget-project/autoget/backend -l .)"
+
+      - name: Lint check
+        run: |
+          $(go env GOPATH)/bin/golangci-lint run ./...
+
+      - name: Run backend tests
+        run: |
+          go test -v ./...
+        env:
+          MTEAM_API_KEY: ${{ secrets.MTEAM_API_KEY }}
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          runtime: node@${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint check
+        run: pnpm run lint
+
+      - name: Format check
+        run: pnpm run fmt:check
+
+      - name: Run tests
+        run: pnpm run test:run
+
+      - name: Build
+        run: pnpm run build
