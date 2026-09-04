@@ -28,10 +28,10 @@
     "@iconify/json": "^2.2.525",
     "@iconify/tailwind4": "^1.2.3",
     "@types/luxon": "^3.7.5",
-    "jsdom": "^29.1.1",
+    "jsdom": "^30.0.1",
     "oxfmt": "^0.66.0",
     "oxlint": "^1.81.0",
-    "typescript": "~6.0.3",
+    "typescript": "~7.0.2",
     "vite": "^8.2.2",
     "vitest": "^4.1.11"
   },
