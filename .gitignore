@@ -26,3 +26,6 @@ build/
 
 # Ignore my local setup
 .local
+
+# Backend build binary
+backend/bin/
