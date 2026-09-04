@@ -1,8 +1,9 @@
 package indexers
 
 import (
-	"github.com/autoget-project/autoget/backend/internal/errors"
 	"github.com/robfig/cron/v3"
+
+	"github.com/autoget-project/autoget/backend/internal/errors"
 )
 
 type IIndexer interface {

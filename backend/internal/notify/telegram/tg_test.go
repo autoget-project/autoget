@@ -21,7 +21,7 @@ func TestSendMessage(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	bot.SendMessage("test message")
+	require.NoError(t, bot.SendMessage("test message"))
 }
 
 func TestSendMarkdownMessage(t *testing.T) {
@@ -38,6 +38,6 @@ func TestSendMarkdownMessage(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	bot.SendMarkdownMessage(`*title*:
-  test message`)
+	require.NoError(t, bot.SendMarkdownMessage(`*title*:
+  test message`))
 }

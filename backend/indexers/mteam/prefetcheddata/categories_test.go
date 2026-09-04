@@ -7,9 +7,10 @@ import (
 
 	_ "embed"
 
-	"github.com/autoget-project/autoget/backend/indexers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/autoget-project/autoget/backend/indexers"
 )
 
 var (

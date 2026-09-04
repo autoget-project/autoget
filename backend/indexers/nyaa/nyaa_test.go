@@ -4,12 +4,13 @@ import (
 	_ "embed"
 	"testing"
 
-	"github.com/autoget-project/autoget/backend/indexers"
-	"github.com/autoget-project/autoget/backend/internal/db"
 	"github.com/mmcdole/gofeed"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
+
+	"github.com/autoget-project/autoget/backend/indexers"
+	"github.com/autoget-project/autoget/backend/internal/db"
 )
 
 func TestCategories(t *testing.T) {
@@ -208,14 +209,14 @@ func TestSearchRSS(t *testing.T) {
 		Text:    "Match Search 1",
 		Action:  "download",
 	}
-	db.AddSearch(d, search1)
+	require.NoError(t, db.AddSearch(d, search1))
 
 	search2 := &db.RSSSearch{
 		Indexer: "nyaa",
 		Text:    "Match Search 2",
 		Action:  "notification",
 	}
-	db.AddSearch(d, search2)
+	require.NoError(t, db.AddSearch(d, search2))
 
 	fp := gofeed.NewParser()
 	feed, err := fp.ParseString(rssResp)

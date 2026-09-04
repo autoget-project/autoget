@@ -3,8 +3,9 @@ package db
 import (
 	"time"
 
-	"github.com/autoget-project/autoget/backend/organizer"
 	"gorm.io/gorm"
+
+	"github.com/autoget-project/autoget/backend/organizer"
 )
 
 const (

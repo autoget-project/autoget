@@ -8,8 +8,9 @@ import (
 	"os"
 
 	"github.com/anacrolix/torrent/metainfo"
-	"github.com/autoget-project/autoget/backend/internal/db"
 	"gorm.io/gorm"
+
+	"github.com/autoget-project/autoget/backend/internal/db"
 )
 
 // DownloadTorrentFileFromURL downloads a file from a given URL and saves it to a specified local path,
@@ -20,7 +21,7 @@ func DownloadTorrentFileFromURL(httpClient *http.Client, url string, dest string
 	if err != nil {
 		return nil, nil, fmt.Errorf("HTTP GET error: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, nil, fmt.Errorf("HTTP status error: %d %s", resp.StatusCode, resp.Status)
@@ -61,12 +62,15 @@ func DownloadTorrentFileFromURL(httpClient *http.Client, url string, dest string
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create file: %w", err)
 	}
-	defer out.Close()
-
 	// Write the response body to the file
 	_, err = io.Copy(out, bytes.NewReader(buffer.Bytes()))
 	if err != nil {
+		_ = out.Close()
 		return nil, nil, fmt.Errorf("failed to copy response body to file: %w", err)
+	}
+
+	if err := out.Close(); err != nil {
+		return nil, nil, fmt.Errorf("failed to close file: %w", err)
 	}
 
 	return m, &info, nil

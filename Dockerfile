@@ -1,20 +1,20 @@
-# Multi-stage Dockerfile for autoget application
-
-# Step 1: Build frontend
+# Stage 1: Build frontend
 FROM node:25-alpine AS frontend-builder
+
+RUN npm install -g pnpm@11.3.0
 
 WORKDIR /frontend
 
 # Copy frontend package files
-COPY frontend/package*.json ./
-RUN npm ci
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
 
 # Copy frontend source and build
 COPY frontend/ ./
-RUN npm run build
+RUN pnpm run build
 
-# Step 2: Build backend
-FROM golang:1.26-alpine AS backend-builder
+# Stage 2: Build backend
+FROM golang:1.27.1-alpine AS backend-builder
 
 WORKDIR /backend
 
@@ -27,10 +27,10 @@ RUN go mod download
 
 # Copy backend source and build
 COPY backend/ ./
-RUN GOOS=linux go build -o autoget ./cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o autoget ./cmd/main.go
 
-# Step 3: Final image
-FROM alpine:latest
+# Stage 3: Deploy image
+FROM alpine:latest AS deploy
 
 # Install runtime dependencies
 RUN apk --no-cache add ca-certificates tzdata

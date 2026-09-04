@@ -1,10 +1,11 @@
 package sukebei
 
 import (
+	"gorm.io/gorm"
+
 	"github.com/autoget-project/autoget/backend/indexers/nyaa"
 	"github.com/autoget-project/autoget/backend/indexers/sukebei/prefetcheddata"
 	"github.com/autoget-project/autoget/backend/internal/notify"
-	"gorm.io/gorm"
 )
 
 const (
@@ -19,10 +20,10 @@ func NewClient(config *nyaa.Config, torrentsDir string, db *gorm.DB, notify noti
 	c := &Client{}
 	c.Client = *nyaa.NewClient(config, torrentsDir, db, notify)
 	c.Name_ = "sukebei"
-	c.Client.DefaultBaseURL = defaultBaseURL
-	c.Client.CategoriesMap = prefetcheddata.Categories
-	c.Client.CategoriesList = prefetcheddata.CategoriesList
-	c.Client.ToOrganizerCategoryMap = prefetcheddata.ToOrganizerCategory
+	c.DefaultBaseURL = defaultBaseURL
+	c.CategoriesMap = prefetcheddata.Categories
+	c.CategoriesList = prefetcheddata.CategoriesList
+	c.ToOrganizerCategoryMap = prefetcheddata.ToOrganizerCategory
 
 	return c
 }

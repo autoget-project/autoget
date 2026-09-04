@@ -4,11 +4,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	dlconfig "github.com/autoget-project/autoget/backend/downloaders/config"
 	"github.com/autoget-project/autoget/backend/indexers/mteam"
 	"github.com/autoget-project/autoget/backend/indexers/nyaa"
 	"github.com/autoget-project/autoget/backend/internal/notify/telegram"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestReadConfig(t *testing.T) {
@@ -43,10 +44,10 @@ downloaders:
 `
 		tmpFile, err := os.CreateTemp("", "config_with_sukebei_*.yaml")
 		assert.NoError(t, err)
-		defer os.Remove(tmpFile.Name())
+		defer func() { _ = os.Remove(tmpFile.Name()) }()
 		_, err = tmpFile.WriteString(configContent)
 		assert.NoError(t, err)
-		tmpFile.Close()
+		_ = tmpFile.Close()
 
 		cfg, err := ReadConfig(tmpFile.Name())
 		assert.NoError(t, err)
@@ -102,10 +103,10 @@ downloaders:
 `
 		tmpFile, err := os.CreateTemp("", "config_without_sukebei_*.yaml")
 		assert.NoError(t, err)
-		defer os.Remove(tmpFile.Name())
+		defer func() { _ = os.Remove(tmpFile.Name()) }()
 		_, err = tmpFile.WriteString(configContent)
 		assert.NoError(t, err)
-		tmpFile.Close()
+		_ = tmpFile.Close()
 
 		cfg, err := ReadConfig(tmpFile.Name())
 		assert.NoError(t, err)

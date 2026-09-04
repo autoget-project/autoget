@@ -89,9 +89,7 @@ func FlattenCategory(category map[string]indexers.Category) map[string]indexers.
 		}
 
 		// Enqueue subcategories
-		for _, subCat := range current.SubCategories {
-			queue = append(queue, subCat)
-		}
+		queue = append(queue, current.SubCategories...)
 	}
 
 	return flattened

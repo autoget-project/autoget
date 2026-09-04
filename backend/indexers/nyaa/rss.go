@@ -4,14 +4,15 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/autoget-project/autoget/backend/indexers"
-	"github.com/autoget-project/autoget/backend/indexers/rsshelper"
 	"github.com/mmcdole/gofeed"
 	"github.com/robfig/cron/v3"
+
+	"github.com/autoget-project/autoget/backend/indexers"
+	"github.com/autoget-project/autoget/backend/indexers/rsshelper"
 )
 
 func (c *Client) RegisterRSSCronjob(cron *cron.Cron) {
-	cron.AddFunc("@every 5m", func() {
+	if _, err := cron.AddFunc("@every 5m", func() {
 		items, err := c.pullRSS()
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to pull RSS feed")
@@ -19,7 +20,9 @@ func (c *Client) RegisterRSSCronjob(cron *cron.Cron) {
 		}
 
 		c.SearchRSS(items)
-	})
+	}); err != nil {
+		logger.Error().Err(err).Msg("Failed to add RSS cron job")
+	}
 }
 
 func (c *Client) pullRSS() ([]*indexers.RSSItem, error) {

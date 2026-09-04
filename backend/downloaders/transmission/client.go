@@ -3,6 +3,7 @@ package transmission
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -10,13 +11,14 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/autoget-project/autoget/backend/downloaders/config"
-	"github.com/autoget-project/autoget/backend/internal/db"
-	"github.com/autoget-project/autoget/backend/organizer"
 	"github.com/hekmon/transmissionrpc/v3"
 	"github.com/robfig/cron/v3"
 	"github.com/rs/zerolog/log"
 	"gorm.io/gorm"
+
+	"github.com/autoget-project/autoget/backend/downloaders/config"
+	"github.com/autoget-project/autoget/backend/internal/db"
+	"github.com/autoget-project/autoget/backend/organizer"
 )
 
 var (
@@ -125,7 +127,9 @@ func (c *Client) updateDownloadProgress(torrentsByHash map[string]*transmissionr
 		if *t.Status == transmissionrpc.TorrentStatusSeed {
 			s.State = db.DownloadSeeding
 		}
-		db.SaveDownloadStatus(c.db, &s)
+		if err := db.SaveDownloadStatus(c.db, &s); err != nil {
+			logger.Error().Err(err).Str("name", c.name).Str("id", s.ID).Msg("failed to save download status")
+		}
 	}
 }
 
@@ -144,7 +148,9 @@ func (c *Client) copyFinishedDownloads(torrentsByHash map[string]*transmissionrp
 
 		if c.copyTorrentFiles(t, &s) {
 			s.MoveState = db.Moved
-			db.SaveDownloadStatus(c.db, &s)
+			if err := db.SaveDownloadStatus(c.db, &s); err != nil {
+				logger.Error().Err(err).Str("name", c.name).Str("id", s.ID).Msg("failed to save download status")
+			}
 		}
 	}
 }
@@ -160,23 +166,26 @@ func (c *Client) copyTorrentFiles(t *transmissionrpc.Torrent, s *db.DownloadStat
 			return false
 		}
 
-		fromFile, err := os.Open(from)
-		if err != nil {
-			logger.Error().Err(err).Str("name", c.name).Msg("failed to open file")
-			return false
-		}
-		defer fromFile.Close()
+		if err := func() error {
+			fromFile, err := os.Open(from)
+			if err != nil {
+				return fmt.Errorf("failed to open file: %w", err)
+			}
+			defer func() { _ = fromFile.Close() }()
 
-		targetFile, err := os.Create(target)
-		if err != nil {
-			logger.Error().Err(err).Str("name", c.name).Msg("failed to create file")
-			return false
-		}
-		defer targetFile.Close()
+			targetFile, err := os.Create(target)
+			if err != nil {
+				return fmt.Errorf("failed to create file: %w", err)
+			}
+			defer func() { _ = targetFile.Close() }()
 
-		_, err = io.Copy(targetFile, fromFile)
-		if err != nil {
-			logger.Error().Err(err).Str("name", c.name).Msg("failed to copy file")
+			_, err = io.Copy(targetFile, fromFile)
+			if err != nil {
+				return fmt.Errorf("failed to copy file: %w", err)
+			}
+			return nil
+		}(); err != nil {
+			logger.Error().Err(err).Str("name", c.name).Msg("failed to copy torrent file")
 			return false
 		}
 
@@ -203,12 +212,16 @@ func (c *Client) createOrganizerPlan() {
 		if err != nil {
 			logger.Error().Err(err).Str("name", c.name).Msg("failed to create organizer plan")
 			st.OrganizeState = db.CreatePlanFailed
-			db.SaveDownloadStatus(c.db, &st)
+			if err := db.SaveDownloadStatus(c.db, &st); err != nil {
+				logger.Error().Err(err).Str("name", c.name).Str("id", st.ID).Msg("failed to save download status")
+			}
 			continue
 		}
 		st.OrganizePlans = resp
 		st.OrganizeState = db.Planed
-		db.SaveDownloadStatus(c.db, &st)
+		if err := db.SaveDownloadStatus(c.db, &st); err != nil {
+			logger.Error().Err(err).Str("name", c.name).Str("id", st.ID).Msg("failed to save download status")
+		}
 	}
 }
 
@@ -264,7 +277,9 @@ func (c *Client) stopTorrents(torrents []transmissionrpc.Torrent) {
 			ss.UploadHistories = make(map[string]int64)
 			ss.ResTitle = *t.Name
 			ss.AddToday(uploaded)
-			db.SaveDownloadStatus(c.db, ss)
+			if err := db.SaveDownloadStatus(c.db, ss); err != nil {
+				logger.Error().Err(err).Str("name", c.name).Str("id", ss.ID).Msg("failed to save download status")
+			}
 
 			continue
 		}
@@ -274,7 +289,9 @@ func (c *Client) stopTorrents(torrents []transmissionrpc.Torrent) {
 		ss.CleanupHistory()
 		ss.AddToday(uploaded)
 
-		db.SaveDownloadStatus(c.db, ss)
+		if err := db.SaveDownloadStatus(c.db, ss); err != nil {
+			logger.Error().Err(err).Str("name", c.name).Str("id", ss.ID).Msg("failed to save download status")
+		}
 
 		before, ok := ss.GetXDayBefore(int(c.cfg.SeedingPolicy.IntervalInDays))
 		if !ok {

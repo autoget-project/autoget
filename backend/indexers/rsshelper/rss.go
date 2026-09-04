@@ -6,11 +6,12 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/rs/zerolog/log"
+	"gorm.io/gorm"
+
 	"github.com/autoget-project/autoget/backend/indexers"
 	"github.com/autoget-project/autoget/backend/internal/db"
 	"github.com/autoget-project/autoget/backend/internal/notify"
-	"github.com/rs/zerolog/log"
-	"gorm.io/gorm"
 )
 
 //go:embed rss.md

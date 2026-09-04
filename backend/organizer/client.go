@@ -103,7 +103,7 @@ func (c *Client) Plan(req *PlanRequest) (*PlanResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to send plan request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
@@ -137,7 +137,7 @@ func (c *Client) Execute(req *ExecuteRequest) (bool, *ExecuteResponse, error) {
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to send execute request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusOK {
 		return true, nil, nil
@@ -175,7 +175,7 @@ func (c *Client) ReplanWithHint(req *ReplanRequest) (*PlanResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to send replan request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)

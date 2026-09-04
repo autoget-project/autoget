@@ -11,13 +11,14 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/rs/zerolog/log"
+	"gorm.io/gorm"
+
 	"github.com/autoget-project/autoget/backend/indexers"
 	"github.com/autoget-project/autoget/backend/indexers/nyaa/prefetcheddata"
 	"github.com/autoget-project/autoget/backend/internal/errors"
 	"github.com/autoget-project/autoget/backend/internal/helpers"
 	"github.com/autoget-project/autoget/backend/internal/notify"
-	"github.com/rs/zerolog/log"
-	"gorm.io/gorm"
 )
 
 var (
@@ -138,7 +139,7 @@ func (c *Client) List(req *indexers.ListRequest) (*indexers.ListResult, *errors.
 	if err != nil {
 		return nil, errors.NewHTTPStatusError(http.StatusInternalServerError, fmt.Sprintf("failed to fetch list page: %v", err))
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -201,8 +202,8 @@ func (c *Client) List(req *indexers.ListRequest) (*indexers.ListResult, *errors.
 
 	// Pagination
 	page := doc.Find("ul.pagination li.active").First().Text()
-	page = strings.Replace(page, "(current)", "", -1) // Remove "(current)"
-	page = strings.TrimSpace(page)                    // Trim leading/trailing whitespace
+	page = strings.ReplaceAll(page, "(current)", "") // Remove "(current)"
+	page = strings.TrimSpace(page)                   // Trim leading/trailing whitespace
 	currentPage, _ := strconv.Atoi(page)
 
 	var totalPages int
@@ -251,7 +252,7 @@ func (c *Client) Detail(id string, fileList bool) (*indexers.ResourceDetail, *er
 	if err != nil {
 		return nil, errors.NewHTTPStatusError(http.StatusInternalServerError, fmt.Sprintf("failed to fetch detail page: %v", err))
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, errors.NewHTTPStatusError(resp.StatusCode, fmt.Sprintf("failed to fetch detail page, status code: %d", resp.StatusCode))

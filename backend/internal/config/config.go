@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/goccy/go-yaml"
+
 	dlconfig "github.com/autoget-project/autoget/backend/downloaders/config"
 	"github.com/autoget-project/autoget/backend/indexers/mteam"
 	"github.com/autoget-project/autoget/backend/indexers/nyaa"
 	"github.com/autoget-project/autoget/backend/internal/notify/telegram"
-	"github.com/goccy/go-yaml"
 )
 
 type Config struct {
@@ -30,8 +31,10 @@ func ReadConfig(path string) (*Config, error) {
 	config := &Config{}
 
 	b, err := os.ReadFile(path)
-	yaml.Unmarshal(b, config)
 	if err != nil {
+		return nil, err
+	}
+	if err := yaml.Unmarshal(b, config); err != nil {
 		return nil, err
 	}
 

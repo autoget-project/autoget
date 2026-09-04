@@ -9,6 +9,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gin-gonic/gin"
+	"github.com/robfig/cron/v3"
+	"github.com/rs/zerolog/log"
+
 	"github.com/autoget-project/autoget/backend/downloaders"
 	"github.com/autoget-project/autoget/backend/indexers"
 	"github.com/autoget-project/autoget/backend/indexers/mteam"
@@ -19,9 +23,6 @@ import (
 	"github.com/autoget-project/autoget/backend/internal/handlers"
 	"github.com/autoget-project/autoget/backend/internal/notify/telegram"
 	"github.com/autoget-project/autoget/backend/organizer"
-	"github.com/gin-gonic/gin"
-	"github.com/robfig/cron/v3"
-	"github.com/rs/zerolog/log"
 )
 
 func main() {

@@ -3,10 +3,11 @@ package mteam
 import (
 	"net/url"
 
-	"github.com/autoget-project/autoget/backend/indexers"
-	"github.com/autoget-project/autoget/backend/indexers/rsshelper"
 	"github.com/mmcdole/gofeed"
 	"github.com/robfig/cron/v3"
+
+	"github.com/autoget-project/autoget/backend/indexers"
+	"github.com/autoget-project/autoget/backend/indexers/rsshelper"
 )
 
 func (m *MTeam) RegisterRSSCronjob(cron *cron.Cron) {
@@ -14,7 +15,7 @@ func (m *MTeam) RegisterRSSCronjob(cron *cron.Cron) {
 		return
 	}
 
-	cron.AddFunc("@every 5m", func() {
+	if _, err := cron.AddFunc("@every 5m", func() {
 		items, err := m.pullRSS()
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to pull RSS feed")
@@ -22,7 +23,9 @@ func (m *MTeam) RegisterRSSCronjob(cron *cron.Cron) {
 		}
 
 		rsshelper.SearchRSS(m, m.db, m.notify, items)
-	})
+	}); err != nil {
+		logger.Error().Err(err).Msg("Failed to add RSS cron job")
+	}
 }
 
 func (m *MTeam) pullRSS() ([]*indexers.RSSItem, error) {

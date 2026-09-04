@@ -6,13 +6,14 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+
 	"github.com/autoget-project/autoget/backend/downloaders"
 	"github.com/autoget-project/autoget/backend/indexers"
 	"github.com/autoget-project/autoget/backend/internal/config"
 	"github.com/autoget-project/autoget/backend/internal/db"
 	"github.com/autoget-project/autoget/backend/organizer"
-	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 type Service struct {
@@ -374,7 +375,7 @@ func (s *Service) image(c *gin.Context) {
 		return
 	}
 
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	c.DataFromReader(resp.StatusCode, resp.ContentLength, resp.Header.Get("Content-Type"), resp.Body, nil)
 }
 

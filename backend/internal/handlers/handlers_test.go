@@ -7,16 +7,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/autoget-project/autoget/backend/downloaders"
-	"github.com/autoget-project/autoget/backend/indexers"
-	"github.com/autoget-project/autoget/backend/internal/db"
-	"github.com/autoget-project/autoget/backend/internal/errors"
-	"github.com/autoget-project/autoget/backend/organizer"
 	"github.com/gin-gonic/gin"
 	"github.com/robfig/cron/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
+
+	"github.com/autoget-project/autoget/backend/downloaders"
+	"github.com/autoget-project/autoget/backend/indexers"
+	"github.com/autoget-project/autoget/backend/internal/db"
+	"github.com/autoget-project/autoget/backend/internal/errors"
+	"github.com/autoget-project/autoget/backend/organizer"
 )
 
 type indexerMock struct {
@@ -732,7 +733,7 @@ func TestService_handleAcceptPlan_PartialFailure(t *testing.T) {
 		assert.Equal(t, "test-hash", req.Dir)
 
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(organizer.ExecuteResponse{FailedMoves: expectedFailures})
+		_ = json.NewEncoder(w).Encode(organizer.ExecuteResponse{FailedMoves: expectedFailures})
 	}))
 	defer mockOrganizerServer.Close()
 
@@ -795,7 +796,7 @@ func TestService_handleRePlan_Success(t *testing.T) {
 		assert.Contains(t, req.Files, "file2.txt")
 
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(organizer.PlanResponse{Plan: expectedPlan})
+		_ = json.NewEncoder(w).Encode(organizer.PlanResponse{Plan: expectedPlan})
 	}))
 	defer mockOrganizerServer.Close()
 
@@ -844,7 +845,7 @@ func TestService_handleRePlan_OrganizerError(t *testing.T) {
 	// Mock organizer server that returns an error
 	mockOrganizerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(organizer.PlanResponse{Error: "organizer service error"})
+		_ = json.NewEncoder(w).Encode(organizer.PlanResponse{Error: "organizer service error"})
 	}))
 	defer mockOrganizerServer.Close()
 
@@ -898,7 +899,7 @@ func TestService_handleRePlan_WithUserHint_Success(t *testing.T) {
 		assert.NotNil(t, req.PreviousResponse)
 
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(organizer.PlanResponse{Plan: expectedPlan})
+		_ = json.NewEncoder(w).Encode(organizer.PlanResponse{Plan: expectedPlan})
 	}))
 	defer mockOrganizerServer.Close()
 
@@ -961,7 +962,7 @@ func TestService_handleRePlan_WithUserHint_Error(t *testing.T) {
 		assert.Equal(t, "invalid hint", req.UserHint)
 
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(organizer.PlanResponse{Error: "replan with hint failed"})
+		_ = json.NewEncoder(w).Encode(organizer.PlanResponse{Error: "replan with hint failed"})
 	}))
 	defer mockOrganizerServer.Close()
 
@@ -1018,7 +1019,7 @@ func TestService_handleRePlan_EmptyUserHint_UsesRegularPlan(t *testing.T) {
 		assert.Contains(t, req.Files, "file1.txt")
 
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(organizer.PlanResponse{Plan: expectedPlan})
+		_ = json.NewEncoder(w).Encode(organizer.PlanResponse{Plan: expectedPlan})
 	}))
 	defer mockOrganizerServer.Close()
 

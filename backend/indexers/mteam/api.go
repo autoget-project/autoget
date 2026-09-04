@@ -3,14 +3,13 @@ package mteam
 import (
 	"time"
 
-	_ "embed"
+	"github.com/rs/zerolog/log"
+	"gorm.io/gorm"
 
 	"github.com/autoget-project/autoget/backend/indexers"
 	"github.com/autoget-project/autoget/backend/indexers/mteam/prefetcheddata"
 	"github.com/autoget-project/autoget/backend/internal/errors"
 	"github.com/autoget-project/autoget/backend/internal/notify"
-	"github.com/rs/zerolog/log"
-	"gorm.io/gorm"
 )
 
 var (
@@ -28,11 +27,6 @@ const (
 	categoryGayPorn = "440"
 
 	httpTimeout = 5 * time.Second
-)
-
-var (
-	//go:embed prefetcheddata/data.json
-	categoriesJSON []byte
 )
 
 type Config struct {

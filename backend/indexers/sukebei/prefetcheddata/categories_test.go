@@ -5,9 +5,10 @@ import (
 	"testing"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/autoget-project/autoget/backend/indexers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/autoget-project/autoget/backend/indexers"
 )
 
 const (
@@ -18,7 +19,7 @@ func TestCategories(t *testing.T) {
 	res, err := http.Get(baseURL)
 	require.NoError(t, err)
 
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	require.Equal(t, 200, res.StatusCode)
 
 	// Load the HTML document

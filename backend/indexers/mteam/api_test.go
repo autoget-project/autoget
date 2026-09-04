@@ -5,10 +5,11 @@ import (
 	"testing"
 
 	"github.com/anacrolix/torrent/metainfo"
-	"github.com/autoget-project/autoget/backend/indexers"
-	"github.com/autoget-project/autoget/backend/internal/db"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/autoget-project/autoget/backend/indexers"
+	"github.com/autoget-project/autoget/backend/internal/db"
 )
 
 var (

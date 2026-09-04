@@ -4,8 +4,9 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/autoget-project/autoget/backend/indexers"
 	"github.com/rs/zerolog/log"
+
+	"github.com/autoget-project/autoget/backend/indexers"
 )
 
 const (

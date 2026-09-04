@@ -10,13 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/autoget-project/autoget/backend/downloaders/config"
-	"github.com/autoget-project/autoget/backend/internal/db"
-	"github.com/autoget-project/autoget/backend/organizer"
 	"github.com/hekmon/cunits/v2"
 	"github.com/hekmon/transmissionrpc/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/autoget-project/autoget/backend/downloaders/config"
+	"github.com/autoget-project/autoget/backend/internal/db"
+	"github.com/autoget-project/autoget/backend/organizer"
 )
 
 type requestPayload struct {
@@ -42,10 +43,10 @@ type fakeTransmission struct {
 }
 
 func (f *fakeTransmission) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	req := &requestPayload{}
-	json.NewDecoder(r.Body).Decode(req)
+	_ = json.NewDecoder(r.Body).Decode(req)
 	f.reqs = append(f.reqs, req)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -59,7 +60,7 @@ func (f *fakeTransmission) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Tag:       req.Tag,
 	}
 
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func newTorrent(id int64, hash string, status transmissionrpc.TorrentStatus, uploaded int64) transmissionrpc.Torrent {
@@ -259,7 +260,7 @@ func TestProgressChecker(t *testing.T) {
 
 	tmpDir, err := os.MkdirTemp("", "autoget-test")
 	require.NoError(t, err)
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+	t.Cleanup(func() { _ = os.RemoveAll(tmpDir) })
 
 	downloadDir := filepath.Join(tmpDir, "download")
 	finishedDir := filepath.Join(tmpDir, "finished")
@@ -288,7 +289,7 @@ func TestProgressChecker(t *testing.T) {
 		// Return plan for torrent with ID "3"
 		if len(req.Files) > 0 && req.Files[0] == "file1.mkv" {
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(organizer.PlanResponse{
+			_ = json.NewEncoder(w).Encode(organizer.PlanResponse{
 				Plan: []organizer.PlanAction{
 					{File: "/finished/3/file1.mkv", Action: organizer.ActionMove, Target: "/movies/movie1.mkv"},
 					{File: "/finished/3/file2.srt", Action: organizer.ActionMove, Target: "/movies/movie1.srt"},
@@ -296,7 +297,7 @@ func TestProgressChecker(t *testing.T) {
 			})
 		} else {
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(organizer.PlanResponse{Plan: []organizer.PlanAction{}})
+			_ = json.NewEncoder(w).Encode(organizer.PlanResponse{Plan: []organizer.PlanAction{}})
 		}
 	}))
 	t.Cleanup(func() { organizerServ.Close() })
@@ -440,7 +441,7 @@ func TestCreateOrganizerPlan(t *testing.T) {
 		assert.NotEmpty(t, req.Dir)
 
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(organizer.PlanResponse{
+		_ = json.NewEncoder(w).Encode(organizer.PlanResponse{
 			Plan: []organizer.PlanAction{
 				{File: "movie.mkv", Action: organizer.ActionMove, Target: "/movies/Test Movie.mkv"},
 				{File: "subtitle.srt", Action: organizer.ActionSkip},
@@ -494,7 +495,7 @@ func TestCreateOrganizerPlan(t *testing.T) {
 		// Create a failing organizer server
 		failingServ := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("organizer service error"))
+			_, _ = w.Write([]byte("organizer service error"))
 		}))
 		t.Cleanup(func() { failingServ.Close() })
 

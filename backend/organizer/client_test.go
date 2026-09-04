@@ -54,7 +54,7 @@ func TestClient_Plan(t *testing.T) {
 			assert.Equal(t, []string{"file1.txt"}, req.Files)
 
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(PlanResponse{Plan: expectedPlan})
+			_ = json.NewEncoder(w).Encode(PlanResponse{Plan: expectedPlan})
 		}))
 		defer server.Close()
 
@@ -77,7 +77,7 @@ func TestClient_Plan(t *testing.T) {
 	t.Run("api error in response", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(PlanResponse{Error: "internal organizer error"})
+			_ = json.NewEncoder(w).Encode(PlanResponse{Error: "internal organizer error"})
 		}))
 		defer server.Close()
 
@@ -93,7 +93,7 @@ func TestClient_Plan(t *testing.T) {
 	t.Run("http error", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("server failure"))
+			_, _ = w.Write([]byte("server failure"))
 		}))
 		defer server.Close()
 
@@ -122,7 +122,7 @@ func TestClient_Plan(t *testing.T) {
 	t.Run("response decoding error", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("not a json"))
+			_, _ = w.Write([]byte("not a json"))
 		}))
 		defer server.Close()
 
@@ -177,7 +177,7 @@ func TestClient_Execute(t *testing.T) {
 
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(ExecuteResponse{FailedMoves: expectedFailures})
+			_ = json.NewEncoder(w).Encode(ExecuteResponse{FailedMoves: expectedFailures})
 		}))
 		defer server.Close()
 
@@ -202,7 +202,7 @@ func TestClient_Execute(t *testing.T) {
 	t.Run("response decoding error", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("not a json"))
+			_, _ = w.Write([]byte("not a json"))
 		}))
 		defer server.Close()
 
@@ -244,7 +244,7 @@ func TestClient_ReplanWithHint(t *testing.T) {
 			assert.Equal(t, map[string]interface{}{"key": "value"}, req.Metadata)
 
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(PlanResponse{Plan: expectedPlan})
+			_ = json.NewEncoder(w).Encode(PlanResponse{Plan: expectedPlan})
 		}))
 		defer server.Close()
 
@@ -268,7 +268,7 @@ func TestClient_ReplanWithHint(t *testing.T) {
 	t.Run("api error in response", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(PlanResponse{Error: "organizer service unavailable"})
+			_ = json.NewEncoder(w).Encode(PlanResponse{Error: "organizer service unavailable"})
 		}))
 		defer server.Close()
 
@@ -289,7 +289,7 @@ func TestClient_ReplanWithHint(t *testing.T) {
 	t.Run("http error", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("internal server error"))
+			_, _ = w.Write([]byte("internal server error"))
 		}))
 		defer server.Close()
 
@@ -318,7 +318,7 @@ func TestClient_ReplanWithHint(t *testing.T) {
 	t.Run("response decoding error", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("invalid json"))
+			_, _ = w.Write([]byte("invalid json"))
 		}))
 		defer server.Close()
 
