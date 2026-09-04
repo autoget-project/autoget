@@ -1,13 +1,13 @@
-import { html, LitElement, unsafeCSS, css, type TemplateResult, type PropertyValues } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { html, LitElement, unsafeCSS, css, type TemplateResult, type PropertyValues } from "lit";
+import { customElement, property, state } from "lit/decorators.js";
 
-import { type Category, fetchIndexerCategories } from '../utils/api';
-import '../components/navbar.ts';
-import '../components/resource_list.ts';
-import { scrollableOnScroll } from '../utils/scroll_to_top';
-import globalStyles from '/src/index.css?inline';
+import { type Category, fetchIndexerCategories } from "../utils/api";
+import "../components/navbar.ts";
+import "../components/resource_list.ts";
+import { scrollableOnScroll } from "../utils/scroll_to_top";
+import globalStyles from "/src/index.css?inline";
 
-@customElement('indexer-view')
+@customElement("indexer-view")
 export class IndexerView extends LitElement {
   static styles = [
     unsafeCSS(globalStyles),
@@ -42,13 +42,13 @@ export class IndexerView extends LitElement {
   ];
 
   @property({ type: String })
-  public indexerId: string = '';
+  public indexerId: string = "";
 
   @state()
   private categories: Category[] = [];
 
   @property({ type: String })
-  public category: string = '';
+  public category: string = "";
 
   @property({ type: Number })
   public page: number = 1;
@@ -62,12 +62,14 @@ export class IndexerView extends LitElement {
 
   private renderCategory(category: Category): TemplateResult {
     const isActive = this.category === category.id;
-    const activeClass = isActive ? 'menu-active' : '';
+    const activeClass = isActive ? "menu-active" : "";
 
     if (category.subCategories && category.subCategories.length > 0) {
       return html`
         <li>
-          <a class="${activeClass}" href="/indexers/${this.indexerId}/${category.id}">${category.name}</a>
+          <a class="${activeClass}" href="/indexers/${this.indexerId}/${category.id}"
+            >${category.name}</a
+          >
           <ul>
             ${category.subCategories.map((child) => this.renderCategory(child))}
           </ul>
@@ -75,7 +77,9 @@ export class IndexerView extends LitElement {
       `;
     } else {
       return html`<li>
-        <a class="${activeClass}" href="/indexers/${this.indexerId}/${category.id}">${category.name}</a>
+        <a class="${activeClass}" href="/indexers/${this.indexerId}/${category.id}"
+          >${category.name}</a
+        >
       </li> `;
     }
   }
@@ -101,12 +105,12 @@ export class IndexerView extends LitElement {
   }
 
   protected async update(changedProperties: PropertyValues): Promise<void> {
-    if (changedProperties.has('indexerId')) {
+    if (changedProperties.has("indexerId")) {
       await this.fetchIndexerCategories();
     }
 
     if (this.indexerId) {
-      let title = 'AutoGet - ' + this.indexerId;
+      let title = "AutoGet - " + this.indexerId;
       if (this.category && this.categories.length > 0) {
         const categoryName = this.findCategoryName(this.category, this.categories);
         if (categoryName) {
@@ -125,17 +129,19 @@ export class IndexerView extends LitElement {
   }
 
   render() {
-    const sidebarClass = this.sidebarVisible ? 'flex-2' : 'w-0';
+    const sidebarClass = this.sidebarVisible ? "flex-2" : "w-0";
     return html`
       <div class="flex flex-col h-screen" @sidebar-toggle=${this.handleSidebarToggle}>
-        <app-navbar .activePage=${this.indexerId} .sidebarVisible=${this.sidebarVisible}></app-navbar>
+        <app-navbar
+          .activePage=${this.indexerId}
+          .sidebarVisible=${this.sidebarVisible}
+        ></app-navbar>
 
         <div class="flex flex-row grow overflow-hidden">
           <div
-            class="${sidebarClass} bg-base-200 overflow-y-auto transition-all duration-300 ease-in-out ${this
-              .sidebarVisible
-              ? ''
-              : 'opacity-0'}"
+            class="${sidebarClass} bg-base-200 overflow-y-auto transition-all duration-300 ease-in-out ${
+              this.sidebarVisible ? "" : "opacity-0"
+            }"
             id="left-panel-categories"
           >
             <ul class="menu bg-base-200 rounded-box w-full">
@@ -148,7 +154,11 @@ export class IndexerView extends LitElement {
             id="content"
             @scroll=${(e: Event) => scrollableOnScroll(e.currentTarget as HTMLElement)}
           >
-            <resource-list .indexerId=${this.indexerId} .category=${this.category} .page=${this.page}></resource-list>
+            <resource-list
+              .indexerId=${this.indexerId}
+              .category=${this.category}
+              .page=${this.page}
+            ></resource-list>
           </div>
         </div>
       </div>

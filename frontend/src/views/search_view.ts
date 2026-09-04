@@ -1,13 +1,13 @@
-import { html, LitElement, unsafeCSS, css, type TemplateResult } from 'lit';
-import { customElement, state } from 'lit/decorators.js';
+import { html, LitElement, unsafeCSS, css, type TemplateResult } from "lit";
+import { customElement, state } from "lit/decorators.js";
 
-import { fetchIndexers, fetchIndexerCategories, type Category } from '../utils/api';
-import '../components/navbar.ts';
-import '../components/resource_list.ts';
-import { scrollableOnScroll } from '../utils/scroll_to_top';
-import globalStyles from '/src/index.css?inline';
+import { fetchIndexers, fetchIndexerCategories, type Category } from "../utils/api";
+import "../components/navbar.ts";
+import "../components/resource_list.ts";
+import { scrollableOnScroll } from "../utils/scroll_to_top";
+import globalStyles from "/src/index.css?inline";
 
-@customElement('search-view')
+@customElement("search-view")
 export class SearchView extends LitElement {
   static styles = [
     unsafeCSS(globalStyles),
@@ -47,7 +47,7 @@ export class SearchView extends LitElement {
   private indexers: string[] = [];
 
   @state()
-  private selectedIndexer = '';
+  private selectedIndexer = "";
 
   @state()
   private allCategories: Category[] = []; // All categories fetched for the selected indexer
@@ -59,16 +59,16 @@ export class SearchView extends LitElement {
   private selectedCategoryPath: Category[] = []; // Path of selected categories
 
   @state()
-  private searchQuery = '';
+  private searchQuery = "";
 
   @state()
-  private currentKeyword: string = '';
+  private currentKeyword: string = "";
 
   @state()
-  private currentIndexer: string = '';
+  private currentIndexer: string = "";
 
   @state()
-  private currentCategory: string = '';
+  private currentCategory: string = "";
 
   @state()
   private currentPage: number = 1;
@@ -82,21 +82,21 @@ export class SearchView extends LitElement {
   async connectedCallback() {
     super.connectedCallback();
     this.indexers = await fetchIndexers();
-    window.addEventListener('popstate', this.handlePopState);
+    window.addEventListener("popstate", this.handlePopState);
     this.handlePopState(); // Initial call to set state from URL
   }
 
   disconnectedCallback() {
-    window.removeEventListener('popstate', this.handlePopState);
+    window.removeEventListener("popstate", this.handlePopState);
     super.disconnectedCallback();
   }
 
   private handlePopState = () => {
     const urlParams = new URLSearchParams(window.location.search);
-    this.currentKeyword = urlParams.get('keyword') || '';
-    this.currentIndexer = urlParams.get('indexer') || '';
-    this.currentCategory = urlParams.get('category') || '';
-    this.currentPage = parseInt(urlParams.get('page') || '1', 10);
+    this.currentKeyword = urlParams.get("keyword") || "";
+    this.currentIndexer = urlParams.get("indexer") || "";
+    this.currentCategory = urlParams.get("category") || "";
+    this.currentPage = parseInt(urlParams.get("page") || "1", 10);
 
     // Update search query input if it's different from the URL
     if (this.searchQuery !== this.currentKeyword) {
@@ -199,20 +199,20 @@ export class SearchView extends LitElement {
     this.requestUpdate();
 
     const url = new URL(window.location.href);
-    url.searchParams.set('keyword', this.searchQuery);
-    url.searchParams.set('indexer', this.selectedIndexer);
-    url.searchParams.set('page', '1');
+    url.searchParams.set("keyword", this.searchQuery);
+    url.searchParams.set("indexer", this.selectedIndexer);
+    url.searchParams.set("page", "1");
     const categoryId = this.selectedCategoryPath[this.selectedCategoryPath.length - 1]?.id;
     if (categoryId) {
-      url.searchParams.set('category', categoryId);
+      url.searchParams.set("category", categoryId);
     } else {
-      url.searchParams.delete('category');
+      url.searchParams.delete("category");
     }
-    window.history.pushState({}, '', url.toString());
-    window.dispatchEvent(new PopStateEvent('popstate'));
+    window.history.pushState({}, "", url.toString());
+    window.dispatchEvent(new PopStateEvent("popstate"));
 
     // Uncheck the search-collapse checkbox
-    const searchCollapse = this.shadowRoot?.getElementById('search-collapse') as HTMLInputElement;
+    const searchCollapse = this.shadowRoot?.getElementById("search-collapse") as HTMLInputElement;
     if (searchCollapse) {
       searchCollapse.checked = false;
     }
@@ -240,7 +240,8 @@ export class SearchView extends LitElement {
   }
 
   private renderCategoryLevel(categories: Category[], level: number): TemplateResult {
-    const levelTitle = level === 0 ? 'Main Category' : level === 1 ? 'Sub Category' : 'Tertiary Category';
+    const levelTitle =
+      level === 0 ? "Main Category" : level === 1 ? "Sub Category" : "Tertiary Category";
     const selectedIdInLevel = this.selectedCategoryPath[level]?.id;
 
     return html`
@@ -250,16 +251,17 @@ export class SearchView extends LitElement {
           ${categories.map(
             (category) => html`
               <div
-                class="category-item p-2 rounded-lg border border-gray-300 dark:border-gray-600 text-left font-medium flex items-center justify-between transition-colors bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 ${selectedIdInLevel ===
-                category.id
-                  ? 'active'
-                  : ''}"
+                class="category-item p-2 rounded-lg border border-gray-300 dark:border-gray-600 text-left font-medium flex items-center justify-between transition-colors bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                  selectedIdInLevel === category.id ? "active" : ""
+                }"
                 @click=${() => this.handleCategoryClick(category, level)}
               >
                 <span>${category.name}</span>
-                ${category.subCategories && category.subCategories.length > 0
-                  ? html`<span class="ml-2 text-gray-400 dark:text-gray-500 font-bold">›</span>`
-                  : ''}
+                ${
+                  category.subCategories && category.subCategories.length > 0
+                    ? html`<span class="ml-2 text-gray-400 dark:text-gray-500 font-bold">›</span>`
+                    : ""
+                }
               </div>
             `,
           )}
@@ -287,7 +289,10 @@ export class SearchView extends LitElement {
                   @input=${this.handleSearchQueryInput}
                 />
                 <button class="btn join-item btn-primary" type="submit">
-                  <span class="icon-[material-symbols--search]" style="width: 1.2em; height: 1.2em;"></span>
+                  <span
+                    class="icon-[material-symbols--search]"
+                    style="width: 1.2em; height: 1.2em;"
+                  ></span>
                 </button>
               </div>
             </form>
@@ -316,10 +321,9 @@ export class SearchView extends LitElement {
                     ${this.indexers.map(
                       (indexer) => html`
                         <div
-                          class="category-item p-2 rounded-lg border border-gray-300 dark:border-gray-600 text-left font-medium flex items-center justify-between transition-colors bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 ${this
-                            .selectedIndexer === indexer
-                            ? 'active'
-                            : ''}"
+                          class="category-item p-2 rounded-lg border border-gray-300 dark:border-gray-600 text-left font-medium flex items-center justify-between transition-colors bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                            this.selectedIndexer === indexer ? "active" : ""
+                          }"
                           @click=${() => this.handleIndexerChange(indexer)}
                         >
                           <span>${indexer}</span>
@@ -338,36 +342,49 @@ export class SearchView extends LitElement {
               </div>
             </div>
 
-            ${this.showIndexerWarning
-              ? html`
-                  <div class="alert alert-warning mt-4">
-                    <span class="icon-[ph--warning-bold]" style="width: 1.2em; height: 1.2em;"></span>
-                    <span>Please choose indexer to search</span>
-                  </div>
-                `
-              : ''}
-            ${this.isSearching
-              ? html`
-                  <div class="flex justify-center items-center py-8">
-                    <span class="loading loading-dots loading-lg"></span>
-                  </div>
-                `
-              : ''}
-            ${this.currentKeyword || this.currentIndexer || this.currentCategory
-              ? html`
-                  ${this.currentKeyword
-                    ? html`<h2 class="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-200">
-                        Result For "${this.currentKeyword}"
-                      </h2>`
-                    : ''}
-                  <resource-list
-                    .keyword=${this.currentKeyword}
-                    .indexerId=${this.currentIndexer}
-                    .category=${this.currentCategory}
-                    .page=${this.currentPage}
-                  ></resource-list>
-                `
-              : ''}
+            ${
+              this.showIndexerWarning
+                ? html`
+                    <div class="alert alert-warning mt-4">
+                      <span
+                        class="icon-[ph--warning-bold]"
+                        style="width: 1.2em; height: 1.2em;"
+                      ></span>
+                      <span>Please choose indexer to search</span>
+                    </div>
+                  `
+                : ""
+            }
+            ${
+              this.isSearching
+                ? html`
+                    <div class="flex justify-center items-center py-8">
+                      <span class="loading loading-dots loading-lg"></span>
+                    </div>
+                  `
+                : ""
+            }
+            ${
+              this.currentKeyword || this.currentIndexer || this.currentCategory
+                ? html`
+                    ${
+                      this.currentKeyword
+                        ? html`<h2
+                            class="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-200"
+                          >
+                            Result For "${this.currentKeyword}"
+                          </h2>`
+                        : ""
+                    }
+                    <resource-list
+                      .keyword=${this.currentKeyword}
+                      .indexerId=${this.currentIndexer}
+                      .category=${this.currentCategory}
+                      .page=${this.currentPage}
+                    ></resource-list>
+                  `
+                : ""
+            }
           </div>
         </div>
       </div>

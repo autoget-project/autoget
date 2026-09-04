@@ -1,24 +1,24 @@
-import { html, LitElement, unsafeCSS, css, type TemplateResult, type PropertyValues } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
-import { DateTime } from 'luxon';
+import { html, LitElement, unsafeCSS, css, type TemplateResult, type PropertyValues } from "lit";
+import { customElement, property, state } from "lit/decorators.js";
+import { DateTime } from "luxon";
 
-import { fetchIndexerResources, type Resource, type ResourcesResponse } from '../utils/api';
-import { formatBytes, formatCreatedDate } from '../utils/format';
-import globalStyles from '/src/index.css?inline';
-import './download_button.js';
+import { fetchIndexerResources, type Resource, type ResourcesResponse } from "../utils/api";
+import { formatBytes, formatCreatedDate } from "../utils/format";
+import globalStyles from "/src/index.css?inline";
+import "./download_button.js";
 
-@customElement('resource-list')
+@customElement("resource-list")
 export class ResourceList extends LitElement {
   static styles = [unsafeCSS(globalStyles), css``];
 
   @property({ type: String })
-  public indexerId: string = '';
+  public indexerId: string = "";
 
   @property({ type: String })
-  public category: string = '';
+  public category: string = "";
 
   @property({ type: String })
-  public keyword: string = '';
+  public keyword: string = "";
 
   @property({ type: Number })
   public page: number = 1;
@@ -37,12 +37,12 @@ export class ResourceList extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    window.addEventListener('resize', this.handleResize);
+    window.addEventListener("resize", this.handleResize);
     this.handleResize(); // Initial call to set column count
   }
 
   disconnectedCallback() {
-    window.removeEventListener('resize', this.handleResize);
+    window.removeEventListener("resize", this.handleResize);
     super.disconnectedCallback();
   }
 
@@ -69,10 +69,10 @@ export class ResourceList extends LitElement {
     super.update(changedProperties);
 
     if (
-      changedProperties.has('indexerId') ||
-      changedProperties.has('category') ||
-      changedProperties.has('keyword') ||
-      changedProperties.has('page')
+      changedProperties.has("indexerId") ||
+      changedProperties.has("category") ||
+      changedProperties.has("keyword") ||
+      changedProperties.has("page")
     ) {
       await this.fetchIndexerResources();
     }
@@ -81,7 +81,12 @@ export class ResourceList extends LitElement {
   private async fetchIndexerResources() {
     if (this.indexerId) {
       this.isLoading = true;
-      const response = await fetchIndexerResources(this.indexerId, this.category, this.keyword, this.page);
+      const response = await fetchIndexerResources(
+        this.indexerId,
+        this.category,
+        this.keyword,
+        this.page,
+      );
       this.isLoading = false;
       if (response) {
         this.resources = response;
@@ -100,9 +105,9 @@ export class ResourceList extends LitElement {
   private handlePageChange(page: number) {
     if (page >= 1 && page <= this.totalPages) {
       const url = new URL(window.location.href);
-      url.searchParams.set('page', page.toString());
-      window.history.pushState({}, '', url.toString());
-      window.dispatchEvent(new PopStateEvent('popstate'));
+      url.searchParams.set("page", page.toString());
+      window.history.pushState({}, "", url.toString());
+      window.dispatchEvent(new PopStateEvent("popstate"));
     }
   }
 
@@ -111,39 +116,55 @@ export class ResourceList extends LitElement {
       <div
         class="image-card rounded-lg overflow-hidden shadow-lg border border-gray-700 bg-gray-100 dark:bg-gray-800 dark:border-gray-600"
       >
-        ${resource.images && resource.images.length > 0
-          ? html`<img
-              src="${resource.images[0]}"
-              alt="${resource.title || 'Resource image'}"
-              class="w-full h-auto object-cover rounded-lg"
-              loading="lazy"
-            />`
-          : ''}
+        ${
+          resource.images && resource.images.length > 0
+            ? html`<img
+                src="${resource.images[0]}"
+                alt="${resource.title || "Resource image"}"
+                class="w-full h-auto object-cover rounded-lg"
+                loading="lazy"
+              />`
+            : ""
+        }
         <div class="p-2">
           <h3
             class="text-gray-900 dark:text-gray-100 font-medium line-clamp-4 text-balance break-all border-b border-b-gray-400 dark:border-gray-600"
           >
-            ${resource.title || 'Untitled Resource'}
+            ${resource.title || "Untitled Resource"}
           </h3>
-          ${resource.title2
-            ? html`<p
-                class="text-gray-800 dark:text-gray-200 font-normal line-clamp-4 text-balance break-all border-b border-b-gray-400 dark:border-gray-600"
-              >
-                ${resource.title2}
-              </p>`
-            : ''}
-          <div class="flex flex-wrap gap-1 mt-1 mb-1 pb-1 border-b border-b-gray-400 dark:border-gray-600">
+          ${
+            resource.title2
+              ? html`<p
+                  class="text-gray-800 dark:text-gray-200 font-normal line-clamp-4 text-balance break-all border-b border-b-gray-400 dark:border-gray-600"
+                >
+                  ${resource.title2}
+                </p>`
+              : ""
+          }
+          <div
+            class="flex flex-wrap gap-1 mt-1 mb-1 pb-1 border-b border-b-gray-400 dark:border-gray-600"
+          >
             <span class="badge badge-outline badge-primary line-clamp-1">${resource.category}</span>
-            <span class="badge badge-outline badge-secondary line-clamp-1">${formatBytes(resource.size)}</span>
-            ${resource.resolution
-              ? html`<span class="badge badge-outline badge-info line-clamp-1">${resource.resolution}</span>`
-              : ''}
-            ${resource.free ? html`<span class="badge badge-success line-clamp-1">Free</span>` : ''}
+            <span class="badge badge-outline badge-secondary line-clamp-1"
+              >${formatBytes(resource.size)}</span
+            >
+            ${
+              resource.resolution
+                ? html`<span class="badge badge-outline badge-info line-clamp-1"
+                    >${resource.resolution}</span
+                  >`
+                : ""
+            }
+            ${resource.free ? html`<span class="badge badge-success line-clamp-1">Free</span>` : ""}
             <span
-              class="badge ${DateTime.now().diff(DateTime.fromSeconds(resource.createdDate, { zone: 'utc' }), 'weeks')
-                .weeks < 1
-                ? 'badge-accent'
-                : 'badge-neutral'}"
+              class="badge ${
+                DateTime.now().diff(
+                  DateTime.fromSeconds(resource.createdDate, { zone: "utc" }),
+                  "weeks",
+                ).weeks < 1
+                  ? "badge-accent"
+                  : "badge-neutral"
+              }"
             >
               <span class="icon-[mingcute--time-line]"></span>
               ${formatCreatedDate(resource.createdDate)}
@@ -153,43 +174,56 @@ export class ResourceList extends LitElement {
               ${resource.seeders}
             </span>
           </div>
-          ${resource.labels && resource.labels.length > 0
-            ? html` <div class="flex flex-wrap gap-1 mt-1 mb-1 pb-1 border-b border-b-gray-400 dark:border-gray-600">
-                ${resource.labels.map(
-                  (label: string) => html`
-                    <span class="badge badge-outline badge-accent line-clamp-1">${label}</span>
-                  `,
-                )}
-              </div>`
-            : ''}
-          ${resource.dbs && resource.dbs.length > 0
-            ? html` <div class="flex flex-wrap gap-3 mt-1 mb-1 pb-1 border-b border-b-gray-400 dark:border-gray-600">
-                ${resource.dbs.map((db: { db: string; link: string; rating: string }) => {
-                  if (db.db === 'douban' || db.db === 'imdb') {
-                    return html`
-                      <a
-                        href="${db.link}"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="inline-flex items-center gap-2 transition-colors cursor-pointer"
-                        title="Open ${db.db.toUpperCase()} page in new tab"
-                      >
-                        <span
-                          class="${db.db === 'douban'
-                            ? 'icon-[simple-icons--douban] text-green-600'
-                            : 'icon-[fa--imdb]'}"
-                          style="width: 1.2em; height: 1.2em;"
-                        ></span>
-                        ${db.rating ? html`<span class="text-xs">(${db.rating} ⭐)</span>` : ''}
-                      </a>
-                    `;
-                  }
-                  return '';
-                })}
-              </div>`
-            : ''}
+          ${
+            resource.labels && resource.labels.length > 0
+              ? html` <div
+                  class="flex flex-wrap gap-1 mt-1 mb-1 pb-1 border-b border-b-gray-400 dark:border-gray-600"
+                >
+                  ${resource.labels.map(
+                    (label: string) => html`
+                      <span class="badge badge-outline badge-accent line-clamp-1">${label}</span>
+                    `,
+                  )}
+                </div>`
+              : ""
+          }
+          ${
+            resource.dbs && resource.dbs.length > 0
+              ? html` <div
+                  class="flex flex-wrap gap-3 mt-1 mb-1 pb-1 border-b border-b-gray-400 dark:border-gray-600"
+                >
+                  ${resource.dbs.map((db: { db: string; link: string; rating: string }) => {
+                    if (db.db === "douban" || db.db === "imdb") {
+                      return html`
+                        <a
+                          href="${db.link}"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="inline-flex items-center gap-2 transition-colors cursor-pointer"
+                          title="Open ${db.db.toUpperCase()} page in new tab"
+                        >
+                          <span
+                            class="${
+                              db.db === "douban"
+                                ? "icon-[simple-icons--douban] text-green-600"
+                                : "icon-[fa--imdb]"
+                            }"
+                            style="width: 1.2em; height: 1.2em;"
+                          ></span>
+                          ${db.rating ? html`<span class="text-xs">(${db.rating} ⭐)</span>` : ""}
+                        </a>
+                      `;
+                    }
+                    return "";
+                  })}
+                </div>`
+              : ""
+          }
           <div class="flex flex-row basis-full justify-end">
-            <download-button indexerId="${this.indexerId}" resourceId="${resource.id}"></download-button>
+            <download-button
+              indexerId="${this.indexerId}"
+              resourceId="${resource.id}"
+            ></download-button>
           </div>
         </div>
       </div>
@@ -249,7 +283,7 @@ export class ResourceList extends LitElement {
     }
 
     if (startPage > 1) {
-      pages.push('<');
+      pages.push("<");
     }
 
     for (let i = startPage; i <= endPage; i++) {
@@ -257,7 +291,7 @@ export class ResourceList extends LitElement {
     }
 
     if (endPage < this.totalPages) {
-      pages.push('>');
+      pages.push(">");
     }
 
     return html`
@@ -265,17 +299,29 @@ export class ResourceList extends LitElement {
         <div class="join">
           ${pages.map((page) => {
             const isActive = page === this.page;
-            const isDisabled = (page === '<' && this.page === 1) || (page === '>' && this.page === this.totalPages);
-            const buttonClass = `join-item btn ${isActive ? 'btn-active' : ''} ${isDisabled ? 'btn-disabled' : ''}`;
+            const isDisabled =
+              (page === "<" && this.page === 1) || (page === ">" && this.page === this.totalPages);
+            const buttonClass = `join-item btn ${isActive ? "btn-active" : ""} ${isDisabled ? "btn-disabled" : ""}`;
 
-            if (typeof page === 'number') {
-              return html`<button class="${buttonClass}" @click=${() => this.handlePageChange(page)}>${page}</button>`;
-            } else if (page === '<') {
-              return html`<button class="${buttonClass}" @click=${() => this.handlePageChange(this.page - 1)}>
+            if (typeof page === "number") {
+              return html`<button
+                class="${buttonClass}"
+                @click=${() => this.handlePageChange(page)}
+              >
+                ${page}
+              </button>`;
+            } else if (page === "<") {
+              return html`<button
+                class="${buttonClass}"
+                @click=${() => this.handlePageChange(this.page - 1)}
+              >
                 &laquo;
               </button>`;
-            } else if (page === '>') {
-              return html`<button class="${buttonClass}" @click=${() => this.handlePageChange(this.page + 1)}>
+            } else if (page === ">") {
+              return html`<button
+                class="${buttonClass}"
+                @click=${() => this.handlePageChange(this.page + 1)}
+              >
                 &raquo;
               </button>`;
             }

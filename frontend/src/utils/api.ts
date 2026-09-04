@@ -1,9 +1,9 @@
 async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const response = await fetch(input, init);
   if (response.status === 401) {
-    console.log('apiFetch: 401 received, redirecting to refresh session via SSO...');
+    console.log("apiFetch: 401 received, redirecting to refresh session via SSO...");
     const url = new URL(window.location.href);
-    url.searchParams.set('_auth_refresh', Date.now().toString());
+    url.searchParams.set("_auth_refresh", Date.now().toString());
     window.location.href = url.toString();
     // Return an unresolved promise so downstream code doesn't throw or trigger error toasts during navigation
     return new Promise(() => {});
@@ -13,13 +13,13 @@ async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<R
 
 export async function fetchIndexers(): Promise<string[]> {
   try {
-    const response = await apiFetch('/api/v1/indexers');
+    const response = await apiFetch("/api/v1/indexers");
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     return await response.json();
   } catch (error) {
-    console.error('Failed to fetch indexers:', error);
+    console.error("Failed to fetch indexers:", error);
     return []; // Set to empty array on error
   }
 }
@@ -38,7 +38,7 @@ export async function fetchIndexerCategories(indexer: string): Promise<Category[
     }
     return await response.json();
   } catch (error) {
-    console.error('Failed to fetch indexers:', error);
+    console.error("Failed to fetch indexers:", error);
     return []; // Set to empty array on error
   }
 }
@@ -93,7 +93,7 @@ export async function fetchIndexerResources(
     }
     return await response.json();
   } catch (error) {
-    console.error('Failed to fetch indexer resources:', error);
+    console.error("Failed to fetch indexer resources:", error);
     return null;
   }
 }
@@ -107,13 +107,13 @@ export interface DownloaderInfo {
 
 export async function fetchDownloaders(): Promise<DownloaderInfo[]> {
   try {
-    const response = await apiFetch('/api/v1/downloaders');
+    const response = await apiFetch("/api/v1/downloaders");
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     return await response.json();
   } catch (error) {
-    console.error('Failed to fetch downloaders:', error);
+    console.error("Failed to fetch downloaders:", error);
     return []; // Set to empty array on error
   }
 }
@@ -156,7 +156,7 @@ export interface DownloaderStatusResponse {
   resources: DownloadItem[];
 }
 
-export type DownloadState = 'downloading' | 'seeding' | 'stopped' | 'planned' | 'failed';
+export type DownloadState = "downloading" | "seeding" | "stopped" | "planned" | "failed";
 
 export async function fetchDownloaderItems(
   downloaderName: string,
@@ -175,12 +175,15 @@ export async function fetchDownloaderItems(
       resources: data.resources || [],
     };
   } catch (error) {
-    console.error('Failed to fetch downloader items:', error);
-    return { state: { count_of_downloading: 0, count_of_planned: 0, count_of_failed: 0 }, resources: [] };
+    console.error("Failed to fetch downloader items:", error);
+    return {
+      state: { count_of_downloading: 0, count_of_planned: 0, count_of_failed: 0 },
+      resources: [],
+    };
   }
 }
 
-export type ActionType = 'move' | 'skip';
+export type ActionType = "move" | "skip";
 
 export interface PlanAction {
   file: string; // Exact original path
@@ -193,7 +196,7 @@ export interface PlanResponse {
   error?: string;
 }
 
-export type OrganizeAction = 'accept_plan' | 'manual_organized' | 're_plan';
+export type OrganizeAction = "accept_plan" | "manual_organized" | "re_plan";
 
 export async function organizeDownload(
   downloadId: string,
@@ -202,19 +205,19 @@ export async function organizeDownload(
 ): Promise<boolean> {
   try {
     let url = `/api/v1/download/${downloadId}/organize?action=${action}`;
-    if (userHint && action === 're_plan') {
+    if (userHint && action === "re_plan") {
       url += `&user_hint=${encodeURIComponent(userHint)}`;
     }
 
     const response = await apiFetch(url, {
-      method: 'POST',
+      method: "POST",
     });
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     return true;
   } catch (error) {
-    console.error('Failed to organize download:', error);
+    console.error("Failed to organize download:", error);
     return false;
   }
 }
@@ -222,29 +225,32 @@ export async function organizeDownload(
 export async function deleteDownload(downloadId: string): Promise<boolean> {
   try {
     const response = await apiFetch(`/api/v1/download/${downloadId}`, {
-      method: 'DELETE',
+      method: "DELETE",
     });
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     return true;
   } catch (error) {
-    console.error('Error deleting download:', error);
+    console.error("Error deleting download:", error);
     return false;
   }
 }
 
 export async function downloadResource(indexerId: string, resourceId: string): Promise<boolean> {
   try {
-    const response = await apiFetch(`/api/v1/indexers/${indexerId}/resources/${resourceId}/download`, {
-      method: 'GET',
-    });
+    const response = await apiFetch(
+      `/api/v1/indexers/${indexerId}/resources/${resourceId}/download`,
+      {
+        method: "GET",
+      },
+    );
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     return true;
   } catch (error) {
-    console.error('Error initiating download:', error);
+    console.error("Error initiating download:", error);
     return false;
   }
 }

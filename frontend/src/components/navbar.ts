@@ -1,10 +1,10 @@
-import { LitElement, html, unsafeCSS } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { LitElement, html, unsafeCSS } from "lit";
+import { customElement, property, state } from "lit/decorators.js";
 
-import { fetchIndexers, fetchDownloaders, type DownloaderInfo } from '../utils/api';
-import globalStyles from '/src/index.css?inline';
+import { fetchIndexers, fetchDownloaders, type DownloaderInfo } from "../utils/api";
+import globalStyles from "/src/index.css?inline";
 
-@customElement('app-navbar')
+@customElement("app-navbar")
 export class AppNavbar extends LitElement {
   static styles = [unsafeCSS(globalStyles)];
 
@@ -15,14 +15,14 @@ export class AppNavbar extends LitElement {
   private downloaders: DownloaderInfo[] = [];
 
   @property({ type: String })
-  activePage = '';
+  activePage = "";
 
   @property({ type: Boolean })
   sidebarVisible = true;
 
   private toggleSidebar() {
     this.dispatchEvent(
-      new CustomEvent('sidebar-toggle', {
+      new CustomEvent("sidebar-toggle", {
         bubbles: true,
         composed: true,
       }),
@@ -63,20 +63,20 @@ export class AppNavbar extends LitElement {
     try {
       this.downloaders = await fetchDownloaders();
     } catch (error) {
-      console.error('Failed to refresh downloaders:', error);
+      console.error("Failed to refresh downloaders:", error);
     }
   }
 
   private getBorderColor(downloader: DownloaderInfo): string {
     // Priority: failed > planned > downloading
     if (downloader.count_of_failed > 0) {
-      return 'border-error'; // Red
+      return "border-error"; // Red
     } else if (downloader.count_of_planned > 0) {
-      return 'border-info'; // Blue
+      return "border-info"; // Blue
     } else if (downloader.count_of_downloading > 0) {
-      return 'border-success'; // Green
+      return "border-success"; // Green
     }
-    return '';
+    return "";
   }
 
   render() {
@@ -84,24 +84,29 @@ export class AppNavbar extends LitElement {
     return html`
       <div class="navbar bg-base-200">
         <div class="navbar-start gap-1">
-          ${isIndexerPage
-            ? html`
-                <a class="btn btn-square btn-ghost" @click=${this.toggleSidebar}>
-                  <span
-                    class="icon-[mdi--chevron-left] w-8 h-8 transition-transform duration-300 ${this.sidebarVisible
-                      ? ''
-                      : 'rotate-180'}"
-                  ></span>
-                </a>
-              `
-            : ''}
+          ${
+            isIndexerPage
+              ? html`
+                  <a class="btn btn-square btn-ghost" @click=${this.toggleSidebar}>
+                    <span
+                      class="icon-[mdi--chevron-left] w-8 h-8 transition-transform duration-300 ${
+                        this.sidebarVisible ? "" : "rotate-180"
+                      }"
+                    ></span>
+                  </a>
+                `
+              : ""
+          }
           <a href="/" class="btn btn-square btn-ghost">
             <img src="/icon.svg" alt="Icon" class="w-8 h-8" />
           </a>
           <div role="tablist" class="tabs tabs-border">
             ${this.indexers.map((indexer) => {
               const isActive = this.activePage === indexer;
-              return html`<a href="/indexers/${indexer}" class="tab ${isActive ? 'tab-active' : ''}" role="tab"
+              return html`<a
+                href="/indexers/${indexer}"
+                class="tab ${isActive ? "tab-active" : ""}"
+                role="tab"
                 >${indexer}</a
               >`;
             })}
@@ -116,13 +121,17 @@ export class AppNavbar extends LitElement {
               return html`
                 <a
                   href="/downloaders/${downloader.name}"
-                  class="btn btn-ghost ${isActive ? 'btn-active' : ''} border-2 ${borderColor}"
+                  class="btn btn-ghost ${isActive ? "btn-active" : ""} border-2 ${borderColor}"
                 >
                   ${downloader.name}
                 </a>
               `;
             })}
-            <a href="/search" class="btn btn-ghost ${this.activePage === 'search' ? 'btn-active' : ''}">Search</a>
+            <a
+              href="/search"
+              class="btn btn-ghost ${this.activePage === "search" ? "btn-active" : ""}"
+              >Search</a
+            >
           </div>
         </div>
       </div>

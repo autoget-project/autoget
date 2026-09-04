@@ -1,8 +1,8 @@
-import { html, LitElement, unsafeCSS } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { html, LitElement, unsafeCSS } from "lit";
+import { customElement, property, state } from "lit/decorators.js";
 
-import '../components/navbar.ts';
-import globalStyles from '/src/index.css?inline';
+import "../components/navbar.ts";
+import globalStyles from "/src/index.css?inline";
 import {
   fetchDownloaderItems,
   organizeDownload,
@@ -13,18 +13,18 @@ import {
   type PlanAction,
   type PlanResponse,
   type DownloaderState,
-} from '../utils/api.ts';
-import { formatBytes } from '../utils/format.ts';
+} from "../utils/api.ts";
+import { formatBytes } from "../utils/format.ts";
 
-@customElement('downloader-view')
+@customElement("downloader-view")
 export class DownloaderView extends LitElement {
   static styles = [unsafeCSS(globalStyles)];
 
   @property({ type: String })
-  public downloaderId: string = '';
+  public downloaderId: string = "";
 
   @property({ type: String })
-  public activeTab: string = 'downloading';
+  public activeTab: string = "downloading";
 
   @state()
   private downloadItems: DownloadItem[] = [];
@@ -50,11 +50,11 @@ export class DownloaderView extends LitElement {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   private readonly tabs = [
-    { id: 'downloading', label: 'Downloading' },
-    { id: 'seeding', label: 'Seeding' },
-    { id: 'stopped', label: 'Stopped' },
-    { id: 'planned', label: 'Planned' },
-    { id: 'failed', label: 'Failed' },
+    { id: "downloading", label: "Downloading" },
+    { id: "seeding", label: "Seeding" },
+    { id: "stopped", label: "Stopped" },
+    { id: "planned", label: "Planned" },
+    { id: "failed", label: "Failed" },
   ];
 
   protected async firstUpdated() {
@@ -68,11 +68,11 @@ export class DownloaderView extends LitElement {
   }
 
   protected async updated(changedProperties: Map<string, unknown>) {
-    if (changedProperties.has('activeTab') || changedProperties.has('downloaderId')) {
+    if (changedProperties.has("activeTab") || changedProperties.has("downloaderId")) {
       // Update URL when activeTab changes
-      if (changedProperties.has('activeTab') && this.downloaderId) {
+      if (changedProperties.has("activeTab") && this.downloaderId) {
         const newUrl = `/downloaders/${this.downloaderId}/${this.activeTab}`;
-        history.pushState(null, '', newUrl);
+        history.pushState(null, "", newUrl);
       }
       await this.loadDownloadItems();
     }
@@ -84,15 +84,22 @@ export class DownloaderView extends LitElement {
     this.error = null;
 
     try {
-      const response = await fetchDownloaderItems(this.downloaderId, this.activeTab as DownloadState);
+      const response = await fetchDownloaderItems(
+        this.downloaderId,
+        this.activeTab as DownloadState,
+      );
 
       // Handle case where response might be undefined or malformed
       if (!response) {
-        throw new Error('No response received from server');
+        throw new Error("No response received from server");
       }
 
       const resources = response.resources || [];
-      const state = response.state || { count_of_downloading: 0, count_of_planned: 0, count_of_failed: 0 };
+      const state = response.state || {
+        count_of_downloading: 0,
+        count_of_planned: 0,
+        count_of_failed: 0,
+      };
 
       // Only update if data has actually changed or if it's the initial load
       if (
@@ -105,7 +112,7 @@ export class DownloaderView extends LitElement {
         this.initialLoad = false;
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to load download items';
+      this.error = err instanceof Error ? err.message : "Failed to load download items";
       // Only clear items on error if there are no items yet
       if (this.downloadItems.length === 0) {
         this.downloadItems = [];
@@ -162,11 +169,11 @@ export class DownloaderView extends LitElement {
     if (!this.downloaderState) return 0;
 
     switch (tabId) {
-      case 'downloading':
+      case "downloading":
         return this.downloaderState.count_of_downloading;
-      case 'planned':
+      case "planned":
         return this.downloaderState.count_of_planned;
-      case 'failed':
+      case "failed":
         return this.downloaderState.count_of_failed;
       default:
         return 0;
@@ -175,14 +182,14 @@ export class DownloaderView extends LitElement {
 
   private getTabBadgeColor(tabId: string): string {
     switch (tabId) {
-      case 'downloading':
-        return 'badge-success';
-      case 'planned':
-        return 'badge-info';
-      case 'failed':
-        return 'badge-error';
+      case "downloading":
+        return "badge-success";
+      case "planned":
+        return "badge-info";
+      case "failed":
+        return "badge-error";
       default:
-        return 'badge-neutral';
+        return "badge-neutral";
     }
   }
 
@@ -201,32 +208,36 @@ export class DownloaderView extends LitElement {
   private getMoveStateLabel(moveState: number): { label: string; color: string } {
     switch (moveState) {
       case 0: // UnMoved
-        return { label: 'Unmoved', color: 'warning' };
+        return { label: "Unmoved", color: "warning" };
       case 1: // Moved
-        return { label: 'Moved', color: 'success' };
+        return { label: "Moved", color: "success" };
       default:
-        return { label: 'Unknown', color: 'neutral' };
+        return { label: "Unknown", color: "neutral" };
     }
   }
 
   private getOrganizeStateLabel(organizeState: number): { label: string; color: string } {
     switch (organizeState) {
       case 0: // Unplanned
-        return { label: 'Unplanned', color: 'neutral' };
+        return { label: "Unplanned", color: "neutral" };
       case 1: // Planned
-        return { label: 'Planned', color: 'info' };
+        return { label: "Planned", color: "info" };
       case 2: // Organized
-        return { label: 'Organized', color: 'success' };
+        return { label: "Organized", color: "success" };
       case 3: // CreatePlanFailed
-        return { label: 'Create Failed', color: 'error' };
+        return { label: "Create Failed", color: "error" };
       case 4: // ExecutePlanFailed
-        return { label: 'Execute Failed', color: 'error' };
+        return { label: "Execute Failed", color: "error" };
       default:
-        return { label: 'Unknown', color: 'neutral' };
+        return { label: "Unknown", color: "neutral" };
     }
   }
 
-  private async handleOrganizeAction(downloadId: string, action: OrganizeAction, userHint?: string) {
+  private async handleOrganizeAction(
+    downloadId: string,
+    action: OrganizeAction,
+    userHint?: string,
+  ) {
     try {
       const success = await organizeDownload(downloadId, action, userHint);
       if (success) {
@@ -238,10 +249,10 @@ export class DownloaderView extends LitElement {
         await this.loadDownloadItems();
       } else {
         // Show error message (could add a toast/notification here)
-        console.error('Failed to organize download');
+        console.error("Failed to organize download");
       }
     } catch (error) {
-      console.error('Error organizing download:', error);
+      console.error("Error organizing download:", error);
     }
   }
 
@@ -252,14 +263,16 @@ export class DownloaderView extends LitElement {
   }
 
   private async handleReplanWithHint(downloadId: string) {
-    const userHint = this.userHints.get(downloadId) || '';
-    await this.handleOrganizeAction(downloadId, 're_plan', userHint);
+    const userHint = this.userHints.get(downloadId) || "";
+    await this.handleOrganizeAction(downloadId, "re_plan", userHint);
   }
 
   private async handleDeleteDownload(downloadId: string) {
     // Show confirmation dialog
     if (
-      !confirm('Are you sure you want to delete this download? This will remove the torrent and delete all local data.')
+      !confirm(
+        "Are you sure you want to delete this download? This will remove the torrent and delete all local data.",
+      )
     ) {
       return;
     }
@@ -271,12 +284,12 @@ export class DownloaderView extends LitElement {
         await this.loadDownloadItems();
       } else {
         // Show error message (could add a toast/notification here)
-        console.error('Failed to delete download');
-        alert('Failed to delete download. Please try again.');
+        console.error("Failed to delete download");
+        alert("Failed to delete download. Please try again.");
       }
     } catch (error) {
-      console.error('Error deleting download:', error);
-      alert('Error deleting download. Please try again.');
+      console.error("Error deleting download:", error);
+      alert("Error deleting download. Please try again.");
     }
   }
 
@@ -314,7 +327,7 @@ export class DownloaderView extends LitElement {
       `;
     }
 
-    const currentUserHint = this.userHints.get(downloadId) || '';
+    const currentUserHint = this.userHints.get(downloadId) || "";
 
     return html`
       <div class="mt-4">
@@ -324,43 +337,47 @@ export class DownloaderView extends LitElement {
           </summary>
           <div class="collapse-content">
             <!-- Feedback Section - Only show in planned tab -->
-            ${this.activeTab === 'planned'
-              ? html`
-                  <div class="pb-4">
-                    <h4 class="text-sm font-medium mb-2">Provide feedback for re-creating plan:</h4>
-                    <div class="flex gap-2">
-                      <input
-                        type="text"
-                        class="input input-bordered input-sm flex-1"
-                        placeholder="E.g., 'Move movie files to /Movies/Action folder', 'Skip subtitle files'"
-                        .value=${currentUserHint}
-                        @input=${(e: Event) => this.handleUserHintChange(downloadId, e)}
-                        @keyup=${(e: KeyboardEvent) => {
-                          if (e.key === 'Enter' && currentUserHint.trim()) {
-                            this.handleReplanWithHint(downloadId);
-                          }
-                        }}
-                      />
-                      <button
-                        class="btn btn-sm btn-primary btn-square"
-                        @click=${() => this.handleReplanWithHint(downloadId)}
-                        @keyup=${(e: KeyboardEvent) => {
-                          if (e.key === 'Enter' && currentUserHint.trim()) {
-                            this.handleReplanWithHint(downloadId);
-                          }
-                        }}
-                        ?disabled=${!currentUserHint.trim()}
-                        title="Send feedback"
-                      >
-                        <span
-                          class="icon-[ph--arrow-elbow-down-left-light]"
-                          style="width: 1.2em; height: 1.2em;"
-                        ></span>
-                      </button>
+            ${
+              this.activeTab === "planned"
+                ? html`
+                    <div class="pb-4">
+                      <h4 class="text-sm font-medium mb-2">
+                        Provide feedback for re-creating plan:
+                      </h4>
+                      <div class="flex gap-2">
+                        <input
+                          type="text"
+                          class="input input-bordered input-sm flex-1"
+                          placeholder="E.g., 'Move movie files to /Movies/Action folder', 'Skip subtitle files'"
+                          .value=${currentUserHint}
+                          @input=${(e: Event) => this.handleUserHintChange(downloadId, e)}
+                          @keyup=${(e: KeyboardEvent) => {
+                            if (e.key === "Enter" && currentUserHint.trim()) {
+                              this.handleReplanWithHint(downloadId);
+                            }
+                          }}
+                        />
+                        <button
+                          class="btn btn-sm btn-primary btn-square"
+                          @click=${() => this.handleReplanWithHint(downloadId)}
+                          @keyup=${(e: KeyboardEvent) => {
+                            if (e.key === "Enter" && currentUserHint.trim()) {
+                              this.handleReplanWithHint(downloadId);
+                            }
+                          }}
+                          ?disabled=${!currentUserHint.trim()}
+                          title="Send feedback"
+                        >
+                          <span
+                            class="icon-[ph--arrow-elbow-down-left-light]"
+                            style="width: 1.2em; height: 1.2em;"
+                          ></span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                `
-              : ''}
+                  `
+                : ""
+            }
 
             <div class="border-t border-base-300 pt-4">
               <div class="overflow-x-auto">
@@ -386,11 +403,12 @@ export class DownloaderView extends LitElement {
 
   private renderPlanAction(planAction: PlanAction) {
     const actionBadge =
-      planAction.action === 'move'
+      planAction.action === "move"
         ? html`<span class="badge badge-success">Move</span>`
         : html`<span class="badge badge-warning">Skip</span>`;
 
-    const targetDisplay = planAction.action === 'move' ? planAction.target || 'No target specified' : 'skip';
+    const targetDisplay =
+      planAction.action === "move" ? planAction.target || "No target specified" : "skip";
 
     return html`
       <tr>
@@ -408,13 +426,17 @@ export class DownloaderView extends LitElement {
           <div class="flex justify-between items-start">
             <div class="flex-1">
               <h3 class="card-title text-lg">${item.ResTitle}</h3>
-              ${item.ResTitle2 ? html`<p class="text-sm text-base-content/70 mt-1">${item.ResTitle2}</p>` : ''}
+              ${item.ResTitle2 ? html`<p class="text-sm text-base-content/70 mt-1">${item.ResTitle2}</p>` : ""}
               <div class="flex flex-wrap gap-2 mt-2">
-                ${item.ResIndexer ? html`<span class="badge badge-neutral">${item.ResIndexer}</span>` : ''}
-                ${item.Category ? html`<span class="badge badge-outline">${item.Category}</span>` : ''}
-                ${item.Size
-                  ? html`<span class="badge badge-outline badge-secondary">${formatBytes(item.Size)}</span>`
-                  : ''}
+                ${item.ResIndexer ? html`<span class="badge badge-neutral">${item.ResIndexer}</span>` : ""}
+                ${item.Category ? html`<span class="badge badge-outline">${item.Category}</span>` : ""}
+                ${
+                  item.Size
+                    ? html`<span class="badge badge-outline badge-secondary"
+                        >${formatBytes(item.Size)}</span
+                      >`
+                    : ""
+                }
                 <span class="badge badge-${this.getMoveStateLabel(item.MoveState).color}">
                   ${this.getMoveStateLabel(item.MoveState).label}
                 </span>
@@ -427,56 +449,72 @@ export class DownloaderView extends LitElement {
               </div>
             </div>
             <div class="flex items-center gap-4">
-              ${this.activeTab === 'downloading'
-                ? html`
-                    <div
-                      class="radial-progress text-primary"
-                      style="--value:${item.DownloadProgress / 10};"
-                      aria-valuenow=${item.DownloadProgress / 10}
-                      role="progressbar"
-                    >
-                      ${item.DownloadProgress / 10}%
-                    </div>
-                  `
-                : html``}
-              <div class="card-actions flex-col gap-2">
-                ${this.activeTab === 'planned'
+              ${
+                this.activeTab === "downloading"
                   ? html`
-                      <button
-                        class="btn btn-sm btn-success"
-                        @click=${() => this.handleOrganizeAction(item.ID, 'accept_plan')}
+                      <div
+                        class="radial-progress text-primary"
+                        style="--value:${item.DownloadProgress / 10};"
+                        aria-valuenow=${item.DownloadProgress / 10}
+                        role="progressbar"
                       >
-                        <span class="icon-[ph--check-bold]" style="width: 1.2em; height: 1.2em;"></span>
-                        Accept Plan
-                      </button>
-                      <button class="btn btn-sm btn-info" @click=${() => this.handleOrganizeAction(item.ID, 're_plan')}>
-                        <span class="icon-[ph--arrow-clockwise-bold]" style="width: 1.2em; height: 1.2em;"></span>
-                        Re-plan
-                      </button>
-                      <button
-                        class="btn btn-sm btn-primary"
-                        @click=${() => this.handleOrganizeAction(item.ID, 'manual_organized')}
-                      >
-                        <span class="icon-[ph--user-bold]" style="width: 1.2em; height: 1.2em;"></span>
-                        Manual Organized
-                      </button>
+                        ${item.DownloadProgress / 10}%
+                      </div>
                     `
-                  : this.activeTab === 'failed'
+                  : html``
+              }
+              <div class="card-actions flex-col gap-2">
+                ${
+                  this.activeTab === "planned"
                     ? html`
                         <button
-                          class="btn btn-sm btn-info"
-                          @click=${() => this.handleOrganizeAction(item.ID, 're_plan')}
+                          class="btn btn-sm btn-success"
+                          @click=${() => this.handleOrganizeAction(item.ID, "accept_plan")}
                         >
+                          <span
+                            class="icon-[ph--check-bold]"
+                            style="width: 1.2em; height: 1.2em;"
+                          ></span>
+                          Accept Plan
+                        </button>
+                        <button
+                          class="btn btn-sm btn-info"
+                          @click=${() => this.handleOrganizeAction(item.ID, "re_plan")}
+                        >
+                          <span
+                            class="icon-[ph--arrow-clockwise-bold]"
+                            style="width: 1.2em; height: 1.2em;"
+                          ></span>
                           Re-plan
                         </button>
                         <button
-                          class="btn btn-sm btn-neutral"
-                          @click=${() => this.handleOrganizeAction(item.ID, 'manual_organized')}
+                          class="btn btn-sm btn-primary"
+                          @click=${() => this.handleOrganizeAction(item.ID, "manual_organized")}
                         >
+                          <span
+                            class="icon-[ph--user-bold]"
+                            style="width: 1.2em; height: 1.2em;"
+                          ></span>
                           Manual Organized
                         </button>
                       `
-                    : html``}
+                    : this.activeTab === "failed"
+                      ? html`
+                          <button
+                            class="btn btn-sm btn-info"
+                            @click=${() => this.handleOrganizeAction(item.ID, "re_plan")}
+                          >
+                            Re-plan
+                          </button>
+                          <button
+                            class="btn btn-sm btn-neutral"
+                            @click=${() => this.handleOrganizeAction(item.ID, "manual_organized")}
+                          >
+                            Manual Organized
+                          </button>
+                        `
+                      : html``
+                }
                 <!-- Delete button for all tabs -->
                 <button
                   class="btn btn-sm btn-error"
@@ -497,45 +535,51 @@ export class DownloaderView extends LitElement {
 
   private renderTabContent() {
     const tabTitles = {
-      downloading: 'Currently Downloading',
-      seeding: 'Seeding Torrents',
-      stopped: 'Stopped Downloads',
-      planned: 'Planned Downloads',
-      failed: 'Failed Downloads',
+      downloading: "Currently Downloading",
+      seeding: "Seeding Torrents",
+      stopped: "Stopped Downloads",
+      planned: "Planned Downloads",
+      failed: "Failed Downloads",
     };
 
     const emptyMessages = {
-      downloading: 'No active downloads at the moment.',
-      seeding: 'No torrents are currently seeding.',
-      stopped: 'No stopped downloads.',
-      planned: 'No planned downloads.',
-      failed: 'No failed downloads.',
+      downloading: "No active downloads at the moment.",
+      seeding: "No torrents are currently seeding.",
+      stopped: "No stopped downloads.",
+      planned: "No planned downloads.",
+      failed: "No failed downloads.",
     };
 
     return html`
       <div class="p-6">
         <h2 class="text-xl font-semibold mb-4">${tabTitles[this.activeTab as DownloadState]}</h2>
 
-        ${this.loading
-          ? html`
-              <div class="flex justify-center items-center py-8">
-                <span class="loading loading-spinner loading-lg"></span>
-              </div>
-            `
-          : this.error
+        ${
+          this.loading
             ? html`
-                <div class="alert alert-error">
-                  <span class="icon-[ph--x-bold]" style="width: 1.2em; height: 1.2em;"></span>
-                  <span>Error: ${this.error}</span>
+                <div class="flex justify-center items-center py-8">
+                  <span class="loading loading-spinner loading-lg"></span>
                 </div>
               `
-            : this.downloadItems.length === 0
+            : this.error
               ? html`
-                  <div class="text-base-content/70">
-                    <p>${emptyMessages[this.activeTab as DownloadState]}</p>
+                  <div class="alert alert-error">
+                    <span class="icon-[ph--x-bold]" style="width: 1.2em; height: 1.2em;"></span>
+                    <span>Error: ${this.error}</span>
                   </div>
                 `
-              : html` <div class="space-y-4">${this.downloadItems.map((item) => this.renderDownloadItem(item))}</div> `}
+              : this.downloadItems.length === 0
+                ? html`
+                    <div class="text-base-content/70">
+                      <p>${emptyMessages[this.activeTab as DownloadState]}</p>
+                    </div>
+                  `
+                : html`
+                    <div class="space-y-4">
+                      ${this.downloadItems.map((item) => this.renderDownloadItem(item))}
+                    </div>
+                  `
+        }
       </div>
     `;
   }
@@ -557,13 +601,17 @@ export class DownloaderView extends LitElement {
                     return html`
                       <button
                         role="tab"
-                        class="tab ${this.activeTab === tab.id ? 'tab-active' : ''}"
+                        class="tab ${this.activeTab === tab.id ? "tab-active" : ""}"
                         @click=${() => this.handleTabChange(tab.id)}
                       >
                         ${tab.label}
-                        ${count > 0
-                          ? html`<span class="badge badge-outline badge-xs ${badgeColor} ml-2">${count}</span>`
-                          : ''}
+                        ${
+                          count > 0
+                            ? html`<span class="badge badge-outline badge-xs ${badgeColor} ml-2"
+                                >${count}</span
+                              >`
+                            : ""
+                        }
                       </button>
                     `;
                   })}

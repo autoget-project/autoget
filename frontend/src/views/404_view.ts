@@ -1,9 +1,9 @@
-import { LitElement, html, unsafeCSS } from 'lit';
-import { customElement } from 'lit/decorators.js';
+import { LitElement, html, unsafeCSS } from "lit";
+import { customElement } from "lit/decorators.js";
 
-import globalStyles from '/src/index.css?inline';
+import globalStyles from "/src/index.css?inline";
 
-@customElement('not-found-view')
+@customElement("not-found-view")
 export class NotFoundView extends LitElement {
   static styles = [unsafeCSS(globalStyles)];
 
