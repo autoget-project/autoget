@@ -30,7 +30,18 @@ export class ResourceList extends LitElement {
   private totalPages: number = 1;
 
   @state()
-  private columnCount: number = 1; // Default to 1 column
+  private responsiveColumnCount: number = 1; // Default to 1 column based on viewport width
+
+  @state()
+  private userColumnCount: number | null = null; // User override via zoom controls (clamped 2..8), null = follow responsive layout
+
+  private static readonly MIN_COLUMNS = 2;
+
+  private static readonly MAX_COLUMNS = 8;
+
+  private get columnCount(): number {
+    return this.userColumnCount ?? this.responsiveColumnCount;
+  }
 
   @state()
   private isLoading: boolean = false;
@@ -48,22 +59,30 @@ export class ResourceList extends LitElement {
 
   private handleResize = () => {
     const width = window.innerWidth;
+    let count = 1;
     if (width >= 1280) {
       // xl
-      this.columnCount = 5;
+      count = 5;
     } else if (width >= 1024) {
       // lg
-      this.columnCount = 4;
+      count = 4;
     } else if (width >= 768) {
       // md
-      this.columnCount = 3;
+      count = 3;
     } else if (width >= 640) {
       // sm
-      this.columnCount = 2;
-    } else {
-      this.columnCount = 1;
+      count = 2;
     }
+    this.responsiveColumnCount = count;
   };
+
+  private handleColumnCountChange(delta: number) {
+    const next = Math.min(
+      ResourceList.MAX_COLUMNS,
+      Math.max(ResourceList.MIN_COLUMNS, this.columnCount + delta),
+    );
+    this.userColumnCount = next;
+  }
 
   protected async update(changedProperties: PropertyValues): Promise<void> {
     super.update(changedProperties);
@@ -256,8 +275,29 @@ export class ResourceList extends LitElement {
     });
 
     return html`
-      <div class="columns-2 sm:columns-2 md:columns-3 lg:columns-4 xl:columns-5 gap-2">
-        ${columns.map((colItems) => html` <div class="break-inside-avoid mb-2 space-y-2">${colItems}</div> `)}
+      <div class="mb-2 flex items-center justify-end gap-1">
+        <span class="text-sm text-gray-500 dark:text-gray-400">${this.columnCount} columns</span>
+        <button
+          class="btn btn-xs btn-square btn-outline"
+          title="Decrease columns"
+          aria-label="Decrease columns"
+          ?disabled=${this.columnCount <= ResourceList.MIN_COLUMNS}
+          @click=${() => this.handleColumnCountChange(-1)}
+        >
+          <span class="icon-[ph--minus-bold]" style="width: 1em; height: 1em;"></span>
+        </button>
+        <button
+          class="btn btn-xs btn-square btn-outline"
+          title="Increase columns"
+          aria-label="Increase columns"
+          ?disabled=${this.columnCount >= ResourceList.MAX_COLUMNS}
+          @click=${() => this.handleColumnCountChange(1)}
+        >
+          <span class="icon-[ph--plus-bold]" style="width: 1em; height: 1em;"></span>
+        </button>
+      </div>
+      <div class="flex items-start gap-2">
+        ${columns.map((colItems) => html`<div class="min-w-0 flex-1 space-y-2">${colItems}</div>`)}
       </div>
     `;
   }
@@ -301,7 +341,7 @@ export class ResourceList extends LitElement {
             const isActive = page === this.page;
             const isDisabled =
               (page === "<" && this.page === 1) || (page === ">" && this.page === this.totalPages);
-            const buttonClass = `join-item btn ${isActive ? "btn-active" : ""} ${isDisabled ? "btn-disabled" : ""}`;
+            const buttonClass = `join-item btn ${isActive ? "btn-primary font-bold ring-2 ring-primary ring-offset-2" : ""} ${isDisabled ? "btn-disabled" : ""}`;
 
             if (typeof page === "number") {
               return html`<button

@@ -47,6 +47,9 @@ export class DownloaderView extends LitElement {
   @state()
   private userHints: Map<string, string> = new Map(); // Store user hints per download ID
 
+  @state()
+  private processingActions: Set<string> = new Set(); // Track in-flight actions per download ID to prevent double submission
+
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   private readonly tabs = [
@@ -233,11 +236,26 @@ export class DownloaderView extends LitElement {
     }
   }
 
+  private isProcessing(downloadId: string, action: OrganizeAction): boolean {
+    return this.processingActions.has(`${downloadId}:${action}`);
+  }
+
   private async handleOrganizeAction(
     downloadId: string,
     action: OrganizeAction,
     userHint?: string,
   ) {
+    const actionKey = `${downloadId}:${action}`;
+
+    // Prevent double submission while an action is already in flight
+    if (this.processingActions.has(actionKey)) {
+      return;
+    }
+
+    const nextProcessing = new Set(this.processingActions);
+    nextProcessing.add(actionKey);
+    this.processingActions = nextProcessing;
+
     try {
       const success = await organizeDownload(downloadId, action, userHint);
       if (success) {
@@ -253,6 +271,10 @@ export class DownloaderView extends LitElement {
       }
     } catch (error) {
       console.error("Error organizing download:", error);
+    } finally {
+      const remaining = new Set(this.processingActions);
+      remaining.delete(actionKey);
+      this.processingActions = remaining;
     }
   }
 
@@ -350,6 +372,7 @@ export class DownloaderView extends LitElement {
                           class="input input-bordered input-sm flex-1"
                           placeholder="E.g., 'Move movie files to /Movies/Action folder', 'Skip subtitle files'"
                           .value=${currentUserHint}
+                          ?disabled=${this.isProcessing(downloadId, "re_plan")}
                           @input=${(e: Event) => this.handleUserHintChange(downloadId, e)}
                           @keyup=${(e: KeyboardEvent) => {
                             if (e.key === "Enter" && currentUserHint.trim()) {
@@ -360,18 +383,17 @@ export class DownloaderView extends LitElement {
                         <button
                           class="btn btn-sm btn-primary btn-square"
                           @click=${() => this.handleReplanWithHint(downloadId)}
-                          @keyup=${(e: KeyboardEvent) => {
-                            if (e.key === "Enter" && currentUserHint.trim()) {
-                              this.handleReplanWithHint(downloadId);
-                            }
-                          }}
-                          ?disabled=${!currentUserHint.trim()}
+                          ?disabled=${!currentUserHint.trim() || this.isProcessing(downloadId, "re_plan")}
                           title="Send feedback"
                         >
-                          <span
-                            class="icon-[ph--arrow-elbow-down-left-light]"
-                            style="width: 1.2em; height: 1.2em;"
-                          ></span>
+                          ${
+                            this.isProcessing(downloadId, "re_plan")
+                              ? html`<span class="loading loading-spinner loading-xs"></span>`
+                              : html`<span
+                                  class="icon-[ph--arrow-elbow-down-left-light]"
+                                  style="width: 1.2em; height: 1.2em;"
+                                ></span>`
+                          }
                         </button>
                       </div>
                     </div>
@@ -469,32 +491,47 @@ export class DownloaderView extends LitElement {
                     ? html`
                         <button
                           class="btn btn-sm btn-success"
+                          ?disabled=${this.isProcessing(item.ID, "accept_plan")}
                           @click=${() => this.handleOrganizeAction(item.ID, "accept_plan")}
                         >
-                          <span
-                            class="icon-[ph--check-bold]"
-                            style="width: 1.2em; height: 1.2em;"
-                          ></span>
+                          ${
+                            this.isProcessing(item.ID, "accept_plan")
+                              ? html`<span class="loading loading-spinner loading-xs"></span>`
+                              : html`<span
+                                  class="icon-[ph--check-bold]"
+                                  style="width: 1.2em; height: 1.2em;"
+                                ></span>`
+                          }
                           Accept Plan
                         </button>
                         <button
                           class="btn btn-sm btn-info"
+                          ?disabled=${this.isProcessing(item.ID, "re_plan")}
                           @click=${() => this.handleOrganizeAction(item.ID, "re_plan")}
                         >
-                          <span
-                            class="icon-[ph--arrow-clockwise-bold]"
-                            style="width: 1.2em; height: 1.2em;"
-                          ></span>
+                          ${
+                            this.isProcessing(item.ID, "re_plan")
+                              ? html`<span class="loading loading-spinner loading-xs"></span>`
+                              : html`<span
+                                  class="icon-[ph--arrow-clockwise-bold]"
+                                  style="width: 1.2em; height: 1.2em;"
+                                ></span>`
+                          }
                           Re-plan
                         </button>
                         <button
                           class="btn btn-sm btn-primary"
+                          ?disabled=${this.isProcessing(item.ID, "manual_organized")}
                           @click=${() => this.handleOrganizeAction(item.ID, "manual_organized")}
                         >
-                          <span
-                            class="icon-[ph--user-bold]"
-                            style="width: 1.2em; height: 1.2em;"
-                          ></span>
+                          ${
+                            this.isProcessing(item.ID, "manual_organized")
+                              ? html`<span class="loading loading-spinner loading-xs"></span>`
+                              : html`<span
+                                  class="icon-[ph--user-bold]"
+                                  style="width: 1.2em; height: 1.2em;"
+                                ></span>`
+                          }
                           Manual Organized
                         </button>
                       `
@@ -502,14 +539,26 @@ export class DownloaderView extends LitElement {
                       ? html`
                           <button
                             class="btn btn-sm btn-info"
+                            ?disabled=${this.isProcessing(item.ID, "re_plan")}
                             @click=${() => this.handleOrganizeAction(item.ID, "re_plan")}
                           >
+                            ${
+                              this.isProcessing(item.ID, "re_plan")
+                                ? html`<span class="loading loading-spinner loading-xs"></span>`
+                                : ""
+                            }
                             Re-plan
                           </button>
                           <button
                             class="btn btn-sm btn-neutral"
+                            ?disabled=${this.isProcessing(item.ID, "manual_organized")}
                             @click=${() => this.handleOrganizeAction(item.ID, "manual_organized")}
                           >
+                            ${
+                              this.isProcessing(item.ID, "manual_organized")
+                                ? html`<span class="loading loading-spinner loading-xs"></span>`
+                                : ""
+                            }
                             Manual Organized
                           </button>
                         `
