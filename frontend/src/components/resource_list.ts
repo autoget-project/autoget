@@ -30,58 +30,37 @@ export class ResourceList extends LitElement {
   private totalPages: number = 1;
 
   @state()
-  private responsiveColumnCount: number = 1; // Default to 1 column based on viewport width
-
-  @state()
-  private userColumnCount: number | null = null; // User override via zoom controls (clamped 2..8), null = follow responsive layout
+  private columnCount: number = 4;
 
   private static readonly MIN_COLUMNS = 2;
 
   private static readonly MAX_COLUMNS = 8;
 
-  private get columnCount(): number {
-    return this.userColumnCount ?? this.responsiveColumnCount;
-  }
+  private static readonly COLUMNS_STORAGE_KEY = "resource-list-column-count";
 
   @state()
   private isLoading: boolean = false;
 
   connectedCallback() {
     super.connectedCallback();
-    window.addEventListener("resize", this.handleResize);
-    this.handleResize(); // Initial call to set column count
+    this.columnCount = this.loadStoredColumnCount();
   }
 
-  disconnectedCallback() {
-    window.removeEventListener("resize", this.handleResize);
-    super.disconnectedCallback();
-  }
-
-  private handleResize = () => {
-    const width = window.innerWidth;
-    let count = 1;
-    if (width >= 1280) {
-      // xl
-      count = 5;
-    } else if (width >= 1024) {
-      // lg
-      count = 4;
-    } else if (width >= 768) {
-      // md
-      count = 3;
-    } else if (width >= 640) {
-      // sm
-      count = 2;
+  private loadStoredColumnCount(): number {
+    const stored = Number(localStorage.getItem(ResourceList.COLUMNS_STORAGE_KEY));
+    if (Number.isInteger(stored)) {
+      return Math.min(ResourceList.MAX_COLUMNS, Math.max(ResourceList.MIN_COLUMNS, stored));
     }
-    this.responsiveColumnCount = count;
-  };
+    return this.columnCount;
+  }
 
   private handleColumnCountChange(delta: number) {
     const next = Math.min(
       ResourceList.MAX_COLUMNS,
       Math.max(ResourceList.MIN_COLUMNS, this.columnCount + delta),
     );
-    this.userColumnCount = next;
+    this.columnCount = next;
+    localStorage.setItem(ResourceList.COLUMNS_STORAGE_KEY, String(next));
   }
 
   protected async update(changedProperties: PropertyValues): Promise<void> {
@@ -341,7 +320,7 @@ export class ResourceList extends LitElement {
             const isActive = page === this.page;
             const isDisabled =
               (page === "<" && this.page === 1) || (page === ">" && this.page === this.totalPages);
-            const buttonClass = `join-item btn ${isActive ? "btn-primary font-bold ring-2 ring-primary ring-offset-2" : ""} ${isDisabled ? "btn-disabled" : ""}`;
+            const buttonClass = `join-item btn ${isActive ? "btn-primary" : ""} ${isDisabled ? "btn-disabled" : ""}`;
 
             if (typeof page === "number") {
               return html`<button
