@@ -56,8 +56,48 @@ export class IndexerView extends LitElement {
   @state()
   private sidebarVisible: boolean = true;
 
+  @state()
+  private sidebarWidth: number = 256;
+
+  @state()
+  private isResizing: boolean = false;
+
+  private readonly sidebarWidthStorageKey = "indexer-sidebar-width";
+
+  private readonly sidebarMinWidth = 160;
+
+  private readonly sidebarMaxWidth = 600;
+
   private handleSidebarToggle(): void {
     this.sidebarVisible = !this.sidebarVisible;
+  }
+
+  private clampSidebarWidth(width: number): number {
+    return Math.min(this.sidebarMaxWidth, Math.max(this.sidebarMinWidth, Math.round(width)));
+  }
+
+  private handleSidebarResizeStart(e: PointerEvent): void {
+    if (e.button !== 0) {
+      return;
+    }
+    e.preventDefault();
+    const target = e.currentTarget as HTMLElement;
+    target.setPointerCapture(e.pointerId);
+    this.isResizing = true;
+
+    const onMove = (ev: PointerEvent): void => {
+      this.sidebarWidth = this.clampSidebarWidth(ev.clientX);
+    };
+    const onEnd = (): void => {
+      target.removeEventListener("pointermove", onMove);
+      target.removeEventListener("pointerup", onEnd);
+      target.removeEventListener("pointercancel", onEnd);
+      localStorage.setItem(this.sidebarWidthStorageKey, String(this.sidebarWidth));
+      this.isResizing = false;
+    };
+    target.addEventListener("pointermove", onMove);
+    target.addEventListener("pointerup", onEnd);
+    target.addEventListener("pointercancel", onEnd);
   }
 
   private renderCategory(category: Category): TemplateResult {
@@ -67,9 +107,9 @@ export class IndexerView extends LitElement {
     if (category.subCategories && category.subCategories.length > 0) {
       return html`
         <li>
-          <a class="${activeClass}" href="/indexers/${this.indexerId}/${category.id}"
-            >${category.name}</a
-          >
+          <a class="${activeClass} min-w-0" href="/indexers/${this.indexerId}/${category.id}">
+            <span class="truncate">${category.name}</span>
+          </a>
           <ul>
             ${category.subCategories.map((child) => this.renderCategory(child))}
           </ul>
@@ -77,15 +117,22 @@ export class IndexerView extends LitElement {
       `;
     } else {
       return html`<li>
-        <a class="${activeClass}" href="/indexers/${this.indexerId}/${category.id}"
-          >${category.name}</a
-        >
+        <a class="${activeClass} min-w-0" href="/indexers/${this.indexerId}/${category.id}">
+          <span class="truncate">${category.name}</span>
+        </a>
       </li> `;
     }
   }
 
   async connectedCallback() {
     super.connectedCallback();
+    const saved = localStorage.getItem(this.sidebarWidthStorageKey);
+    if (saved) {
+      const parsed = parseInt(saved, 10);
+      if (!Number.isNaN(parsed)) {
+        this.sidebarWidth = this.clampSidebarWidth(parsed);
+      }
+    }
     await this.fetchIndexerCategories();
   }
 
@@ -129,7 +176,8 @@ export class IndexerView extends LitElement {
   }
 
   render() {
-    const sidebarClass = this.sidebarVisible ? "flex-2" : "w-0";
+    const sidebarStyle = this.sidebarVisible ? `width: ${this.sidebarWidth}px;` : "width: 0;";
+    const transitionClass = this.isResizing ? "" : "transition-all duration-300 ease-in-out";
     return html`
       <div class="flex flex-col h-screen" @sidebar-toggle=${this.handleSidebarToggle}>
         <app-navbar
@@ -139,9 +187,10 @@ export class IndexerView extends LitElement {
 
         <div class="flex flex-row grow overflow-hidden">
           <div
-            class="${sidebarClass} bg-base-200 overflow-y-auto transition-all duration-300 ease-in-out ${
+            class="bg-base-200 overflow-y-auto overflow-x-hidden shrink-0 ${transitionClass} ${
               this.sidebarVisible ? "" : "opacity-0"
             }"
+            style=${sidebarStyle}
             id="left-panel-categories"
           >
             <ul class="menu bg-base-200 rounded-box w-full">
@@ -150,7 +199,15 @@ export class IndexerView extends LitElement {
           </div>
 
           <div
-            class="flex-10 p-4 overflow-y-auto"
+            class="${this.sidebarVisible ? "w-1.5" : "w-0"} shrink-0 cursor-col-resize select-none ${
+              this.isResizing ? "bg-primary" : "hover:bg-primary/50"
+            } ${transitionClass}"
+            style="touch-action: none;"
+            @pointerdown=${this.handleSidebarResizeStart}
+          ></div>
+
+          <div
+            class="grow min-w-0 p-4 overflow-y-auto"
             id="content"
             @scroll=${(e: Event) => scrollableOnScroll(e.currentTarget as HTMLElement)}
           >
