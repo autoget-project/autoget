@@ -47,9 +47,13 @@ export class ResourceList extends LitElement {
   }
 
   private loadStoredColumnCount(): number {
-    const stored = Number(localStorage.getItem(ResourceList.COLUMNS_STORAGE_KEY));
-    if (Number.isInteger(stored)) {
-      return Math.min(ResourceList.MAX_COLUMNS, Math.max(ResourceList.MIN_COLUMNS, stored));
+    const stored = localStorage.getItem(ResourceList.COLUMNS_STORAGE_KEY);
+    if (stored === null) {
+      return this.columnCount;
+    }
+    const parsed = Number(stored);
+    if (Number.isInteger(parsed)) {
+      return Math.min(ResourceList.MAX_COLUMNS, Math.max(ResourceList.MIN_COLUMNS, parsed));
     }
     return this.columnCount;
   }
@@ -255,24 +259,28 @@ export class ResourceList extends LitElement {
 
     return html`
       <div class="mb-2 flex items-center justify-end gap-1">
-        <span class="text-sm text-gray-500 dark:text-gray-400">${this.columnCount} columns</span>
         <button
-          class="btn btn-xs btn-square btn-outline"
+          class="btn btn-xs btn-square btn-ghost"
           title="Decrease columns"
           aria-label="Decrease columns"
           ?disabled=${this.columnCount <= ResourceList.MIN_COLUMNS}
           @click=${() => this.handleColumnCountChange(-1)}
         >
-          <span class="icon-[ph--minus-bold]" style="width: 1em; height: 1em;"></span>
+          <span class="icon-[akar-icons--circle-minus]" style="width: 1.2em; height: 1.2em;"></span>
         </button>
+        <span
+          class="icon-[f7--rectangle-grid-3x2-fill] text-gray-500 dark:text-gray-400"
+          style="width: 1.2em; height: 1.2em;"
+          title="${this.columnCount} columns"
+        ></span>
         <button
-          class="btn btn-xs btn-square btn-outline"
+          class="btn btn-xs btn-square btn-ghost"
           title="Increase columns"
           aria-label="Increase columns"
           ?disabled=${this.columnCount >= ResourceList.MAX_COLUMNS}
           @click=${() => this.handleColumnCountChange(1)}
         >
-          <span class="icon-[ph--plus-bold]" style="width: 1em; height: 1em;"></span>
+          <span class="icon-[akar-icons--circle-plus]" style="width: 1.2em; height: 1.2em;"></span>
         </button>
       </div>
       <div class="flex items-start gap-2">
