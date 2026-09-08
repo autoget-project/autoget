@@ -18,7 +18,7 @@
   "dependencies": {
     "@lit-labs/router": "^0.1.4",
     "@tailwindcss/vite": "^4.3.3",
-    "daisyui": "^5.7.27",
+    "daisyui": "^5.7.28",
     "lit": "^3.3.3",
     "luxon": "^3.7.2",
     "tailwindcss": "^4.3.3",
@@ -28,12 +28,12 @@
     "@iconify/json": "^2.2.525",
     "@iconify/tailwind4": "^1.2.3",
     "@types/luxon": "^3.7.5",
-    "jsdom": "^29.1.1",
+    "jsdom": "^30.0.1",
     "oxfmt": "^0.66.0",
     "oxlint": "^1.81.0",
-    "typescript": "~6.0.3",
+    "typescript": "~7.0.2",
     "vite": "^8.2.2",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.0"
   },
   "packageManager": "pnpm@11.3.0"
 }
