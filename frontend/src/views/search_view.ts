@@ -314,30 +314,32 @@ export class SearchView extends LitElement {
                 </div>
               </div>
 
-              <div class="collapse-content p-0 flex flex-row space-x-4">
-                <div class="shrink-0 w-60 p-2 bg-gray-100 dark:bg-gray-700 rounded-xl">
-                  <h3 class="font-semibold text-gray-700 dark:text-gray-300 mb-3">Indexer</h3>
-                  <div class="flex flex-col space-y-2">
-                    ${this.indexers.map(
-                      (indexer) => html`
-                        <div
-                          class="category-item p-2 rounded-lg border border-gray-300 dark:border-gray-600 text-left font-medium flex items-center justify-between transition-colors bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                            this.selectedIndexer === indexer ? "active" : ""
-                          }"
-                          @click=${() => this.handleIndexerChange(indexer)}
-                        >
-                          <span>${indexer}</span>
-                          <span class="ml-2 text-gray-400 dark:text-gray-500 font-bold">›</span>
-                        </div>
-                      `,
+              <div class="collapse-content p-0">
+                <div class="flex flex-col md:flex-row gap-4 overflow-x-auto pb-4 max-w-full">
+                  <div class="shrink-0 w-full md:w-60 p-2 bg-gray-100 dark:bg-gray-700 rounded-xl">
+                    <h3 class="font-semibold text-gray-700 dark:text-gray-300 mb-3">Indexer</h3>
+                    <div class="flex flex-col space-y-2">
+                      ${this.indexers.map(
+                        (indexer) => html`
+                          <div
+                            class="category-item p-2 rounded-lg border border-gray-300 dark:border-gray-600 text-left font-medium flex items-center justify-between transition-colors bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                              this.selectedIndexer === indexer ? "active" : ""
+                            }"
+                            @click=${() => this.handleIndexerChange(indexer)}
+                          >
+                            <span>${indexer}</span>
+                            <span class="ml-2 text-gray-400 dark:text-gray-500 font-bold">›</span>
+                          </div>
+                        `,
+                      )}
+                    </div>
+                  </div>
+
+                  <div class="scroll-container overflow-x-auto flex space-x-4 pb-2 grow min-w-0">
+                    ${this.displayedCategoryLevels.map((categories, index) =>
+                      this.renderCategoryLevel(categories, index),
                     )}
                   </div>
-                </div>
-
-                <div class="scroll-container overflow-x-auto flex space-x-4 pb-4 grow">
-                  ${this.displayedCategoryLevels.map((categories, index) =>
-                    this.renderCategoryLevel(categories, index),
-                  )}
                 </div>
               </div>
             </div>

@@ -444,53 +444,59 @@ export class DownloaderView extends LitElement {
   private renderDownloadItem(item: DownloadItem) {
     return html`
       <div class="card bg-base-100 shadow-sm mb-4">
-        <div class="card-body">
-          <div class="flex justify-between items-start">
-            <div class="flex-1">
-              <h3 class="card-title text-lg">${item.ResTitle}</h3>
-              ${item.ResTitle2 ? html`<p class="text-sm text-base-content/70 mt-1">${item.ResTitle2}</p>` : ""}
-              <div class="flex flex-wrap gap-2 mt-2">
-                ${item.ResIndexer ? html`<span class="badge badge-neutral">${item.ResIndexer}</span>` : ""}
-                ${item.Category ? html`<span class="badge badge-outline">${item.Category}</span>` : ""}
+        <div class="card-body p-4 sm:p-6">
+          <div class="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+            <div class="flex-1 min-w-0">
+              <h3 class="card-title text-base sm:text-lg break-words">${item.ResTitle}</h3>
+              ${item.ResTitle2 ? html`<p class="text-sm text-base-content/70 mt-1 break-words">${item.ResTitle2}</p>` : ""}
+              <div class="flex flex-wrap gap-1.5 sm:gap-2 mt-2">
+                ${item.ResIndexer ? html`<span class="badge badge-sm sm:badge-md badge-neutral">${item.ResIndexer}</span>` : ""}
+                ${item.Category ? html`<span class="badge badge-sm sm:badge-md badge-outline">${item.Category}</span>` : ""}
                 ${
                   item.Size
-                    ? html`<span class="badge badge-outline badge-secondary"
+                    ? html`<span class="badge badge-sm sm:badge-md badge-outline badge-secondary"
                         >${formatBytes(item.Size)}</span
                       >`
                     : ""
                 }
-                <span class="badge badge-${this.getMoveStateLabel(item.MoveState).color}">
+                <span
+                  class="badge badge-sm sm:badge-md badge-${this.getMoveStateLabel(item.MoveState).color}"
+                >
                   ${this.getMoveStateLabel(item.MoveState).label}
                 </span>
-                <span class="badge badge-${this.getOrganizeStateLabel(item.OrganizeState).color}">
+                <span
+                  class="badge badge-sm sm:badge-md badge-${this.getOrganizeStateLabel(item.OrganizeState).color}"
+                >
                   ${this.getOrganizeStateLabel(item.OrganizeState).label}
                 </span>
               </div>
-              <div class="mt-3 text-sm text-base-content/60">
+              <div class="mt-2 text-xs sm:text-sm text-base-content/60">
                 <p>Created: ${this.formatDate(item.CreatedAt)}</p>
               </div>
             </div>
-            <div class="flex items-center gap-4">
+            <div
+              class="flex flex-wrap items-center justify-between md:justify-end gap-3 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-base-200"
+            >
               ${
                 this.activeTab === "downloading"
                   ? html`
                       <div
                         class="radial-progress text-primary"
-                        style="--value:${item.DownloadProgress / 10};"
+                        style="--value:${item.DownloadProgress / 10}; --size:3rem; --thickness: 4px;"
                         aria-valuenow=${item.DownloadProgress / 10}
                         role="progressbar"
                       >
-                        ${item.DownloadProgress / 10}%
+                        <span class="text-xs font-semibold">${item.DownloadProgress / 10}%</span>
                       </div>
                     `
                   : html``
               }
-              <div class="card-actions flex-col gap-2">
+              <div class="card-actions flex-wrap md:flex-col gap-2">
                 ${
                   this.activeTab === "planned"
                     ? html`
                         <button
-                          class="btn btn-sm btn-success"
+                          class="btn btn-xs sm:btn-sm btn-success"
                           ?disabled=${this.isProcessing(item.ID, "accept_plan")}
                           @click=${() => this.handleOrganizeAction(item.ID, "accept_plan")}
                         >
@@ -505,7 +511,7 @@ export class DownloaderView extends LitElement {
                           Accept Plan
                         </button>
                         <button
-                          class="btn btn-sm btn-info"
+                          class="btn btn-xs sm:btn-sm btn-info"
                           ?disabled=${this.isProcessing(item.ID, "re_plan")}
                           @click=${() => this.handleOrganizeAction(item.ID, "re_plan")}
                         >
@@ -520,7 +526,7 @@ export class DownloaderView extends LitElement {
                           Re-plan
                         </button>
                         <button
-                          class="btn btn-sm btn-primary"
+                          class="btn btn-xs sm:btn-sm btn-primary"
                           ?disabled=${this.isProcessing(item.ID, "manual_organized")}
                           @click=${() => this.handleOrganizeAction(item.ID, "manual_organized")}
                         >
@@ -538,7 +544,7 @@ export class DownloaderView extends LitElement {
                     : this.activeTab === "failed"
                       ? html`
                           <button
-                            class="btn btn-sm btn-info"
+                            class="btn btn-xs sm:btn-sm btn-info"
                             ?disabled=${this.isProcessing(item.ID, "re_plan")}
                             @click=${() => this.handleOrganizeAction(item.ID, "re_plan")}
                           >
@@ -550,7 +556,7 @@ export class DownloaderView extends LitElement {
                             Re-plan
                           </button>
                           <button
-                            class="btn btn-sm btn-neutral"
+                            class="btn btn-xs sm:btn-sm btn-neutral"
                             ?disabled=${this.isProcessing(item.ID, "manual_organized")}
                             @click=${() => this.handleOrganizeAction(item.ID, "manual_organized")}
                           >
@@ -566,7 +572,7 @@ export class DownloaderView extends LitElement {
                 }
                 <!-- Delete button for all tabs -->
                 <button
-                  class="btn btn-sm btn-error"
+                  class="btn btn-xs sm:btn-sm btn-error"
                   @click=${() => this.handleDeleteDownload(item.ID)}
                   title="Delete download and remove all local data"
                 >
@@ -642,35 +648,39 @@ export class DownloaderView extends LitElement {
           <div class="flex-1 flex flex-col overflow-hidden">
             <!-- Tabs -->
             <div class="bg-base-100 border-b border-base-300">
-              <div class="flex items-center justify-between px-4">
-                <div role="tablist" class="tabs tabs-border">
-                  ${this.tabs.map((tab) => {
-                    const count = this.getTabCount(tab.id);
-                    const badgeColor = this.getTabBadgeColor(tab.id);
-                    return html`
-                      <button
-                        role="tab"
-                        class="tab ${this.activeTab === tab.id ? "tab-active" : ""}"
-                        @click=${() => this.handleTabChange(tab.id)}
-                      >
-                        ${tab.label}
-                        ${
-                          count > 0
-                            ? html`<span class="badge badge-outline badge-xs ${badgeColor} ml-2"
-                                >${count}</span
-                              >`
-                            : ""
-                        }
-                      </button>
-                    `;
-                  })}
+              <div class="flex items-center justify-between px-2 sm:px-4 gap-2">
+                <div class="overflow-x-auto min-w-0 flex-1 scrollbar-none py-1">
+                  <div role="tablist" class="tabs tabs-border flex-nowrap whitespace-nowrap">
+                    ${this.tabs.map((tab) => {
+                      const count = this.getTabCount(tab.id);
+                      const badgeColor = this.getTabBadgeColor(tab.id);
+                      return html`
+                        <button
+                          role="tab"
+                          class="tab tab-sm sm:tab-md ${this.activeTab === tab.id ? "tab-active font-bold" : ""}"
+                          @click=${() => this.handleTabChange(tab.id)}
+                        >
+                          ${tab.label}
+                          ${
+                            count > 0
+                              ? html`<span class="badge badge-outline badge-xs ${badgeColor} ml-1.5"
+                                  >${count}</span
+                                >`
+                              : ""
+                          }
+                        </button>
+                      `;
+                    })}
+                  </div>
                 </div>
 
                 <!-- Refresh Dropdown -->
-                <div class="flex items-center gap-2">
-                  <span class="text-sm text-base-content/70">Refresh:</span>
+                <div class="flex items-center gap-1 shrink-0">
+                  <span class="text-xs sm:text-sm text-base-content/70 hidden sm:inline"
+                    >Refresh:</span
+                  >
                   <select
-                    class="select select-bordered select-sm"
+                    class="select select-bordered select-xs sm:select-sm"
                     @change=${this.handleRefreshIntervalChange}
                     .value=${String(this.refreshInterval)}
                   >

@@ -126,6 +126,9 @@ export class IndexerView extends LitElement {
 
   async connectedCallback() {
     super.connectedCallback();
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      this.sidebarVisible = false;
+    }
     const saved = localStorage.getItem(this.sidebarWidthStorageKey);
     if (saved) {
       const parsed = parseInt(saved, 10);
@@ -176,38 +179,70 @@ export class IndexerView extends LitElement {
   }
 
   render() {
-    const sidebarStyle = this.sidebarVisible ? `width: ${this.sidebarWidth}px;` : "width: 0;";
+    const isDesktop = typeof window !== "undefined" && window.innerWidth >= 1024;
+    const sidebarDesktopStyle = this.sidebarVisible
+      ? `width: ${this.sidebarWidth}px;`
+      : "width: 0;";
     const transitionClass = this.isResizing ? "" : "transition-all duration-300 ease-in-out";
+
     return html`
-      <div class="flex flex-col h-screen" @sidebar-toggle=${this.handleSidebarToggle}>
+      <div class="flex flex-col h-screen relative" @sidebar-toggle=${this.handleSidebarToggle}>
         <app-navbar
           .activePage=${this.indexerId}
           .sidebarVisible=${this.sidebarVisible}
         ></app-navbar>
 
-        <div class="flex flex-row grow overflow-hidden">
+        <!-- Mobile Drawer Overlay Backdrop -->
+        ${
+          !isDesktop && this.sidebarVisible
+            ? html`
+                <div
+                  class="fixed inset-0 bg-black/50 z-30 lg:hidden"
+                  @click=${this.handleSidebarToggle}
+                ></div>
+              `
+            : ""
+        }
+
+        <div class="flex flex-row grow overflow-hidden relative">
+          <!-- Sidebar: drawer on mobile, static on desktop -->
           <div
-            class="bg-base-200 overflow-y-auto overflow-x-hidden shrink-0 ${transitionClass} ${
-              this.sidebarVisible ? "" : "opacity-0"
-            }"
-            style=${sidebarStyle}
+            class="bg-base-200 overflow-y-auto overflow-x-hidden ${transitionClass} ${
+              this.sidebarVisible ? "" : "opacity-0 pointer-events-none"
+            } lg:relative lg:shrink-0 lg:z-auto fixed inset-y-0 left-0 z-40 max-w-[85vw] shadow-2xl lg:shadow-none"
+            style=${isDesktop ? sidebarDesktopStyle : this.sidebarVisible ? "width: 280px;" : "width: 0;"}
             id="left-panel-categories"
           >
-            <ul class="menu bg-base-200 rounded-box w-full">
+            <div class="flex items-center justify-between p-3 border-b border-base-300 lg:hidden">
+              <span class="font-bold text-sm">Categories</span>
+              <button class="btn btn-ghost btn-xs btn-circle" @click=${this.handleSidebarToggle}>
+                ✕
+              </button>
+            </div>
+            <ul
+              class="menu bg-base-200 rounded-box w-full p-2"
+              @click=${() => {
+                if (!isDesktop) {
+                  this.sidebarVisible = false;
+                }
+              }}
+            >
               ${this.categories.map((category) => this.renderCategory(category))}
             </ul>
           </div>
 
+          <!-- Resize divider handle (desktop only) -->
           <div
-            class="${this.sidebarVisible ? "w-1.5" : "w-0"} shrink-0 cursor-col-resize select-none ${
+            class="hidden lg:block ${this.sidebarVisible ? "w-1.5" : "w-0"} shrink-0 cursor-col-resize select-none ${
               this.isResizing ? "bg-primary" : "hover:bg-primary/50"
             } ${transitionClass}"
             style="touch-action: none;"
             @pointerdown=${this.handleSidebarResizeStart}
           ></div>
 
+          <!-- Main content -->
           <div
-            class="grow min-w-0 p-4 overflow-y-auto"
+            class="grow min-w-0 p-2 sm:p-4 overflow-y-auto"
             id="content"
             @scroll=${(e: Event) => scrollableOnScroll(e.currentTarget as HTMLElement)}
           >
