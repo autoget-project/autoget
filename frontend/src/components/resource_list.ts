@@ -297,12 +297,17 @@ export class ResourceList extends LitElement {
 
     return html`
       <div class="mb-2 flex items-center justify-end gap-1">
+        <!--
+          Zoom controls for resource grid:
+          - The minus (-) button zooms out (makes cards smaller by INCREASING the column count).
+          - The plus (+) button zooms in (makes cards larger by DECREASING the column count).
+        -->
         <button
           class="btn btn-xs btn-square btn-ghost"
-          title="Decrease columns"
-          aria-label="Decrease columns"
-          ?disabled=${this.columnCount <= ResourceList.MIN_COLUMNS}
-          @click=${() => this.handleColumnCountChange(-1)}
+          title="Zoom out (increase columns)"
+          aria-label="Zoom out (increase columns)"
+          ?disabled=${this.columnCount >= maxCols}
+          @click=${() => this.handleColumnCountChange(1)}
         >
           <span class="icon-[akar-icons--circle-minus]" style="width: 1.2em; height: 1.2em;"></span>
         </button>
@@ -313,10 +318,10 @@ export class ResourceList extends LitElement {
         ></span>
         <button
           class="btn btn-xs btn-square btn-ghost"
-          title="Increase columns"
-          aria-label="Increase columns"
-          ?disabled=${this.columnCount >= maxCols}
-          @click=${() => this.handleColumnCountChange(1)}
+          title="Zoom in (decrease columns)"
+          aria-label="Zoom in (decrease columns)"
+          ?disabled=${this.columnCount <= ResourceList.MIN_COLUMNS}
+          @click=${() => this.handleColumnCountChange(-1)}
         >
           <span class="icon-[akar-icons--circle-plus]" style="width: 1.2em; height: 1.2em;"></span>
         </button>
