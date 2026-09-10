@@ -32,9 +32,9 @@ export class ResourceList extends LitElement {
   @state()
   private columnCount: number = 4;
 
-  private static readonly MIN_COLUMNS = 2;
+  private static readonly MIN_COLUMNS = 1;
 
-  private static readonly MAX_COLUMNS = 8;
+  private static readonly MAX_COLUMNS = 12;
 
   private static readonly COLUMNS_STORAGE_KEY = "resource-list-column-count";
 
@@ -118,31 +118,29 @@ export class ResourceList extends LitElement {
       <div
         class="image-card rounded-lg overflow-hidden shadow-lg border border-gray-700 bg-gray-100 dark:bg-gray-800 dark:border-gray-600"
       >
-        ${
-          resource.images && resource.images.length > 0
-            ? html`<img
+        ${resource.images && resource.images.length > 0
+        ? html`<img
                 src="${resource.images[0]}"
                 alt="${resource.title || "Resource image"}"
                 class="w-full h-auto object-cover rounded-lg"
                 loading="lazy"
               />`
-            : ""
-        }
+        : ""
+      }
         <div class="p-2">
           <h3
             class="text-gray-900 dark:text-gray-100 font-medium line-clamp-4 text-balance break-all border-b border-b-gray-400 dark:border-gray-600"
           >
             ${resource.title || "Untitled Resource"}
           </h3>
-          ${
-            resource.title2
-              ? html`<p
+          ${resource.title2
+        ? html`<p
                   class="text-gray-800 dark:text-gray-200 font-normal line-clamp-4 text-balance break-all border-b border-b-gray-400 dark:border-gray-600"
                 >
                   ${resource.title2}
                 </p>`
-              : ""
-          }
+        : ""
+      }
           <div
             class="flex flex-wrap gap-1 mt-1 mb-1 pb-1 border-b border-b-gray-400 dark:border-gray-600"
           >
@@ -150,23 +148,21 @@ export class ResourceList extends LitElement {
             <span class="badge badge-outline badge-secondary line-clamp-1"
               >${formatBytes(resource.size)}</span
             >
-            ${
-              resource.resolution
-                ? html`<span class="badge badge-outline badge-info line-clamp-1"
+            ${resource.resolution
+        ? html`<span class="badge badge-outline badge-info line-clamp-1"
                     >${resource.resolution}</span
                   >`
-                : ""
-            }
+        : ""
+      }
             ${resource.free ? html`<span class="badge badge-success line-clamp-1">Free</span>` : ""}
             <span
-              class="badge ${
-                DateTime.now().diff(
-                  DateTime.fromSeconds(resource.createdDate, { zone: "utc" }),
-                  "weeks",
-                ).weeks < 1
-                  ? "badge-accent"
-                  : "badge-neutral"
-              }"
+              class="badge ${DateTime.now().diff(
+        DateTime.fromSeconds(resource.createdDate, { zone: "utc" }),
+        "weeks",
+      ).weeks < 1
+        ? "badge-accent"
+        : "badge-neutral"
+      }"
             >
               <span class="icon-[mingcute--time-line]"></span>
               ${formatCreatedDate(resource.createdDate)}
@@ -176,27 +172,25 @@ export class ResourceList extends LitElement {
               ${resource.seeders}
             </span>
           </div>
-          ${
-            resource.labels && resource.labels.length > 0
-              ? html` <div
+          ${resource.labels && resource.labels.length > 0
+        ? html` <div
                   class="flex flex-wrap gap-1 mt-1 mb-1 pb-1 border-b border-b-gray-400 dark:border-gray-600"
                 >
                   ${resource.labels.map(
-                    (label: string) => html`
+          (label: string) => html`
                       <span class="badge badge-outline badge-accent line-clamp-1">${label}</span>
                     `,
-                  )}
+        )}
                 </div>`
-              : ""
-          }
-          ${
-            resource.dbs && resource.dbs.length > 0
-              ? html` <div
+        : ""
+      }
+          ${resource.dbs && resource.dbs.length > 0
+        ? html` <div
                   class="flex flex-wrap gap-3 mt-1 mb-1 pb-1 border-b border-b-gray-400 dark:border-gray-600"
                 >
                   ${resource.dbs.map((db: { db: string; link: string; rating: string }) => {
-                    if (db.db === "douban" || db.db === "imdb") {
-                      return html`
+          if (db.db === "douban" || db.db === "imdb") {
+            return html`
                         <a
                           href="${db.link}"
                           target="_blank"
@@ -205,22 +199,21 @@ export class ResourceList extends LitElement {
                           title="Open ${db.db.toUpperCase()} page in new tab"
                         >
                           <span
-                            class="${
-                              db.db === "douban"
-                                ? "icon-[simple-icons--douban] text-green-600"
-                                : "icon-[fa--imdb]"
-                            }"
+                            class="${db.db === "douban"
+                ? "icon-[simple-icons--douban] text-green-600"
+                : "icon-[fa--imdb]"
+              }"
                             style="width: 1.2em; height: 1.2em;"
                           ></span>
                           ${db.rating ? html`<span class="text-xs">(${db.rating} ⭐)</span>` : ""}
                         </a>
                       `;
-                    }
-                    return "";
-                  })}
-                </div>`
-              : ""
           }
+          return "";
+        })}
+                </div>`
+        : ""
+      }
           <div class="flex flex-row basis-full justify-end">
             <download-button
               indexerId="${this.indexerId}"
@@ -264,7 +257,7 @@ export class ResourceList extends LitElement {
           title="Decrease columns"
           aria-label="Decrease columns"
           ?disabled=${this.columnCount <= ResourceList.MIN_COLUMNS}
-          @click=${() => this.handleColumnCountChange(-1)}
+          @click=${() => this.handleColumnCountChange(1)}
         >
           <span class="icon-[akar-icons--circle-minus]" style="width: 1.2em; height: 1.2em;"></span>
         </button>
@@ -278,7 +271,7 @@ export class ResourceList extends LitElement {
           title="Increase columns"
           aria-label="Increase columns"
           ?disabled=${this.columnCount >= ResourceList.MAX_COLUMNS}
-          @click=${() => this.handleColumnCountChange(1)}
+          @click=${() => this.handleColumnCountChange(-1)}
         >
           <span class="icon-[akar-icons--circle-plus]" style="width: 1.2em; height: 1.2em;"></span>
         </button>
@@ -325,35 +318,35 @@ export class ResourceList extends LitElement {
       <div class="flex justify-center my-4">
         <div class="join">
           ${pages.map((page) => {
-            const isActive = page === this.page;
-            const isDisabled =
-              (page === "<" && this.page === 1) || (page === ">" && this.page === this.totalPages);
-            const buttonClass = `join-item btn ${isActive ? "btn-primary" : ""} ${isDisabled ? "btn-disabled" : ""}`;
+      const isActive = page === this.page;
+      const isDisabled =
+        (page === "<" && this.page === 1) || (page === ">" && this.page === this.totalPages);
+      const buttonClass = `join-item btn ${isActive ? "btn-primary" : ""} ${isDisabled ? "btn-disabled" : ""}`;
 
-            if (typeof page === "number") {
-              return html`<button
+      if (typeof page === "number") {
+        return html`<button
                 class="${buttonClass}"
                 @click=${() => this.handlePageChange(page)}
               >
                 ${page}
               </button>`;
-            } else if (page === "<") {
-              return html`<button
+      } else if (page === "<") {
+        return html`<button
                 class="${buttonClass}"
                 @click=${() => this.handlePageChange(this.page - 1)}
               >
                 &laquo;
               </button>`;
-            } else if (page === ">") {
-              return html`<button
+      } else if (page === ">") {
+        return html`<button
                 class="${buttonClass}"
                 @click=${() => this.handlePageChange(this.page + 1)}
               >
                 &raquo;
               </button>`;
-            }
-            return null;
-          })}
+      }
+      return null;
+    })}
         </div>
       </div>
     `;
