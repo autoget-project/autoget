@@ -2,6 +2,7 @@ import { LitElement, html, unsafeCSS } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { fetchIndexers, fetchDownloaders, type DownloaderInfo } from "../utils/api";
+import "./theme_controller.ts";
 import globalStyles from "/src/index.css?inline";
 
 @customElement("app-navbar")
@@ -172,9 +173,10 @@ export class AppNavbar extends LitElement {
             <a href="/search" class="btn btn-ghost btn-sm ${isSearchPage ? "btn-active" : ""}"
               >Search</a
             >
+            <theme-controller></theme-controller>
           </div>
 
-          <!-- Mobile navigation controls (Indexers dropdown, Downloaders dropdown, Search icon) -->
+          <!-- Mobile navigation controls (Indexers dropdown, Downloaders dropdown, Search icon, Theme) -->
           <div class="flex items-center gap-1 md:hidden">
             <!-- 1. Indexers Dropdown -->
             <div class="dropdown dropdown-end">
@@ -287,6 +289,9 @@ export class AppNavbar extends LitElement {
             >
               <span class="icon-[akar-icons--search] w-5 h-5"></span>
             </a>
+
+            <!-- 4. Theme controller -->
+            <theme-controller></theme-controller>
           </div>
         </div>
       </div>

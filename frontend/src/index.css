@@ -4,4 +4,8 @@
     light --default,
     dark --prefersdark;
 }
+@plugin "./themes/latte.ts";
+@plugin "./themes/frappe.ts";
+@plugin "./themes/macchiato.ts";
+@plugin "./themes/mocha.ts";
 @plugin "@iconify/tailwind4";

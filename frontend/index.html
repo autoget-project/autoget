@@ -5,6 +5,27 @@
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AutoGet</title>
+    <script>
+      (function () {
+        try {
+          const darkThemes = ["dark", "frappe", "macchiato", "mocha"];
+          const validThemes = ["light", "dark", "latte", "frappe", "macchiato", "mocha"];
+          let theme = localStorage.getItem("autoget-theme");
+          if (!theme || !validThemes.includes(theme)) {
+            theme =
+              window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light";
+          }
+          document.documentElement.setAttribute("data-theme", theme);
+          if (darkThemes.includes(theme)) {
+            document.documentElement.classList.add("dark");
+          } else {
+            document.documentElement.classList.remove("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
     <link rel="stylesheet" href="./src/index.css" />
     <script type="module" src="/src/app.ts"></script>
   </head>
