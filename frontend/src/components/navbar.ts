@@ -94,11 +94,26 @@ export class AppNavbar extends LitElement {
 
   render() {
     const isIndexerPage = this.indexers.includes(this.activePage);
+    const isDownloaderPage = this.downloaders.some((d) => d.name === this.activePage);
+    const isSearchPage = this.activePage === "search";
+    const currentDownloader = this.downloaders.find((d) => d.name === this.activePage);
     const summaryBadgeColor = this.getSummaryBadgeColor();
+
+    // Mobile label / icon for Indexers dropdown:
+    // - On an indexer page: show the active indexer's name
+    // - Otherwise (on downloader or search page): show "Indexers"
+    const mobileIndexerLabel = isIndexerPage ? this.activePage : "Indexers";
+
+    // Mobile label / icon for Downloaders dropdown:
+    // - On a downloader page: show active downloader name and its border color
+    // - Otherwise: show download icon (akar-icons:download)
+    const mobileDownloaderBorderColor = currentDownloader
+      ? this.getBorderColor(currentDownloader)
+      : "";
 
     return html`
       <div class="navbar bg-base-200 px-2 sm:px-4 min-h-14">
-        <!-- Left part: Toggle, Logo, and Indexer Tabs -->
+        <!-- Left part: Toggle & Logo (always visible), and Desktop Indexer Tabs -->
         <div class="flex items-center gap-1 min-w-0 flex-1">
           ${
             isIndexerPage
@@ -120,8 +135,9 @@ export class AppNavbar extends LitElement {
           <a href="/" class="btn btn-square btn-ghost btn-sm sm:btn-md shrink-0" aria-label="Home">
             <img src="/icon.svg" alt="Icon" class="w-6 h-6 sm:w-8 sm:h-8" />
           </a>
-          <!-- Indexers scrollable tabs container -->
-          <div class="overflow-x-auto min-w-0 flex items-center scrollbar-none">
+
+          <!-- Desktop Indexers scrollable tabs container -->
+          <div class="hidden md:flex overflow-x-auto min-w-0 items-center scrollbar-none">
             <div role="tablist" class="tabs tabs-border flex-nowrap whitespace-nowrap">
               ${this.indexers.map((indexer) => {
                 const isActive = this.activePage === indexer;
@@ -136,8 +152,8 @@ export class AppNavbar extends LitElement {
           </div>
         </div>
 
-        <!-- Right part: Desktop links vs Mobile Dropdown -->
-        <div class="shrink-0 flex items-center gap-1 ml-2">
+        <!-- Right part: Desktop Links vs Mobile Controls -->
+        <div class="shrink-0 flex items-center gap-1 sm:gap-2 ml-2">
           <!-- Desktop navigation links -->
           <div class="hidden md:flex items-center gap-2">
             ${this.downloaders.map((downloader) => {
@@ -153,49 +169,86 @@ export class AppNavbar extends LitElement {
                 </a>
               `;
             })}
-            <a
-              href="/search"
-              class="btn btn-ghost btn-sm ${this.activePage === "search" ? "btn-active" : ""}"
+            <a href="/search" class="btn btn-ghost btn-sm ${isSearchPage ? "btn-active" : ""}"
               >Search</a
             >
           </div>
 
-          <!-- Mobile navigation dropdown -->
-          <div class="dropdown dropdown-end md:hidden">
-            <div
-              tabindex="0"
-              role="button"
-              class="btn btn-ghost btn-sm btn-square relative"
-              aria-label="Menu"
-            >
-              <span class="icon-[heroicons--bars-3] w-6 h-6"></span>
-              ${
-                summaryBadgeColor
-                  ? html`<span
-                      class="badge badge-xs ${summaryBadgeColor} absolute top-1 right-1"
-                    ></span>`
-                  : ""
-              }
+          <!-- Mobile navigation controls (Indexers dropdown, Downloaders dropdown, Search icon) -->
+          <div class="flex items-center gap-1 md:hidden">
+            <!-- 1. Indexers Dropdown -->
+            <div class="dropdown dropdown-end">
+              <div
+                tabindex="0"
+                role="button"
+                class="btn btn-ghost btn-sm gap-1 max-w-28 sm:max-w-36 ${
+                  isIndexerPage ? "btn-active font-bold" : ""
+                }"
+              >
+                <span class="truncate">${mobileIndexerLabel}</span>
+                <span class="icon-[heroicons--chevron-down] w-3.5 h-3.5 shrink-0 opacity-70"></span>
+              </div>
+              <ul
+                tabindex="0"
+                class="menu dropdown-content bg-base-100 rounded-box z-50 mt-2 w-48 p-2 shadow-xl border border-base-300"
+              >
+                <li class="menu-title text-xs">Indexers</li>
+                ${this.indexers.map((indexer) => {
+                  const isActive = this.activePage === indexer;
+                  return html`
+                    <li>
+                      <a
+                        href="/indexers/${indexer}"
+                        class="${isActive ? "menu-active font-bold" : ""}"
+                      >
+                        ${indexer}
+                      </a>
+                    </li>
+                  `;
+                })}
+              </ul>
             </div>
-            <ul
-              tabindex="0"
-              class="menu dropdown-content bg-base-100 rounded-box z-50 mt-2 w-52 p-2 shadow-xl border border-base-300"
-            >
-              <li class="menu-title text-xs">Search</li>
-              <li>
-                <a
-                  href="/search"
-                  class="${this.activePage === "search" ? "menu-active font-bold" : ""}"
-                >
-                  <span class="icon-[material-symbols--search] w-5 h-5"></span>
-                  Search
-                </a>
-              </li>
-              ${
-                this.downloaders.length > 0
-                  ? html`
-                      <li class="menu-title text-xs mt-2">Downloaders</li>
-                      ${this.downloaders.map((downloader) => {
+
+            <!-- 2. Downloaders Dropdown -->
+            <div class="dropdown dropdown-end">
+              <div
+                tabindex="0"
+                role="button"
+                class="btn btn-ghost btn-sm gap-1 relative ${
+                  isDownloaderPage
+                    ? `btn-active font-bold border-2 ${mobileDownloaderBorderColor}`
+                    : ""
+                }"
+              >
+                ${
+                  isDownloaderPage
+                    ? html`
+                        <span class="truncate max-w-24">${this.activePage}</span>
+                        <span
+                          class="icon-[heroicons--chevron-down] w-3.5 h-3.5 shrink-0 opacity-70"
+                        ></span>
+                      `
+                    : html`
+                        <span class="icon-[akar-icons--download] w-5 h-5"></span>
+                        ${
+                          summaryBadgeColor
+                            ? html`<span
+                                class="badge badge-xs ${summaryBadgeColor} absolute top-1 right-1"
+                              ></span>`
+                            : ""
+                        }
+                      `
+                }
+              </div>
+              <ul
+                tabindex="0"
+                class="menu dropdown-content bg-base-100 rounded-box z-50 mt-2 w-52 p-2 shadow-xl border border-base-300"
+              >
+                <li class="menu-title text-xs">Downloaders</li>
+                ${
+                  this.downloaders.length === 0
+                    ? html`<li><span class="text-xs opacity-60">No downloaders</span></li>`
+                    : this.downloaders.map((downloader) => {
                         const isActive = this.activePage === downloader.name;
                         const borderColor = this.getBorderColor(downloader);
                         return html`
@@ -220,11 +273,20 @@ export class AppNavbar extends LitElement {
                             </a>
                           </li>
                         `;
-                      })}
-                    `
-                  : ""
-              }
-            </ul>
+                      })
+                }
+              </ul>
+            </div>
+
+            <!-- 3. Search Icon -->
+            <a
+              href="/search"
+              class="btn btn-ghost btn-sm btn-square ${isSearchPage ? "btn-active text-primary" : ""}"
+              title="Search"
+              aria-label="Search"
+            >
+              <span class="icon-[akar-icons--search] w-5 h-5"></span>
+            </a>
           </div>
         </div>
       </div>
