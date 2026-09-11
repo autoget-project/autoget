@@ -97,7 +97,6 @@ export class AppNavbar extends LitElement {
     const isIndexerPage = this.indexers.includes(this.activePage);
     const isDownloaderPage = this.downloaders.some((d) => d.name === this.activePage);
     const isSearchPage = this.activePage === "search";
-    const currentDownloader = this.downloaders.find((d) => d.name === this.activePage);
     const summaryBadgeColor = this.getSummaryBadgeColor();
 
     // Mobile label / icon for Indexers dropdown:
@@ -105,12 +104,9 @@ export class AppNavbar extends LitElement {
     // - Otherwise (on downloader or search page): show "Indexers"
     const mobileIndexerLabel = isIndexerPage ? this.activePage : "Indexers";
 
-    // Mobile label / icon for Downloaders dropdown:
-    // - On a downloader page: show active downloader name and its border color
-    // - Otherwise: show download icon (akar-icons:download)
-    const mobileDownloaderBorderColor = currentDownloader
-      ? this.getBorderColor(currentDownloader)
-      : "";
+    // On mobile the downloaders button always stays a compact icon with a
+    // summary status badge, so the navbar keeps a consistent width on every
+    // page (active state is conveyed by btn-active instead of a long label).
 
     return html`
       <div class="navbar bg-base-200 px-2 sm:px-4 min-h-14">
@@ -216,30 +212,17 @@ export class AppNavbar extends LitElement {
               <div
                 tabindex="0"
                 role="button"
-                class="btn btn-ghost btn-sm gap-1 relative ${
-                  isDownloaderPage
-                    ? `btn-active font-bold border-2 ${mobileDownloaderBorderColor}`
-                    : ""
+                class="btn btn-ghost btn-sm btn-square relative ${
+                  isDownloaderPage ? "btn-active" : ""
                 }"
               >
+                <span class="icon-[akar-icons--download] w-5 h-5"></span>
                 ${
-                  isDownloaderPage
-                    ? html`
-                        <span class="truncate max-w-24">${this.activePage}</span>
-                        <span
-                          class="icon-[heroicons--chevron-down] w-3.5 h-3.5 shrink-0 opacity-70"
-                        ></span>
-                      `
-                    : html`
-                        <span class="icon-[akar-icons--download] w-5 h-5"></span>
-                        ${
-                          summaryBadgeColor
-                            ? html`<span
-                                class="badge badge-xs ${summaryBadgeColor} absolute top-1 right-1"
-                              ></span>`
-                            : ""
-                        }
-                      `
+                  summaryBadgeColor
+                    ? html`<span
+                        class="badge badge-xs ${summaryBadgeColor} absolute top-1 right-1"
+                      ></span>`
+                    : ""
                 }
               </div>
               <ul
