@@ -65,7 +65,7 @@ describe("theme utility", () => {
   });
 
   it("should dispatch autoget-theme-changed event when theme changes", () => {
-    const handler = vi.fn();
+    const handler = vi.fn<(e: Event) => void>();
     window.addEventListener("autoget-theme-changed", handler);
 
     applyTheme("frappe");

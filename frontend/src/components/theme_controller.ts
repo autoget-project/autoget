@@ -38,8 +38,6 @@ export class ThemeController extends LitElement {
   }
 
   render() {
-    const activeOption = THEMES.find((t) => t.id === this.currentTheme) || THEMES[0];
-
     return html`
       <div class="dropdown dropdown-end">
         <div
@@ -47,10 +45,9 @@ export class ThemeController extends LitElement {
           role="button"
           class="btn btn-ghost btn-sm gap-1 px-2"
           aria-label="Change theme"
-          title="Change theme (${activeOption.label})"
+          title="Change theme"
         >
           <span class="icon-[solar--pallete-2-linear] w-5 h-5"></span>
-          <span class="hidden xl:inline text-xs max-w-20 truncate">${activeOption.label}</span>
           <span class="icon-[heroicons--chevron-down] w-3 h-3 opacity-60"></span>
         </div>
         <ul
