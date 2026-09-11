@@ -454,7 +454,7 @@ export class DownloaderView extends LitElement {
                 ${item.Category ? html`<span class="badge badge-sm sm:badge-md badge-outline">${item.Category}</span>` : ""}
                 ${
                   item.Size
-                    ? html`<span class="badge badge-sm sm:badge-md badge-outline badge-neutral"
+                    ? html`<span class="badge badge-sm sm:badge-md badge-outline badge-secondary"
                         >${formatBytes(item.Size)}</span
                       >`
                     : ""

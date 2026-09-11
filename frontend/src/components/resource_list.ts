@@ -181,7 +181,7 @@ export class ResourceList extends LitElement {
           }
           <div class="flex flex-wrap gap-1 mt-1 mb-1 pb-1 border-b border-base-300">
             <span class="badge badge-outline badge-primary line-clamp-1">${resource.category}</span>
-            <span class="badge badge-outline badge-neutral line-clamp-1"
+            <span class="badge badge-outline badge-secondary line-clamp-1"
               >${formatBytes(resource.size)}</span
             >
             ${
