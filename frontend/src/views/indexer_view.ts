@@ -20,20 +20,6 @@ export class IndexerView extends LitElement {
         padding-left: 0.5rem;
       }
 
-      body::-webkit-scrollbar {
-        width: 8px;
-      }
-
-      body::-webkit-scrollbar-track {
-        background: #1f2937;
-      }
-
-      body::-webkit-scrollbar-thumb {
-        background-color: #4b5563;
-        border-radius: 20px;
-        border: 2px solid #1f2937;
-      }
-
       /* To prevent items from splitting across columns */
       .break-inside-avoid-column {
         break-inside: avoid-column;

@@ -152,7 +152,7 @@ export class ResourceList extends LitElement {
   private renderResourceCard(resource: Resource): TemplateResult {
     return html`
       <div
-        class="image-card rounded-lg overflow-hidden shadow-lg border border-gray-700 bg-gray-100 dark:bg-gray-800 dark:border-gray-600"
+        class="image-card rounded-lg overflow-hidden shadow-lg border border-base-300 bg-base-100"
       >
         ${
           resource.images && resource.images.length > 0
@@ -166,22 +166,20 @@ export class ResourceList extends LitElement {
         }
         <div class="p-2">
           <h3
-            class="text-gray-900 dark:text-gray-100 font-medium line-clamp-4 text-balance break-all border-b border-b-gray-400 dark:border-gray-600"
+            class="text-base-content font-medium line-clamp-4 text-balance break-all border-b border-base-300"
           >
             ${resource.title || "Untitled Resource"}
           </h3>
           ${
             resource.title2
               ? html`<p
-                  class="text-gray-800 dark:text-gray-200 font-normal line-clamp-4 text-balance break-all border-b border-b-gray-400 dark:border-gray-600"
+                  class="text-base-content/80 font-normal line-clamp-4 text-balance break-all border-b border-base-300"
                 >
                   ${resource.title2}
                 </p>`
               : ""
           }
-          <div
-            class="flex flex-wrap gap-1 mt-1 mb-1 pb-1 border-b border-b-gray-400 dark:border-gray-600"
-          >
+          <div class="flex flex-wrap gap-1 mt-1 mb-1 pb-1 border-b border-base-300">
             <span class="badge badge-outline badge-primary line-clamp-1">${resource.category}</span>
             <span class="badge badge-outline badge-neutral line-clamp-1"
               >${formatBytes(resource.size)}</span
@@ -214,9 +212,7 @@ export class ResourceList extends LitElement {
           </div>
           ${
             resource.labels && resource.labels.length > 0
-              ? html` <div
-                  class="flex flex-wrap gap-1 mt-1 mb-1 pb-1 border-b border-b-gray-400 dark:border-gray-600"
-                >
+              ? html` <div class="flex flex-wrap gap-1 mt-1 mb-1 pb-1 border-b border-base-300">
                   ${resource.labels.map(
                     (label: string) => html`
                       <span class="badge badge-outline badge-accent line-clamp-1">${label}</span>
@@ -227,9 +223,7 @@ export class ResourceList extends LitElement {
           }
           ${
             resource.dbs && resource.dbs.length > 0
-              ? html` <div
-                  class="flex flex-wrap gap-3 mt-1 mb-1 pb-1 border-b border-b-gray-400 dark:border-gray-600"
-                >
+              ? html` <div class="flex flex-wrap gap-3 mt-1 mb-1 pb-1 border-b border-base-300">
                   ${resource.dbs.map((db: { db: string; link: string; rating: string }) => {
                     if (db.db === "douban" || db.db === "imdb") {
                       return html`
@@ -282,7 +276,7 @@ export class ResourceList extends LitElement {
     if (!this.resources || !this.resources.resources || this.resources.resources.length === 0) {
       return html`
         <div class="flex justify-center items-center py-20">
-          <p class="text-gray-500 dark:text-gray-400">No resources found</p>
+          <p class="text-base-content/60">No resources found</p>
         </div>
       `;
     }
@@ -312,7 +306,7 @@ export class ResourceList extends LitElement {
           <span class="icon-[akar-icons--circle-minus]" style="width: 1.2em; height: 1.2em;"></span>
         </button>
         <span
-          class="icon-[f7--rectangle-grid-3x2-fill] text-gray-500 dark:text-gray-400"
+          class="icon-[f7--rectangle-grid-3x2-fill] text-base-content/60"
           style="width: 1.2em; height: 1.2em;"
           title="${this.columnCount} columns"
         ></span>
