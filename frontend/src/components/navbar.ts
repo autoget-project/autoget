@@ -110,7 +110,7 @@ export class AppNavbar extends LitElement {
 
     return html`
       <div class="navbar bg-base-200 px-2 sm:px-4 min-h-14">
-        <!-- Left part: Toggle & Logo (always visible), and Desktop Indexer Tabs -->
+        <!-- Left part: Toggle & Logo (always visible), Desktop Indexer Tabs, and Mobile Indexer Dropdown -->
         <div class="flex items-center gap-1 min-w-0 flex-1">
           ${
             isIndexerPage
@@ -147,9 +147,42 @@ export class AppNavbar extends LitElement {
               })}
             </div>
           </div>
+
+          <!-- Mobile Indexers dropdown (aligned to the left) -->
+          <div class="dropdown md:hidden min-w-0">
+            <div
+              tabindex="0"
+              role="button"
+              class="btn btn-ghost btn-sm gap-1 max-w-28 sm:max-w-36 ${
+                isIndexerPage ? "btn-active font-bold" : ""
+              }"
+            >
+              <span class="truncate">${mobileIndexerLabel}</span>
+              <span class="icon-[heroicons--chevron-down] w-3.5 h-3.5 shrink-0 opacity-70"></span>
+            </div>
+            <ul
+              tabindex="0"
+              class="menu dropdown-content bg-base-100 rounded-box z-50 mt-2 w-48 p-2 shadow-xl border border-base-300"
+            >
+              <li class="menu-title text-xs">Indexers</li>
+              ${this.indexers.map((indexer) => {
+                const isActive = this.activePage === indexer;
+                return html`
+                  <li>
+                    <a
+                      href="/indexers/${indexer}"
+                      class="${isActive ? "menu-active font-bold" : ""}"
+                    >
+                      ${indexer}
+                    </a>
+                  </li>
+                `;
+              })}
+            </ul>
+          </div>
         </div>
 
-        <!-- Right part: Desktop Links vs Mobile Controls -->
+        <!-- Right part: Desktop Links vs Mobile Controls (Downloaders, Search, Theme) -->
         <div class="shrink-0 flex items-center gap-1 sm:gap-2 ml-2">
           <!-- Desktop navigation links -->
           <div class="hidden md:flex items-center gap-2">
@@ -172,42 +205,9 @@ export class AppNavbar extends LitElement {
             <theme-controller></theme-controller>
           </div>
 
-          <!-- Mobile navigation controls (Indexers dropdown, Downloaders dropdown, Search icon, Theme) -->
+          <!-- Mobile navigation controls (Downloaders dropdown, Search icon, Theme) -->
           <div class="flex items-center gap-1 md:hidden">
-            <!-- 1. Indexers Dropdown -->
-            <div class="dropdown dropdown-end">
-              <div
-                tabindex="0"
-                role="button"
-                class="btn btn-ghost btn-sm gap-1 max-w-28 sm:max-w-36 ${
-                  isIndexerPage ? "btn-active font-bold" : ""
-                }"
-              >
-                <span class="truncate">${mobileIndexerLabel}</span>
-                <span class="icon-[heroicons--chevron-down] w-3.5 h-3.5 shrink-0 opacity-70"></span>
-              </div>
-              <ul
-                tabindex="0"
-                class="menu dropdown-content bg-base-100 rounded-box z-50 mt-2 w-48 p-2 shadow-xl border border-base-300"
-              >
-                <li class="menu-title text-xs">Indexers</li>
-                ${this.indexers.map((indexer) => {
-                  const isActive = this.activePage === indexer;
-                  return html`
-                    <li>
-                      <a
-                        href="/indexers/${indexer}"
-                        class="${isActive ? "menu-active font-bold" : ""}"
-                      >
-                        ${indexer}
-                      </a>
-                    </li>
-                  `;
-                })}
-              </ul>
-            </div>
-
-            <!-- 2. Downloaders Dropdown -->
+            <!-- Downloaders Dropdown -->
             <div class="dropdown dropdown-end">
               <div
                 tabindex="0"
@@ -263,7 +263,7 @@ export class AppNavbar extends LitElement {
               </ul>
             </div>
 
-            <!-- 3. Search Icon -->
+            <!-- Search Icon -->
             <a
               href="/search"
               class="btn btn-ghost btn-sm btn-square ${isSearchPage ? "btn-active text-primary" : ""}"
@@ -273,7 +273,7 @@ export class AppNavbar extends LitElement {
               <span class="icon-[akar-icons--search] w-5 h-5"></span>
             </a>
 
-            <!-- 4. Theme controller -->
+            <!-- Theme controller -->
             <theme-controller></theme-controller>
           </div>
         </div>
