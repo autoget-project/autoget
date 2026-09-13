@@ -7,11 +7,17 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-and-push-image:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - image: ${{ github.repository }}
+            dockerfile: Dockerfile
+          - image: ${{ github.repository }}-organizer
+            dockerfile: Dockerfile.organizer
     # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
     permissions:
       contents: read
@@ -32,7 +38,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ matrix.image }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=ref,event=branch
@@ -43,7 +49,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: Dockerfile
+          file: ${{ matrix.dockerfile }}
           target: deploy
           push: true
           tags: ${{ steps.meta.outputs.tags }}
@@ -51,11 +57,11 @@ jobs:
 
       # This step generates an artifact attestation for the image, which is an unforgeable statement
       # about where and how it was built. It increases supply chain security for people who consume
-      # the image. For more information, see 
-      # "[AUTOTITLE](https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds)." 
+      # the image. For more information, see
+      # "[AUTOTITLE](https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds)."
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v4
         with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-name: ${{ env.REGISTRY }}/${{ matrix.image }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
