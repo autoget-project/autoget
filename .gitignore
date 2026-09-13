@@ -30,7 +30,7 @@ build/
 # Backend build binary
 backend/bin/
 
-# Go workspace sum (workspace has no shared module requirements)
+# Go workspace sum
 go.work.sum
 
 # Organizer build binary

@@ -83,7 +83,7 @@ docker run -d \
   -v /path/to/downloads:/downloads \
   -v /path/to/media:/media \
   -v /path/to/config:/config \
-  ghcr.io/autoget-project/organizer:latest
+  ghcr.io/autoget-project/autoget-organizer:latest
 ```
 
 ---
