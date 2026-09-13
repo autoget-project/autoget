@@ -32,3 +32,6 @@ backend/bin/
 
 # Go workspace sum (workspace has no shared module requirements)
 go.work.sum
+
+# Organizer build binary
+organizer/bin/

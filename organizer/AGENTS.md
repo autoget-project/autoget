@@ -29,7 +29,7 @@ AutoGet Organizer is the post-processing core service in an automated media pipe
 
 ## Tooling
 
-- Automation tasks live in `justfile` (fmt, lint, test, build). Run these before finishing work.
+- Automation tasks live in the monorepo root `Justfile` (fmt, lint, test, build — organizer variants suffixed `-organizer`). Run these before finishing work.
 - **E2E tests cost real money** (`tests/e2e/` hits live LLM providers). NEVER run the full e2e suite unless the user explicitly asks for it. Always filter to the exact test case under work, e.g.:
   `E2E_TEST=1 go test -count=1 ./tests/e2e/ -run 'TestE2E_Stage1CheckersOnly/gemini/audiobook'`
   Note: without `-count=1`, `go test` may replay cached results instead of actually executing.

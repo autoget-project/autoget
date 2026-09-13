@@ -48,23 +48,25 @@ Configure the following environment variables before starting the service:
 
 ### Building & Running Locally
 
+Run from the monorepo root:
+
 ```bash
 # 1. Run quality gates (tests and linting)
-just test
-just lint
+just test-organizer
+just lint-organizer
 
 # 2. Build the binary
-just build
+just build-organizer
 
 # 3. Start the server
-just run
+just run-organizer
 ```
 
 ### Running with Docker
 
 ```bash
-# Build the container image
-just build-image
+# Build the container image (from the monorepo root)
+just build-images
 
 # Run the container
 docker run -d \
@@ -271,13 +273,14 @@ Refines an existing plan using user feedback or corrections without re-running c
 
 ## Development Tasks (`Justfile`)
 
+Organizer recipes live in the monorepo root `Justfile`:
+
 ```bash
-just           # List all available recipes
-just build     # Build the Go binary
-just test      # Run unit and integration tests
-just fmt       # Format code with goimports
-just lint      # Run static analysis with golangci-lint
-just test-e2e  # Run end-to-end (E2E) test suite
-just run       # Run the service locally
-just build-image # Build the production Docker image
+just build-organizer    # Build the Go binary
+just test-organizer     # Run unit and integration tests
+just fmt-organizer      # Format code with goimports
+just lint-organizer     # Run static analysis with golangci-lint
+just test-e2e           # Run end-to-end (E2E) test suite
+just run-organizer      # Run the service locally
+just build-images       # Build the production Docker images (autoget + organizer)
 ```
