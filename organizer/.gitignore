@@ -1,0 +1,6 @@
+
+.local
+.env
+.env.e2e
+
+build/
