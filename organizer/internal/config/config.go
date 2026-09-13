@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"golang.org/x/sys/unix"
 
@@ -30,6 +31,11 @@ type Config struct {
 	// planner. When empty, the porn planner silently falls back to the local
 	// naming chain.
 	TPDBAPIToken string
+
+	// Upload resumable configuration
+	UploadTempDir      string
+	UploadExpireHours  int
+	UploadReserveBytes uint64
 }
 
 // LoadConfig reads configuration from environment variables.
@@ -38,8 +44,31 @@ func LoadConfig() *Config {
 	if tmdbLanguage == "" {
 		tmdbLanguage = "zh-CN"
 	}
+
+	downloadCompletedDir := os.Getenv("DOWNLOAD_COMPLETED_DIR")
+	uploadTempDir := os.Getenv("UPLOAD_TEMP_DIR")
+	if uploadTempDir == "" && downloadCompletedDir != "" {
+		uploadTempDir = filepath.Join(downloadCompletedDir, ".uploads")
+	}
+
+	uploadExpireHours := 72
+	if s := os.Getenv("UPLOAD_EXPIRE_HOURS"); s != "" {
+		var h int
+		if _, err := fmt.Sscanf(s, "%d", &h); err == nil && h > 0 {
+			uploadExpireHours = h
+		}
+	}
+
+	uploadReserveBytes := uint64(1024 * 1024 * 1024) // 1GB
+	if s := os.Getenv("UPLOAD_RESERVE_BYTES"); s != "" {
+		var b uint64
+		if _, err := fmt.Sscanf(s, "%d", &b); err == nil {
+			uploadReserveBytes = b
+		}
+	}
+
 	return &Config{
-		DownloadCompletedDir: os.Getenv("DOWNLOAD_COMPLETED_DIR"),
+		DownloadCompletedDir: downloadCompletedDir,
 		TargetDir:            os.Getenv("TARGET_DIR"),
 		JavActorFile:         os.Getenv("JAV_ACTOR_FILE"),
 		FlareSolverrURL:      os.Getenv("FLARESOLVERR_URL"),
@@ -51,6 +80,9 @@ func LoadConfig() *Config {
 		XaiAPIKey:            os.Getenv("XAI_API_KEY"),
 		GeminiAPIKey:         os.Getenv("GEMINI_API_KEY"),
 		TPDBAPIToken:         os.Getenv("TPDB_API_TOKEN"),
+		UploadTempDir:        uploadTempDir,
+		UploadExpireHours:    uploadExpireHours,
+		UploadReserveBytes:   uploadReserveBytes,
 	}
 }
 
@@ -107,6 +139,34 @@ func StartupCheck(cfg *Config) error {
 		return fmt.Errorf("download completed dir %s check failed: %w", cfg.DownloadCompletedDir, err)
 	}
 
+	// 5. Upload temporary directory validation and same-device check (Fail-fast against EXDEV)
+	if cfg.UploadTempDir != "" {
+		if err := os.MkdirAll(cfg.UploadTempDir, 0o755); err != nil {
+			return fmt.Errorf("failed to create upload temp dir %s: %w", cfg.UploadTempDir, err)
+		}
+		if err := checkDirWritable(cfg.UploadTempDir); err != nil {
+			return fmt.Errorf("upload temp dir %s check failed: %w", cfg.UploadTempDir, err)
+		}
+		if err := CheckSameDevice(cfg.UploadTempDir, cfg.DownloadCompletedDir); err != nil {
+			return fmt.Errorf("upload temp dir validation failed: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// CheckSameDevice checks that two directories reside on the same filesystem device.
+func CheckSameDevice(dir1, dir2 string) error {
+	var stat1, stat2 syscall.Stat_t
+	if err := syscall.Stat(dir1, &stat1); err != nil {
+		return fmt.Errorf("failed to stat %s: %w", dir1, err)
+	}
+	if err := syscall.Stat(dir2, &stat2); err != nil {
+		return fmt.Errorf("failed to stat %s: %w", dir2, err)
+	}
+	if stat1.Dev != stat2.Dev {
+		return fmt.Errorf("directories %s (dev=%d) and %s (dev=%d) are on different filesystem devices; atomic rename is not supported", dir1, stat1.Dev, dir2, stat2.Dev)
+	}
 	return nil
 }
 

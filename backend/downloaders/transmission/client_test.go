@@ -17,6 +17,8 @@ import (
 
 	"github.com/autoget-project/autoget/protocol"
 
+	"github.com/autoget-project/autoget/organizer/upload"
+
 	"github.com/autoget-project/autoget/backend/downloaders/config"
 	"github.com/autoget-project/autoget/backend/internal/db"
 	"github.com/autoget-project/autoget/backend/organizer"
@@ -552,4 +554,99 @@ func TestCreateOrganizerPlan(t *testing.T) {
 		require.NoError(t, d.First(updated, "id = ?", "test3").Error)
 		assert.Equal(t, db.Planed, updated.OrganizeState)
 	})
+}
+
+func TestClient_HTTPUploadMode(t *testing.T) {
+	tempDir := t.TempDir()
+	completedDir := filepath.Join(tempDir, "completed")
+	uploadDir := filepath.Join(completedDir, ".uploads")
+	downloadDir := filepath.Join(tempDir, "downloads")
+	require.NoError(t, os.MkdirAll(completedDir, 0o755))
+	require.NoError(t, os.MkdirAll(downloadDir, 0o755))
+
+	// Setup real upload store and handler
+	store, err := upload.NewStore(uploadDir, completedDir, 1024*1024)
+	require.NoError(t, err)
+	mux := http.NewServeMux()
+	upload.RegisterRoutes(mux, upload.NewHandler(store))
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	orgClient, err := organizer.NewClient(ts.URL, ts.Client())
+	require.NoError(t, err)
+
+	d, err := db.SqliteForTest()
+	require.NoError(t, err)
+
+	cfg := &config.DownloaderConfig{
+		Transmission: &config.TransmissionConfig{
+			URL:         "http://localhost:9091",
+			TorrentsDir: filepath.Join(tempDir, "torrents"),
+			DownloadDir: downloadDir,
+			FinishedDir: completedDir,
+		},
+		Transfer: &config.TransferConfig{
+			Mode:        "http",
+			ChunkSizeMB: 1,
+			MaxRetries:  3,
+			Concurrency: 2,
+		},
+	}
+
+	client := &Client{
+		name:            "test-uploader-dl",
+		db:              d,
+		organizerClient: orgClient,
+		cfg:             cfg,
+		uploader:        organizer.NewUploader(orgClient, organizer.WithChunkSize(64*1024)),
+		inFlight:        make(map[string]bool),
+		uploadSem:       make(chan struct{}, 2),
+	}
+
+	// Create test file in downloadDir
+	relFile := "sub/test.mkv"
+	fullFilePath := filepath.Join(downloadDir, relFile)
+	require.NoError(t, os.MkdirAll(filepath.Dir(fullFilePath), 0o755))
+	testContent := []byte("hello resumable upload from transmission client")
+	require.NoError(t, os.WriteFile(fullFilePath, testContent, 0o644))
+
+	torrentHash := "hash12345678"
+	status := &db.DownloadStatus{
+		ID:         torrentHash,
+		Downloader: "test-uploader-dl",
+		State:      db.DownloadSeeding,
+		MoveState:  db.UnMoved,
+	}
+	require.NoError(t, d.Create(status).Error)
+
+	torrentsByHash := map[string]*transmissionrpc.Torrent{
+		torrentHash: {
+			HashString:  &torrentHash,
+			DownloadDir: &downloadDir,
+			Files: []transmissionrpc.TorrentFile{
+				{
+					Name: relFile,
+				},
+			},
+		},
+	}
+
+	// Call copyFinishedDownloads: should route to HTTP upload
+	client.copyFinishedDownloads(torrentsByHash)
+
+	// Wait briefly for the async upload goroutine to complete
+	require.Eventually(t, func() bool {
+		var st db.DownloadStatus
+		if err := d.First(&st, "id = ?", torrentHash).Error; err != nil {
+			return false
+		}
+		return st.MoveState == db.Moved
+	}, 3*time.Second, 50*time.Millisecond)
+
+	// Verify file arrived at completedDir/{torrentHash}/{relFile}
+	finalPath := filepath.Join(completedDir, torrentHash, relFile)
+	assert.FileExists(t, finalPath)
+	data, err := os.ReadFile(finalPath)
+	require.NoError(t, err)
+	assert.Equal(t, testContent, data)
 }

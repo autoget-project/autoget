@@ -1,11 +1,16 @@
 package organizer
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/autoget-project/autoget/organizer/upload"
 	"github.com/autoget-project/autoget/protocol"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -335,4 +340,87 @@ func TestClient_ReplanWithHint(t *testing.T) {
 		assert.Nil(t, resp)
 		assert.Contains(t, err.Error(), "failed to decode replan response")
 	})
+}
+
+func TestClient_UploadEndpoints(t *testing.T) {
+	tempDir := t.TempDir()
+	completedDir := filepath.Join(tempDir, "completed")
+	uploadDir := filepath.Join(completedDir, ".uploads")
+	require.NoError(t, os.MkdirAll(completedDir, 0o755))
+
+	store, err := upload.NewStore(uploadDir, completedDir, 1024*1024)
+	require.NoError(t, err)
+
+	handler := upload.NewHandler(store)
+	mux := http.NewServeMux()
+	upload.RegisterRoutes(mux, handler)
+
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	client, err := NewClient(ts.URL, ts.Client())
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	torrentID := "torrent-client-test"
+	relPath := "dir/sample.bin"
+	totalSize := int64(40)
+
+	// 1. InitUpload
+	initResp, err := client.InitUpload(ctx, &UploadInitRequest{
+		TorrentID:    torrentID,
+		RelativePath: relPath,
+		TotalSize:    totalSize,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), initResp.Offset)
+	assert.Equal(t, protocol.StatusUploading, initResp.Status)
+
+	// 2. GetUpload
+	getResp, err := client.GetUpload(ctx, initResp.UploadID)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), getResp.Offset)
+	assert.Equal(t, totalSize, getResp.TotalSize)
+
+	// 3. UploadChunk: 20 bytes
+	chunk1 := bytes.Repeat([]byte("1"), 20)
+	newOffset, err := client.UploadChunk(ctx, initResp.UploadID, 0, bytes.NewReader(chunk1), 20, "")
+	require.NoError(t, err)
+	assert.Equal(t, int64(20), newOffset)
+
+	// 4. UploadChunk conflict: sending at offset 0 again
+	_, err = client.UploadChunk(ctx, initResp.UploadID, 0, bytes.NewReader(chunk1), 20, "")
+	require.Error(t, err)
+	var conflictErr ErrUploadOffsetConflict
+	require.ErrorAs(t, err, &conflictErr)
+	assert.Equal(t, int64(20), conflictErr.ServerOffset)
+
+	// 5. UploadChunk: remaining 20 bytes
+	chunk2 := bytes.Repeat([]byte("2"), 20)
+	newOffset, err = client.UploadChunk(ctx, initResp.UploadID, 20, bytes.NewReader(chunk2), 20, "")
+	require.NoError(t, err)
+	assert.Equal(t, int64(40), newOffset)
+
+	// 6. FinishUpload
+	err = client.FinishUpload(ctx, initResp.UploadID, &UploadFinishRequest{
+		TorrentID:    torrentID,
+		RelativePath: relPath,
+	})
+	require.NoError(t, err)
+
+	// Verify target file on disk
+	finalTarget := filepath.Join(completedDir, torrentID, relPath)
+	data, err := os.ReadFile(finalTarget)
+	require.NoError(t, err)
+	assert.Equal(t, append(chunk1, chunk2...), data)
+
+	// 7. CancelUpload on a new upload
+	initResp2, err := client.InitUpload(ctx, &UploadInitRequest{
+		TorrentID:    torrentID,
+		RelativePath: "to_cancel.bin",
+		TotalSize:    10,
+	})
+	require.NoError(t, err)
+	err = client.CancelUpload(ctx, initResp2.UploadID)
+	require.NoError(t, err)
 }

@@ -24,6 +24,7 @@ import (
 	stage2enricher "github.com/autoget-project/autoget/organizer/internal/pipeline/stage2_enricher"
 	stage3planner "github.com/autoget-project/autoget/organizer/internal/pipeline/stage3_planner"
 	"github.com/autoget-project/autoget/organizer/internal/service"
+	"github.com/autoget-project/autoget/organizer/upload"
 )
 
 const defaultPort = "8000"
@@ -54,10 +55,17 @@ func main() {
 	pipe := pipeline.NewPipeline(provider, enricher, cfg.DownloadCompletedDir, cfg.TargetDir, tpdb)
 	exec := service.NewExecutor(cfg.DownloadCompletedDir, cfg.TargetDir)
 
+	uploadStore, err := upload.NewStore(cfg.UploadTempDir, cfg.DownloadCompletedDir, cfg.UploadReserveBytes)
+	if err != nil {
+		log.Fatalf("failed to initialize upload store: %v", err)
+	}
+	uploadHandler := upload.NewHandler(uploadStore)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/plan", handler.NewPlanHandler(pipe).Handle)
 	mux.HandleFunc("POST /v1/execute", handler.NewExecuteHandler(exec).Handle)
 	mux.HandleFunc("POST /v1/replan-with-hint", handler.NewReplanHandler(provider).Handle)
+	upload.RegisterRoutes(mux, uploadHandler)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
@@ -77,6 +85,9 @@ func main() {
 	// Graceful shutdown on SIGINT / SIGTERM.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	uploadGC := upload.NewGC(uploadStore, time.Duration(cfg.UploadExpireHours)*time.Hour)
+	go uploadGC.Run(ctx, 1*time.Hour)
 
 	go func() {
 		log.Printf("organizer server listening on :%s (provider=%s model=%s)", port, provider.Name(), cfg.Model)

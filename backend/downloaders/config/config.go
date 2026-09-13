@@ -51,9 +51,36 @@ func (p *SeedingPolicy) Validate() error {
 	return nil
 }
 
+type TransferConfig struct {
+	Mode        string `yaml:"mode"`          // "local" or "http"
+	ChunkSizeMB int64  `yaml:"chunk_size_mb"` // in MB, default 32
+	MaxRetries  int    `yaml:"max_retries"`   // default 5
+	Concurrency int    `yaml:"concurrency"`   // concurrent files per torrent, default 2
+}
+
+func (t *TransferConfig) Validate() error {
+	if t.Mode == "" {
+		t.Mode = "local"
+	}
+	if t.Mode != "local" && t.Mode != "http" {
+		return fmt.Errorf("transfer mode must be 'local' or 'http', got %q", t.Mode)
+	}
+	if t.ChunkSizeMB <= 0 {
+		t.ChunkSizeMB = 32
+	}
+	if t.MaxRetries < 0 {
+		t.MaxRetries = 5
+	}
+	if t.Concurrency <= 0 {
+		t.Concurrency = 2
+	}
+	return nil
+}
+
 type DownloaderConfig struct {
 	Transmission  *TransmissionConfig `yaml:"transmission"`
 	SeedingPolicy *SeedingPolicy      `yaml:"seeding_policy"`
+	Transfer      *TransferConfig     `yaml:"transfer"`
 }
 
 func (c *DownloaderConfig) Validate() error {
@@ -65,6 +92,11 @@ func (c *DownloaderConfig) Validate() error {
 	}
 	if c.SeedingPolicy != nil {
 		if err := c.SeedingPolicy.Validate(); err != nil {
+			return err
+		}
+	}
+	if c.Transfer != nil {
+		if err := c.Transfer.Validate(); err != nil {
 			return err
 		}
 	}

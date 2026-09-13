@@ -26,6 +26,7 @@ type MoveState uint16
 const (
 	UnMoved MoveState = iota
 	Moved
+	Moving
 )
 
 type OrganizeState uint16
@@ -111,7 +112,7 @@ func GetDownloadStatusByDownloaderAndState(db *gorm.DB, downloader string, state
 
 func GetFinishedUnmoveedDownloadStatusByDownloader(db *gorm.DB, downloader string) ([]DownloadStatus, error) {
 	var ss []DownloadStatus
-	err := db.Where("downloader = ?", downloader).Where("state >= ?", DownloadSeeding).Where("move_state = ?", UnMoved).Find(&ss).Error
+	err := db.Where("downloader = ?", downloader).Where("state >= ?", DownloadSeeding).Where("move_state IN ?", []MoveState{UnMoved, Moving}).Find(&ss).Error
 	return ss, err
 }
 

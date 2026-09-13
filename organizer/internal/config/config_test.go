@@ -42,6 +42,11 @@ func TestLoadConfigDefaults(t *testing.T) {
 
 	// TMDB_RESPONSE_LANGUAGE unset must default to Simplified Chinese.
 	assert.Equal(t, "zh-CN", cfg.TMDBLanguage)
+
+	// Upload defaults
+	assert.Equal(t, filepath.Join("/downloads", ".uploads"), cfg.UploadTempDir)
+	assert.Equal(t, 72, cfg.UploadExpireHours)
+	assert.Equal(t, uint64(1024*1024*1024), cfg.UploadReserveBytes)
 }
 
 func TestResolveProvider(t *testing.T) {
@@ -159,6 +164,7 @@ func TestStartupCheckDirectories(t *testing.T) {
 		MetaTubeAPIURL:       "http://localhost:9000",
 		Model:                "xai:grok-2",
 		XaiAPIKey:            "valid-key",
+		UploadTempDir:        filepath.Join(downloadDir, ".uploads"),
 	}
 
 	// targetDir does not exist yet.
@@ -175,4 +181,18 @@ func TestStartupCheckDirectories(t *testing.T) {
 	}
 	require.NoError(t, StartupCheck(cfg))
 	assert.Equal(t, "grok", cfg.Provider)
+	assert.DirExists(t, cfg.UploadTempDir)
+}
+
+func TestCheckSameDevice(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	dir1 := filepath.Join(tempDir, "a")
+	dir2 := filepath.Join(tempDir, "b")
+	require.NoError(t, os.MkdirAll(dir1, 0o755))
+	require.NoError(t, os.MkdirAll(dir2, 0o755))
+
+	// Two subdirectories in the same TempDir share the same device.
+	require.NoError(t, CheckSameDevice(dir1, dir2))
 }

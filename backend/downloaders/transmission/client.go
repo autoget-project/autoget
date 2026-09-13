@@ -9,12 +9,15 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/hekmon/transmissionrpc/v3"
 	"github.com/robfig/cron/v3"
 	"github.com/rs/zerolog/log"
 	"gorm.io/gorm"
+
+	"github.com/autoget-project/autoget/protocol"
 
 	"github.com/autoget-project/autoget/backend/downloaders/config"
 	"github.com/autoget-project/autoget/backend/internal/db"
@@ -33,6 +36,10 @@ type Client struct {
 	db              *gorm.DB
 	organizerClient *organizer.Client
 	cfg             *config.DownloaderConfig
+	uploader        *organizer.Uploader
+	inFlightMu      sync.Mutex
+	inFlight        map[string]bool
+	uploadSem       chan struct{}
 }
 
 func New(name string, cfg *config.DownloaderConfig, db *gorm.DB, organizerClient *organizer.Client) (*Client, error) {
@@ -52,12 +59,31 @@ func New(name string, cfg *config.DownloaderConfig, db *gorm.DB, organizerClient
 		return nil, err
 	}
 
+	var uploader *organizer.Uploader
+	concurrency := 2
+	if cfg.Transfer != nil {
+		if err := cfg.Transfer.Validate(); err != nil {
+			return nil, err
+		}
+		concurrency = cfg.Transfer.Concurrency
+		chunkSize := cfg.Transfer.ChunkSizeMB * 1024 * 1024
+		uploader = organizer.NewUploader(organizerClient,
+			organizer.WithChunkSize(chunkSize),
+			organizer.WithMaxRetries(cfg.Transfer.MaxRetries),
+		)
+	} else {
+		uploader = organizer.NewUploader(organizerClient)
+	}
+
 	return &Client{
 		client:          client,
 		name:            name,
 		db:              db,
 		organizerClient: organizerClient,
 		cfg:             cfg,
+		uploader:        uploader,
+		inFlight:        make(map[string]bool),
+		uploadSem:       make(chan struct{}, concurrency),
 	}, nil
 }
 
@@ -140,19 +166,97 @@ func (c *Client) copyFinishedDownloads(torrentsByHash map[string]*transmissionrp
 		return
 	}
 
+	mode := "local"
+	if c.cfg.Transfer != nil && c.cfg.Transfer.Mode != "" {
+		mode = c.cfg.Transfer.Mode
+	}
+
 	for _, s := range statuses {
 		t, ok := torrentsByHash[s.ID]
 		if !ok {
 			continue
 		}
 
-		if c.copyTorrentFiles(t, &s) {
-			s.MoveState = db.Moved
-			if err := db.SaveDownloadStatus(c.db, &s); err != nil {
-				logger.Error().Err(err).Str("name", c.name).Str("id", s.ID).Msg("failed to save download status")
+		if mode == "http" {
+			c.dispatchHTTPUpload(t, s)
+		} else {
+			if c.copyTorrentFiles(t, &s) {
+				s.MoveState = db.Moved
+				if err := db.SaveDownloadStatus(c.db, &s); err != nil {
+					logger.Error().Err(err).Str("name", c.name).Str("id", s.ID).Msg("failed to save download status")
+				}
 			}
 		}
 	}
+}
+
+func (c *Client) dispatchHTTPUpload(t *transmissionrpc.Torrent, s db.DownloadStatus) {
+	c.inFlightMu.Lock()
+	if c.inFlight[s.ID] {
+		c.inFlightMu.Unlock()
+		return
+	}
+	c.inFlight[s.ID] = true
+	c.inFlightMu.Unlock()
+
+	// Ensure MoveState is set to Moving in database
+	if s.MoveState != db.Moving {
+		s.MoveState = db.Moving
+		if err := db.SaveDownloadStatus(c.db, &s); err != nil {
+			logger.Error().Err(err).Str("name", c.name).Str("id", s.ID).Msg("failed to update status to Moving")
+		}
+	}
+
+	go func(torrent *transmissionrpc.Torrent, status db.DownloadStatus) {
+		defer func() {
+			c.inFlightMu.Lock()
+			delete(c.inFlight, status.ID)
+			c.inFlightMu.Unlock()
+		}()
+
+		c.uploadSem <- struct{}{}
+		defer func() { <-c.uploadSem }()
+
+		c.uploadTorrentFiles(torrent, &status)
+	}(t, s)
+}
+
+func (c *Client) uploadTorrentFiles(t *transmissionrpc.Torrent, s *db.DownloadStatus) {
+	files := make([]string, 0, len(t.Files))
+	ctx := context.Background()
+
+	for _, f := range t.Files {
+		srcPath := filepath.Join(*t.DownloadDir, f.Name)
+		fi, err := os.Stat(srcPath)
+		if err != nil {
+			logger.Error().Err(err).Str("name", c.name).Str("file", f.Name).Msg("failed to stat source file for upload; parking")
+			return
+		}
+
+		initReq := &protocol.UploadInitRequest{
+			TorrentID:    s.ID,
+			RelativePath: f.Name,
+			TotalSize:    fi.Size(),
+			ModifyTime:   fi.ModTime().Unix(),
+		}
+
+		if err := c.uploader.UploadFile(ctx, srcPath, initReq, nil); err != nil {
+			logger.Error().Err(err).Str("name", c.name).Str("file", f.Name).Msg("failed to upload torrent file; parking for next tick")
+			return
+		}
+
+		files = append(files, f.Name)
+	}
+
+	// All files uploaded and finalized successfully
+	s.FileList = files
+	s.MoveState = db.Moved
+	if err := db.SaveDownloadStatus(c.db, s); err != nil {
+		logger.Error().Err(err).Str("name", c.name).Str("id", s.ID).Msg("failed to save download status after upload")
+		return
+	}
+
+	logger.Info().Str("name", c.name).Str("id", s.ID).Int("files", len(files)).Msg("successfully uploaded torrent files via HTTP")
 }
 
 func (c *Client) copyTorrentFiles(t *transmissionrpc.Torrent, s *db.DownloadStatus) bool {
@@ -382,6 +486,19 @@ func (c *Client) DeleteTorrent(hash string) error {
 
 	if torrentID == 0 {
 		return errors.New("torrent not found")
+	}
+
+	// If torrent is Moving, attempt to cancel upload sessions with organizer
+	if st, err := db.GetDownloadStatus(c.db, hash); err == nil && st != nil && st.MoveState == db.Moving {
+		for _, t := range torrents {
+			if *t.HashString == hash {
+				for _, f := range t.Files {
+					upID := protocol.DeriveUploadID(hash, f.Name)
+					_ = c.organizerClient.CancelUpload(context.Background(), upID)
+				}
+				break
+			}
+		}
 	}
 
 	// Delete the torrent from Transmission

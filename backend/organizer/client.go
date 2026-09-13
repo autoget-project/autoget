@@ -2,11 +2,13 @@ package organizer
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/autoget-project/autoget/protocol"
 )
@@ -26,7 +28,21 @@ type (
 	PlanFailed      = protocol.PlanFailed
 	ExecuteResponse = protocol.ExecuteResponse
 	ReplanRequest   = protocol.APIReplanRequest
+
+	UploadInitRequest    = protocol.UploadInitRequest
+	UploadStatusResponse = protocol.UploadStatusResponse
+	UploadFinishRequest  = protocol.UploadFinishRequest
+	UploadFinishResponse = protocol.UploadFinishResponse
 )
+
+// ErrUploadOffsetConflict indicates that the uploaded chunk offset conflicted with the server's authoritative offset.
+type ErrUploadOffsetConflict struct {
+	ServerOffset int64
+}
+
+func (e ErrUploadOffsetConflict) Error() string {
+	return fmt.Sprintf("upload offset conflict: server expects offset %d", e.ServerOffset)
+}
 
 // Client is a client for the organizer service.
 type Client struct {
@@ -155,4 +171,168 @@ func (c *Client) ReplanWithHint(req *ReplanRequest) (*PlanResponse, error) {
 	}
 
 	return &planResp, nil
+}
+
+// InitUpload sends POST /v1/upload/init.
+func (c *Client) InitUpload(ctx context.Context, req *UploadInitRequest) (*UploadStatusResponse, error) {
+	initURL := c.baseURL.JoinPath("/v1/upload/init")
+
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal init request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, initURL.String(), bytes.NewReader(reqBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create init request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send init request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("init upload failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var statusResp UploadStatusResponse
+	if err := json.NewDecoder(resp.Body).Decode(&statusResp); err != nil {
+		return nil, fmt.Errorf("failed to decode init response: %w", err)
+	}
+
+	return &statusResp, nil
+}
+
+// GetUpload sends GET /v1/upload/{upload_id} to query current upload offset and status.
+func (c *Client) GetUpload(ctx context.Context, uploadID string) (*UploadStatusResponse, error) {
+	getURL := c.baseURL.JoinPath("/v1/upload", uploadID)
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, getURL.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create get upload request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send get upload request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("get upload failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var statusResp UploadStatusResponse
+	if err := json.NewDecoder(resp.Body).Decode(&statusResp); err != nil {
+		return nil, fmt.Errorf("failed to decode get upload response: %w", err)
+	}
+
+	return &statusResp, nil
+}
+
+// UploadChunk sends PATCH /v1/upload/{upload_id} to append a chunk.
+// If the server returns 409 Conflict, ErrUploadOffsetConflict is returned containing the server's last_offset.
+func (c *Client) UploadChunk(ctx context.Context, uploadID string, offset int64, body io.Reader, length int64, checksum string) (int64, error) {
+	patchURL := c.baseURL.JoinPath("/v1/upload", uploadID)
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPatch, patchURL.String(), body)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create patch request: %w", err)
+	}
+
+	httpReq.Header.Set(protocol.UploadOffsetHeader, strconv.FormatInt(offset, 10))
+	httpReq.Header.Set("Content-Type", protocol.UploadContentType)
+	if checksum != "" {
+		httpReq.Header.Set(protocol.UploadChecksumHeader, checksum)
+	}
+	httpReq.ContentLength = length
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return 0, fmt.Errorf("failed to send patch request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusConflict {
+		serverOffsetStr := resp.Header.Get(protocol.UploadOffsetHeader)
+		if serverOffset, parseErr := strconv.ParseInt(serverOffsetStr, 10, 64); parseErr == nil {
+			return serverOffset, ErrUploadOffsetConflict{ServerOffset: serverOffset}
+		}
+		return 0, fmt.Errorf("upload conflict with unparseable offset header %q", serverOffsetStr)
+	}
+
+	if resp.StatusCode != http.StatusNoContent {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return 0, fmt.Errorf("upload chunk failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	newOffsetStr := resp.Header.Get(protocol.UploadOffsetHeader)
+	newOffset, err := strconv.ParseInt(newOffsetStr, 10, 64)
+	if err != nil {
+		return offset + length, nil
+	}
+	return newOffset, nil
+}
+
+// FinishUpload sends POST /v1/upload/{upload_id}/finish.
+func (c *Client) FinishUpload(ctx context.Context, uploadID string, req *UploadFinishRequest) error {
+	finishURL := c.baseURL.JoinPath("/v1/upload", uploadID, "finish")
+
+	var bodyReader io.Reader
+	if req != nil {
+		reqBytes, err := json.Marshal(req)
+		if err != nil {
+			return fmt.Errorf("failed to marshal finish request: %w", err)
+		}
+		bodyReader = bytes.NewReader(reqBytes)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, finishURL.String(), bodyReader)
+	if err != nil {
+		return fmt.Errorf("failed to create finish request: %w", err)
+	}
+	if req != nil {
+		httpReq.Header.Set("Content-Type", "application/json")
+	}
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("failed to send finish request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("finish upload failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
+}
+
+// CancelUpload sends DELETE /v1/upload/{upload_id}.
+func (c *Client) CancelUpload(ctx context.Context, uploadID string) error {
+	cancelURL := c.baseURL.JoinPath("/v1/upload", uploadID)
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodDelete, cancelURL.String(), nil)
+	if err != nil {
+		return fmt.Errorf("failed to create cancel request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("failed to send cancel request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("cancel upload failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
 }

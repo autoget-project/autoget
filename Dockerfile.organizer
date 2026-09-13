@@ -26,6 +26,7 @@ WORKDIR /src
 COPY protocol/ ./protocol/
 COPY organizer/cmd ./organizer/cmd
 COPY organizer/internal ./organizer/internal
+COPY organizer/upload ./organizer/upload
 
 WORKDIR /src/organizer
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/organizer ./cmd/server
