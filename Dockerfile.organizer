@@ -16,19 +16,22 @@ FROM golang:${GO_VERSION}-alpine AS builder
 WORKDIR /src
 
 # Cache module downloads independently of source changes.
-COPY protocol/ ./protocol/
+COPY protocol/go.mod ./protocol/
 COPY organizer/go.mod organizer/go.sum ./organizer/
 
 WORKDIR /src/organizer
 RUN go mod download
 
-COPY organizer/cmd ./cmd
-COPY organizer/internal ./internal
+WORKDIR /src
+COPY protocol/ ./protocol/
+COPY organizer/cmd ./organizer/cmd
+COPY organizer/internal ./organizer/internal
 
+WORKDIR /src/organizer
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/organizer ./cmd/server
 
 # ---- Runtime stage ---------------------------------------------------------
-FROM alpine:${ALPINE_VERSION}
+FROM alpine:${ALPINE_VERSION} AS deploy
 
 ARG UID
 ARG GID

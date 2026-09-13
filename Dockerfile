@@ -21,12 +21,18 @@ WORKDIR /src
 # Install build dependencies
 RUN apk add --no-cache git
 
-# Copy protocol and backend modules
+# Cache module downloads independently of source changes
+COPY protocol/go.mod ./protocol/
+COPY backend/go.mod backend/go.sum ./backend/
+
+WORKDIR /src/backend
+RUN go mod download
+
+WORKDIR /src
 COPY protocol/ ./protocol/
 COPY backend/ ./backend/
 
 WORKDIR /src/backend
-RUN go mod download
 RUN CGO_ENABLED=0 GOOS=linux go build -o autoget ./cmd/main.go
 
 # Stage 3: Deploy image
