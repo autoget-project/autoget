@@ -299,6 +299,37 @@ func TestReplanHandler_EmptyPlanFallsBackToGenericPrompt(t *testing.T) {
 	assert.Equal(t, "move", resp.Plan[0].Action)
 }
 
+func TestReplanHandler_NilPreviousResponseFallsBackToGenericPrompt(t *testing.T) {
+	t.Parallel()
+
+	prov := mock.NewProvider()
+	prov.AddRule(mock.Rule{
+		PromptPattern: "revises file organization plans based on user feedback",
+		Response: `{"plan":[{"file":"movie.mkv","action":"move",
+			"target":"movie/Others/Movie (2000)/Movie (2000).mkv"}]}`,
+	})
+	e := newTestEnv(t, prov)
+
+	rec := postJSON(t, e, "/v1/replan-with-hint", model.APIReplanRequest{
+		Files:            []string{"movie.mkv"},
+		Metadata:         map[string]interface{}{"title": "Movie"},
+		PreviousResponse: nil,
+		UserHint:         "the year should be 2000, not 2024",
+	})
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	calls := prov.Calls()
+	require.Len(t, calls, 1)
+	assert.Contains(t, calls[0].Prompt, "revises file organization plans based on user feedback",
+		"nil previous response must fall back to the generic replan prompt without panic")
+
+	var resp model.PlanResponse
+	decodeBody(t, rec, &resp)
+	assert.Nil(t, resp.Error)
+	require.Len(t, resp.Plan, 1)
+	assert.Equal(t, "move", resp.Plan[0].Action)
+}
+
 func TestReplanHandler_UnknownRootFallsBackToGenericPrompt(t *testing.T) {
 	t.Parallel()
 

@@ -76,18 +76,22 @@ func (h *ReplanHandler) Handle(w http.ResponseWriter, r *http.Request) {
 // generic fallback and returns the strict structured LLM response.
 func (h *ReplanHandler) callReplanLLM(ctx context.Context, req model.APIReplanRequest) ([]stage3planner.FilePlanItem, error) {
 	var prompt string
-	if domain, ok := inferDomainFromPreviousPlan(req.PreviousResponse.Plan); ok {
-		payload, err := json.Marshal(map[string]interface{}{
-			"root_path":     domainRoot(domain),
-			"files":         req.Files,
-			"previous_plan": req.PreviousResponse.Plan,
-			"user_hint":     req.UserHint,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("replan failed to marshal input: %w", err)
+	if req.PreviousResponse != nil {
+		if domain, ok := inferDomainFromPreviousPlan(req.PreviousResponse.Plan); ok {
+			payload, err := json.Marshal(map[string]interface{}{
+				"root_path":     domainRoot(domain),
+				"files":         req.Files,
+				"previous_plan": req.PreviousResponse.Plan,
+				"user_hint":     req.UserHint,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("replan failed to marshal input: %w", err)
+			}
+			prompt = fmt.Sprintf(domainReplanPrompt(domain), string(payload))
 		}
-		prompt = fmt.Sprintf(domainReplanPrompt(domain), string(payload))
-	} else {
+	}
+
+	if prompt == "" {
 		// Fallback: generic replan prompt (revises the whole plan based on
 		// the user hint).
 		payload, err := json.Marshal(map[string]interface{}{
