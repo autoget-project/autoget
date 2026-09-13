@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/autoget-project/organizer/internal/ai/mock"
-	"github.com/autoget-project/organizer/internal/model"
-	"github.com/autoget-project/organizer/internal/ptr"
+	"github.com/autoget-project/autoget/organizer/internal/ai/mock"
+	"github.com/autoget-project/autoget/organizer/internal/model"
+	"github.com/autoget-project/autoget/organizer/internal/ptr"
 )
 
 func TestReadSubtitlePreview_First30LinesAndPathJoin_L8(t *testing.T) {

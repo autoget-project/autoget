@@ -7,59 +7,26 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+
+	"github.com/autoget-project/autoget/protocol"
 )
 
+// Re-export protocol constants for convenience
 const (
-	// ActionMove indicates that the file should be moved.
-	ActionMove = "move"
-	// ActionSkip indicates that the file should be skipped.
-	ActionSkip = "skip"
+	ActionMove = protocol.ActionMove
+	ActionSkip = protocol.ActionSkip
 )
 
-// PlanRequest is the request body for the plan endpoint.
-type PlanRequest struct {
-	Dir      string                 `json:"dir"`
-	Files    []string               `json:"files"`
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
-}
-
-// PlanAction defines a single action to be taken on a file.
-type PlanAction struct {
-	File   string `json:"file"`             // Exact original path
-	Action string `json:"action"`           // "move" or "skip"
-	Target string `json:"target,omitempty"` // Target path for "move" action
-}
-
-// PlanResponse is the response from the plan endpoint.
-type PlanResponse struct {
-	Plan  []PlanAction `json:"plan,omitempty"`
-	Error string       `json:"error,omitempty"`
-}
-
-// ExecuteRequest is the request body for the execute endpoint.
-type ExecuteRequest struct {
-	Dir  string       `json:"dir"`
-	Plan []PlanAction `json:"plan"`
-}
-
-// ReplanRequest is the request body for the replan-with-hint endpoint.
-type ReplanRequest struct {
-	Files            []string               `json:"files"`
-	Metadata         map[string]interface{} `json:"metadata,omitempty"`
-	PreviousResponse *PlanResponse          `json:"previous_response"`
-	UserHint         string                 `json:"user_hint"`
-}
-
-// PlanFailed represents a PlanAction that failed during execution.
-type PlanFailed struct {
-	PlanAction
-	Reason string `json:"reason"`
-}
-
-// ExecuteResponse is the response from the execute endpoint on failure.
-type ExecuteResponse struct {
-	FailedMoves []PlanFailed `json:"failed_move"`
-}
+// Type aliases to shared protocol DTOs
+type (
+	PlanAction      = protocol.PlanAction
+	PlanRequest     = protocol.APIPlanRequest
+	PlanResponse    = protocol.PlanResponse
+	ExecuteRequest  = protocol.APIExecuteRequest
+	PlanFailed      = protocol.PlanFailed
+	ExecuteResponse = protocol.ExecuteResponse
+	ReplanRequest   = protocol.APIReplanRequest
+)
 
 // Client is a client for the organizer service.
 type Client struct {

@@ -12,6 +12,40 @@ env:
   PNPM_VERSION: '11.3.0'
 
 jobs:
+  protocol:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: protocol
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Install goimports
+        run: go install golang.org/x/tools/cmd/goimports@${{ env.GOIMPORTS_VERSION }}
+
+      - name: Install golangci-lint
+        run: curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $(go env GOPATH)/bin ${{ env.GOLANGCI_LINT_VERSION }}
+
+      - name: Format check
+        run: |
+          test -z "$($(go env GOPATH)/bin/goimports -local github.com/autoget-project/autoget/protocol -l .)"
+
+      - name: Lint check
+        run: |
+          $(go env GOPATH)/bin/golangci-lint run ./...
+
+      - name: Run protocol tests
+        run: |
+          go test -v ./...
+
   backend:
     runs-on: ubuntu-latest
     defaults:
@@ -74,7 +108,7 @@ jobs:
 
       - name: Format check
         run: |
-          test -z "$($(go env GOPATH)/bin/goimports -local github.com/autoget-project/organizer -l .)"
+          test -z "$($(go env GOPATH)/bin/goimports -local github.com/autoget-project/autoget/organizer -l .)"
 
       - name: Lint check
         run: |

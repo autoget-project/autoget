@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/autoget-project/organizer/internal/model"
+	"github.com/autoget-project/autoget/organizer/internal/model"
 )
 
 // logLLMPlanItems logs every file mapping returned by a planner LLM so

@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
+	"github.com/autoget-project/autoget/protocol"
+
 	"github.com/autoget-project/autoget/backend/downloaders"
 	"github.com/autoget-project/autoget/backend/indexers"
 	"github.com/autoget-project/autoget/backend/internal/db"
@@ -682,7 +684,7 @@ func TestService_handleAcceptPlan_Success(t *testing.T) {
 
 	// Create a test download status with a plan
 	testPlan := []organizer.PlanAction{
-		{File: "/path/to/file.txt", Action: organizer.ActionMove, Target: "/new/path/file.txt"},
+		{File: "/path/to/file.txt", Action: organizer.ActionMove, Target: protocol.StringPtr("/new/path/file.txt")},
 	}
 	downloadStatus := &db.DownloadStatus{
 		ID:            "test-hash",
@@ -718,8 +720,10 @@ func TestService_handleAcceptPlan_PartialFailure(t *testing.T) {
 	// Mock organizer server that returns partial failure
 	expectedFailures := []organizer.PlanFailed{
 		{
-			PlanAction: organizer.PlanAction{File: "file.txt", Action: organizer.ActionMove, Target: "new/file.txt"},
-			Reason:     "permission denied",
+			File:   "file.txt",
+			Action: organizer.ActionMove,
+			Target: protocol.StringPtr("new/file.txt"),
+			Reason: "permission denied",
 		},
 	}
 
@@ -733,7 +737,7 @@ func TestService_handleAcceptPlan_PartialFailure(t *testing.T) {
 		assert.Equal(t, "test-hash", req.Dir)
 
 		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(organizer.ExecuteResponse{FailedMoves: expectedFailures})
+		_ = json.NewEncoder(w).Encode(organizer.ExecuteResponse{FailedMove: expectedFailures})
 	}))
 	defer mockOrganizerServer.Close()
 
@@ -744,7 +748,7 @@ func TestService_handleAcceptPlan_PartialFailure(t *testing.T) {
 
 	// Create a test download status with a plan
 	testPlan := []organizer.PlanAction{
-		{File: "/path/to/file.txt", Action: organizer.ActionMove, Target: "/new/path/file.txt"},
+		{File: "/path/to/file.txt", Action: organizer.ActionMove, Target: protocol.StringPtr("/new/path/file.txt")},
 	}
 	downloadStatus := &db.DownloadStatus{
 		ID:            "test-hash",
@@ -780,7 +784,7 @@ func TestService_handleRePlan_Success(t *testing.T) {
 
 	// Mock organizer server
 	expectedPlan := []organizer.PlanAction{
-		{File: "file1.txt", Action: organizer.ActionMove, Target: "/organized/file1.txt"},
+		{File: "file1.txt", Action: organizer.ActionMove, Target: protocol.StringPtr("/organized/file1.txt")},
 		{File: "file2.txt", Action: organizer.ActionSkip},
 	}
 
@@ -806,14 +810,11 @@ func TestService_handleRePlan_Success(t *testing.T) {
 	serv.organizerClient = organizerClient
 
 	// Create a test download status
-	testFiles := []string{"file1.txt", "file2.txt"}
-	testMetadata := map[string]interface{}{"title": "Test Download"}
 	downloadStatus := &db.DownloadStatus{
 		ID:            "test-hash",
 		Downloader:    "test-downloader",
 		State:         db.DownloadStarted,
-		FileList:      testFiles,
-		Metadata:      testMetadata,
+		FileList:      []string{"file1.txt", "file2.txt"},
 		OrganizeState: db.Organized,
 	}
 	err = testDB.Create(downloadStatus).Error
@@ -845,7 +846,7 @@ func TestService_handleRePlan_OrganizerError(t *testing.T) {
 	// Mock organizer server that returns an error
 	mockOrganizerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(organizer.PlanResponse{Error: "organizer service error"})
+		_ = json.NewEncoder(w).Encode(organizer.PlanResponse{Error: protocol.StringPtr("organizer service error")})
 	}))
 	defer mockOrganizerServer.Close()
 
@@ -882,7 +883,7 @@ func TestService_handleRePlan_WithUserHint_Success(t *testing.T) {
 
 	// Mock organizer server for ReplanWithHint
 	expectedPlan := []organizer.PlanAction{
-		{File: "file1.txt", Action: organizer.ActionMove, Target: "/organized/file1.txt"},
+		{File: "file1.txt", Action: organizer.ActionMove, Target: protocol.StringPtr("/organized/file1.txt")},
 		{File: "file2.txt", Action: organizer.ActionSkip},
 	}
 
@@ -962,7 +963,7 @@ func TestService_handleRePlan_WithUserHint_Error(t *testing.T) {
 		assert.Equal(t, "invalid hint", req.UserHint)
 
 		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(organizer.PlanResponse{Error: "replan with hint failed"})
+		_ = json.NewEncoder(w).Encode(organizer.PlanResponse{Error: protocol.StringPtr("replan with hint failed")})
 	}))
 	defer mockOrganizerServer.Close()
 
@@ -1005,7 +1006,7 @@ func TestService_handleRePlan_EmptyUserHint_UsesRegularPlan(t *testing.T) {
 
 	// Mock organizer server for regular Plan endpoint
 	expectedPlan := []organizer.PlanAction{
-		{File: "file1.txt", Action: organizer.ActionMove, Target: "/organized/file1.txt"},
+		{File: "file1.txt", Action: organizer.ActionMove, Target: protocol.StringPtr("/organized/file1.txt")},
 	}
 
 	mockOrganizerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

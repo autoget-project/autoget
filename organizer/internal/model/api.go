@@ -1,67 +1,49 @@
 package model
 
+import "github.com/autoget-project/autoget/protocol"
+
+// Constants mirrored from protocol module for convenient local access.
+const (
+	ActionMove = protocol.ActionMove
+	ActionSkip = protocol.ActionSkip
+)
+
 // PlanAction represents a file movement or skipping action.
-// In skip action, Target should be serialized as null (Target *string without omitempty)
-// to maintain exact contract alignment with upstream clients.
-type PlanAction struct {
-	File   string  `json:"file"`
-	Action string  `json:"action"` // "move" or "skip"
-	Target *string `json:"target"` // pointer ensures "target": null when nil
-}
+// Type alias to protocol.PlanAction.
+type PlanAction = protocol.PlanAction
 
 // PlanRequest represents the input parameters for creating a plan.
-type PlanRequest struct {
-	Files    []string               `json:"files"`
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
-}
+// Type alias to protocol.PlanRequest.
+type PlanRequest = protocol.PlanRequest
 
 // APIPlanRequest represents the REST API request for creating a plan.
-type APIPlanRequest struct {
-	Dir      string                 `json:"dir"`
-	Files    []string               `json:"files"`
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
-}
+// Type alias to protocol.APIPlanRequest.
+type APIPlanRequest = protocol.APIPlanRequest
 
-// MoverResponse is the internal mover output DTO. Planners that already
-// return []PlanAction use it implicitly; it exists for wire/contract parity.
-type MoverResponse struct {
-	Plan []PlanAction `json:"plan"`
-}
+// MoverResponse is the internal mover output DTO.
+// Type alias to protocol.MoverResponse.
+type MoverResponse = protocol.MoverResponse
 
 // PlanResponse represents the REST API response for creating a plan.
-type PlanResponse struct {
-	Plan  []PlanAction `json:"plan"`
-	Error *string      `json:"error"` // pointer ensures "error": null when nil
-}
+// Type alias to protocol.PlanResponse.
+type PlanResponse = protocol.PlanResponse
 
 // ExecuteRequest represents internal execution parameters.
-type ExecuteRequest struct {
-	Plan []PlanAction `json:"plan"`
-}
+// Type alias to protocol.ExecuteRequest.
+type ExecuteRequest = protocol.ExecuteRequest
 
 // APIExecuteRequest represents the REST API request for executing a plan.
-type APIExecuteRequest struct {
-	Dir  string       `json:"dir"`
-	Plan []PlanAction `json:"plan"`
-}
+// Type alias to protocol.APIExecuteRequest.
+type APIExecuteRequest = protocol.APIExecuteRequest
 
 // PlanFailed details a failed plan action during execution.
-type PlanFailed struct {
-	File   string  `json:"file"`
-	Action string  `json:"action"`
-	Target *string `json:"target"`
-	Reason string  `json:"reason"`
-}
+// Type alias to protocol.PlanFailed.
+type PlanFailed = protocol.PlanFailed
 
 // ExecuteResponse represents the REST API response for plan execution.
-type ExecuteResponse struct {
-	FailedMove []PlanFailed `json:"failed_move"`
-}
+// Type alias to protocol.ExecuteResponse.
+type ExecuteResponse = protocol.ExecuteResponse
 
 // APIReplanRequest represents the REST API request to replan with user hint.
-type APIReplanRequest struct {
-	Files            []string               `json:"files"`
-	Metadata         map[string]interface{} `json:"metadata,omitempty"`
-	PreviousResponse PlanResponse           `json:"previous_response"`
-	UserHint         string                 `json:"user_hint"`
-}
+// Type alias to protocol.APIReplanRequest.
+type APIReplanRequest = protocol.APIReplanRequest

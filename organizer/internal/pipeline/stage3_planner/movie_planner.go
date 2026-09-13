@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"path"
 
-	"github.com/autoget-project/organizer/internal/ai"
-	"github.com/autoget-project/organizer/internal/model"
+	"github.com/autoget-project/autoget/organizer/internal/ai"
+	"github.com/autoget-project/autoget/organizer/internal/model"
 )
 
 // movieTargetRoot resolves the movie root dir based on the animation flag (H4).

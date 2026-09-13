@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/autoget-project/autoget/protocol"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -38,7 +39,7 @@ func TestNewClient(t *testing.T) {
 func TestClient_Plan(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		expectedPlan := []PlanAction{
-			{File: "/path/to/file1.txt", Action: ActionMove, Target: "/new/path/file1.txt"},
+			{File: "/path/to/file1.txt", Action: ActionMove, Target: protocol.StringPtr("/new/path/file1.txt")},
 			{File: "/path/to/file2.txt", Action: ActionSkip},
 		}
 
@@ -70,14 +71,14 @@ func TestClient_Plan(t *testing.T) {
 		resp, err := client.Plan(req)
 		require.NoError(t, err)
 		require.NotNil(t, resp)
-		assert.Empty(t, resp.Error)
+		assert.Nil(t, resp.Error)
 		assert.Equal(t, expectedPlan, resp.Plan)
 	})
 
 	t.Run("api error in response", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(PlanResponse{Error: "internal organizer error"})
+			_ = json.NewEncoder(w).Encode(PlanResponse{Error: protocol.StringPtr("internal organizer error")})
 		}))
 		defer server.Close()
 
@@ -87,7 +88,8 @@ func TestClient_Plan(t *testing.T) {
 		resp, err := client.Plan(&PlanRequest{})
 		require.NoError(t, err)
 		require.NotNil(t, resp)
-		assert.Equal(t, "internal organizer error", resp.Error)
+		require.NotNil(t, resp.Error)
+		assert.Equal(t, "internal organizer error", *resp.Error)
 	})
 
 	t.Run("http error", func(t *testing.T) {
@@ -158,7 +160,7 @@ func TestClient_Execute(t *testing.T) {
 
 		req := &ExecuteRequest{
 			Dir:  "test-dir-id",
-			Plan: []PlanAction{{File: "file.txt", Action: ActionMove, Target: "new/file.txt"}},
+			Plan: []PlanAction{{File: "file.txt", Action: ActionMove, Target: protocol.StringPtr("new/file.txt")}},
 		}
 
 		success, failedResp, err := client.Execute(req)
@@ -170,14 +172,16 @@ func TestClient_Execute(t *testing.T) {
 	t.Run("partial failure", func(t *testing.T) {
 		expectedFailures := []PlanFailed{
 			{
-				PlanAction: PlanAction{File: "file2.txt", Action: ActionMove, Target: "new/file2.txt"},
-				Reason:     "permission denied",
+				File:   "file2.txt",
+				Action: ActionMove,
+				Target: protocol.StringPtr("new/file2.txt"),
+				Reason: "permission denied",
 			},
 		}
 
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
-			_ = json.NewEncoder(w).Encode(ExecuteResponse{FailedMoves: expectedFailures})
+			_ = json.NewEncoder(w).Encode(ExecuteResponse{FailedMove: expectedFailures})
 		}))
 		defer server.Close()
 
@@ -187,8 +191,8 @@ func TestClient_Execute(t *testing.T) {
 		req := &ExecuteRequest{
 			Dir: "test-dir-id",
 			Plan: []PlanAction{
-				{File: "file1.txt", Action: ActionMove, Target: "new/file1.txt"},
-				{File: "file2.txt", Action: ActionMove, Target: "new/file2.txt"},
+				{File: "file1.txt", Action: ActionMove, Target: protocol.StringPtr("new/file1.txt")},
+				{File: "file2.txt", Action: ActionMove, Target: protocol.StringPtr("new/file2.txt")},
 			},
 		}
 
@@ -196,7 +200,7 @@ func TestClient_Execute(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, success)
 		require.NotNil(t, failedResp)
-		assert.Equal(t, expectedFailures, failedResp.FailedMoves)
+		assert.Equal(t, expectedFailures, failedResp.FailedMove)
 	})
 
 	t.Run("response decoding error", func(t *testing.T) {
@@ -220,13 +224,13 @@ func TestClient_Execute(t *testing.T) {
 func TestClient_ReplanWithHint(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		expectedPlan := []PlanAction{
-			{File: "/path/to/file1.txt", Action: ActionMove, Target: "/new/path/file1.txt"},
+			{File: "/path/to/file1.txt", Action: ActionMove, Target: protocol.StringPtr("/new/path/file1.txt")},
 			{File: "/path/to/file2.txt", Action: ActionSkip},
 		}
 
 		previousResponse := &PlanResponse{
 			Plan: []PlanAction{
-				{File: "/old/path/file1.txt", Action: ActionMove, Target: "/old/target/file1.txt"},
+				{File: "/old/path/file1.txt", Action: ActionMove, Target: protocol.StringPtr("/old/target/file1.txt")},
 			},
 		}
 
@@ -261,14 +265,14 @@ func TestClient_ReplanWithHint(t *testing.T) {
 		resp, err := client.ReplanWithHint(req)
 		require.NoError(t, err)
 		require.NotNil(t, resp)
-		assert.Empty(t, resp.Error)
+		assert.Nil(t, resp.Error)
 		assert.Equal(t, expectedPlan, resp.Plan)
 	})
 
 	t.Run("api error in response", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(PlanResponse{Error: "organizer service unavailable"})
+			_ = json.NewEncoder(w).Encode(PlanResponse{Error: protocol.StringPtr("organizer service unavailable")})
 		}))
 		defer server.Close()
 
@@ -283,7 +287,8 @@ func TestClient_ReplanWithHint(t *testing.T) {
 		resp, err := client.ReplanWithHint(req)
 		require.NoError(t, err)
 		require.NotNil(t, resp)
-		assert.Equal(t, "organizer service unavailable", resp.Error)
+		require.NotNil(t, resp.Error)
+		assert.Equal(t, "organizer service unavailable", *resp.Error)
 	})
 
 	t.Run("http error", func(t *testing.T) {

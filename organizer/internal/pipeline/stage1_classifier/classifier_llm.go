@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/autoget-project/organizer/internal/ai"
-	"github.com/autoget-project/organizer/internal/model"
+	"github.com/autoget-project/autoget/organizer/internal/ai"
+	"github.com/autoget-project/autoget/organizer/internal/model"
 )
 
 // ClassifierLLMResponse defines the structured JSON output schema (kept for backward compatibility and test mock mapping).

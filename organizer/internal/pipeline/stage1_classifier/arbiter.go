@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/autoget-project/organizer/internal/ai"
-	"github.com/autoget-project/organizer/internal/model"
+	"github.com/autoget-project/autoget/organizer/internal/ai"
+	"github.com/autoget-project/autoget/organizer/internal/model"
 )
 
 // ArbiterDecision is the structured output from the Arbiter LLM.

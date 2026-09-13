@@ -15,8 +15,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/autoget-project/organizer/internal/ai"
-	"github.com/autoget-project/organizer/internal/ai/grok"
+	"github.com/autoget-project/autoget/organizer/internal/ai"
+	"github.com/autoget-project/autoget/organizer/internal/ai/grok"
 )
 
 // Compile-time proof that the Grok provider supports the optional tool protocol.

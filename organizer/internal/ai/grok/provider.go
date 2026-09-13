@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/autoget-project/organizer/internal/ai"
+	"github.com/autoget-project/autoget/organizer/internal/ai"
 )
 
 const (

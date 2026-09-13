@@ -12,12 +12,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/autoget-project/organizer/internal/ai"
-	"github.com/autoget-project/organizer/internal/model"
-	stage1classifier "github.com/autoget-project/organizer/internal/pipeline/stage1_classifier"
-	stage2enricher "github.com/autoget-project/organizer/internal/pipeline/stage2_enricher"
-	stage3planner "github.com/autoget-project/organizer/internal/pipeline/stage3_planner"
-	stage4postprocess "github.com/autoget-project/organizer/internal/pipeline/stage4_postprocess"
+	"github.com/autoget-project/autoget/organizer/internal/ai"
+	"github.com/autoget-project/autoget/organizer/internal/model"
+	stage1classifier "github.com/autoget-project/autoget/organizer/internal/pipeline/stage1_classifier"
+	stage2enricher "github.com/autoget-project/autoget/organizer/internal/pipeline/stage2_enricher"
+	stage3planner "github.com/autoget-project/autoget/organizer/internal/pipeline/stage3_planner"
+	stage4postprocess "github.com/autoget-project/autoget/organizer/internal/pipeline/stage4_postprocess"
 )
 
 // Pipeline is the 4-stage planning orchestrator.

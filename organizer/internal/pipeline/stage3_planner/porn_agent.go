@@ -11,10 +11,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/autoget-project/organizer/internal/ai"
-	"github.com/autoget-project/organizer/internal/metadata"
-	"github.com/autoget-project/organizer/internal/model"
-	"github.com/autoget-project/organizer/internal/ptr"
+	"github.com/autoget-project/autoget/organizer/internal/ai"
+	"github.com/autoget-project/autoget/organizer/internal/metadata"
+	"github.com/autoget-project/autoget/organizer/internal/model"
+	"github.com/autoget-project/autoget/organizer/internal/ptr"
 )
 
 // PornSceneDecision is the per-video-file decision emitted by the porn agent

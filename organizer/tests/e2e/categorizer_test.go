@@ -6,9 +6,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/autoget-project/organizer/internal/ai"
-	"github.com/autoget-project/organizer/internal/model"
-	stage1classifier "github.com/autoget-project/organizer/internal/pipeline/stage1_classifier"
+	"github.com/autoget-project/autoget/organizer/internal/ai"
+	"github.com/autoget-project/autoget/organizer/internal/model"
+	stage1classifier "github.com/autoget-project/autoget/organizer/internal/pipeline/stage1_classifier"
 )
 
 // TestE2E_CategorizerRuleBehavior covers Stage 1 rule classification:

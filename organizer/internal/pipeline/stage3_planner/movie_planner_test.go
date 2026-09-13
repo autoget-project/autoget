@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/autoget-project/organizer/internal/ai/mock"
-	"github.com/autoget-project/organizer/internal/model"
+	"github.com/autoget-project/autoget/organizer/internal/ai/mock"
+	"github.com/autoget-project/autoget/organizer/internal/model"
 )
 
 func TestMoviePlanner_AnimRouting_H4(t *testing.T) {

@@ -16,17 +16,17 @@ RUN pnpm run build
 # Stage 2: Build backend
 FROM golang:1.27.1-alpine AS backend-builder
 
-WORKDIR /backend
+WORKDIR /src
 
 # Install build dependencies
 RUN apk add --no-cache git
 
-# Copy go mod files and download dependencies
-COPY backend/go.mod backend/go.sum ./
-RUN go mod download
+# Copy protocol and backend modules
+COPY protocol/ ./protocol/
+COPY backend/ ./backend/
 
-# Copy backend source and build
-COPY backend/ ./
+WORKDIR /src/backend
+RUN go mod download
 RUN CGO_ENABLED=0 GOOS=linux go build -o autoget ./cmd/main.go
 
 # Stage 3: Deploy image
@@ -46,7 +46,7 @@ RUN addgroup -g 1000 -S appgroup && \
 COPY --from=frontend-builder /frontend/dist /html
 
 # Copy backend to /app
-COPY --from=backend-builder /backend/autoget /app/
+COPY --from=backend-builder /src/backend/autoget /app/
 
 # Set ownership
 RUN chown -R 1000:1000 /html /app /config

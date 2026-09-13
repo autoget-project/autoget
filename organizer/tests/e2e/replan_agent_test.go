@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/autoget-project/organizer/internal/model"
+	"github.com/autoget-project/autoget/organizer/internal/model"
 )
 
 // TestE2E_ReplanWithHintLifecycle drives /v1/plan -> /v1/replan-with-hint ->
@@ -36,7 +36,7 @@ func TestE2E_ReplanWithHintLifecycle(t *testing.T) {
 		code, body = s.postJSON(t, "/v1/replan-with-hint", model.APIReplanRequest{
 			Files:            []string{"movie.mkv"},
 			Metadata:         map[string]interface{}{"organizer_category": "movie", "title": "Wrong Name", "year": 2020},
-			PreviousResponse: initial,
+			PreviousResponse: &initial,
 			UserHint:         "the movie name is wrong, it should be The Correct Name",
 		})
 		require.Equal(t, http.StatusOK, code, body)

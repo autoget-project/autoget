@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/autoget-project/organizer/internal/ai"
+	"github.com/autoget-project/autoget/organizer/internal/ai"
 )
 
 // SearchContext carries the grounder's answers to a fixed set of questions

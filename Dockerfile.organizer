@@ -16,7 +16,10 @@ FROM golang:${GO_VERSION}-alpine AS builder
 WORKDIR /src
 
 # Cache module downloads independently of source changes.
-COPY organizer/go.mod organizer/go.sum ./
+COPY protocol/ ./protocol/
+COPY organizer/go.mod organizer/go.sum ./organizer/
+
+WORKDIR /src/organizer
 RUN go mod download
 
 COPY organizer/cmd ./cmd

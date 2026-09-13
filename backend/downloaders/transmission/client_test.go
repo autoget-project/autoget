@@ -15,6 +15,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/autoget-project/autoget/protocol"
+
 	"github.com/autoget-project/autoget/backend/downloaders/config"
 	"github.com/autoget-project/autoget/backend/internal/db"
 	"github.com/autoget-project/autoget/backend/organizer"
@@ -291,8 +293,8 @@ func TestProgressChecker(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(organizer.PlanResponse{
 				Plan: []organizer.PlanAction{
-					{File: "/finished/3/file1.mkv", Action: organizer.ActionMove, Target: "/movies/movie1.mkv"},
-					{File: "/finished/3/file2.srt", Action: organizer.ActionMove, Target: "/movies/movie1.srt"},
+					{File: "/finished/3/file1.mkv", Action: organizer.ActionMove, Target: protocol.StringPtr("/movies/movie1.mkv")},
+					{File: "/finished/3/file2.srt", Action: organizer.ActionMove, Target: protocol.StringPtr("/movies/movie1.srt")},
 				},
 			})
 		} else {
@@ -417,11 +419,13 @@ func TestProgressChecker(t *testing.T) {
 		actions := r.OrganizePlans.Plan
 		assert.Equal(t, "/finished/3/file1.mkv", actions[0].File)
 		assert.Equal(t, organizer.ActionMove, actions[0].Action)
-		assert.Equal(t, "/movies/movie1.mkv", actions[0].Target)
+		require.NotNil(t, actions[0].Target)
+		assert.Equal(t, "/movies/movie1.mkv", *actions[0].Target)
 
 		assert.Equal(t, "/finished/3/file2.srt", actions[1].File)
 		assert.Equal(t, organizer.ActionMove, actions[1].Action)
-		assert.Equal(t, "/movies/movie1.srt", actions[1].Target)
+		require.NotNil(t, actions[1].Target)
+		assert.Equal(t, "/movies/movie1.srt", *actions[1].Target)
 	}
 }
 
@@ -443,7 +447,7 @@ func TestCreateOrganizerPlan(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(organizer.PlanResponse{
 			Plan: []organizer.PlanAction{
-				{File: "movie.mkv", Action: organizer.ActionMove, Target: "/movies/Test Movie.mkv"},
+				{File: "movie.mkv", Action: organizer.ActionMove, Target: protocol.StringPtr("/movies/Test Movie.mkv")},
 				{File: "subtitle.srt", Action: organizer.ActionSkip},
 			},
 		})
@@ -485,10 +489,12 @@ func TestCreateOrganizerPlan(t *testing.T) {
 		actions := updated.OrganizePlans.Plan
 		assert.Equal(t, "movie.mkv", actions[0].File)
 		assert.Equal(t, organizer.ActionMove, actions[0].Action)
-		assert.Equal(t, "/movies/Test Movie.mkv", actions[0].Target)
+		require.NotNil(t, actions[0].Target)
+		assert.Equal(t, "/movies/Test Movie.mkv", *actions[0].Target)
 
 		assert.Equal(t, "subtitle.srt", actions[1].File)
 		assert.Equal(t, organizer.ActionSkip, actions[1].Action)
+		assert.Nil(t, actions[1].Target)
 	})
 
 	t.Run("organizer service error", func(t *testing.T) {

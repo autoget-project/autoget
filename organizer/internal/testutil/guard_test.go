@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/autoget-project/organizer/internal/testutil"
+	"github.com/autoget-project/autoget/organizer/internal/testutil"
 )
 
 func TestSkipIfNoAPIKey_WhenSet(t *testing.T) {

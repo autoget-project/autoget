@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/autoget-project/organizer/internal/model"
-	stage2enricher "github.com/autoget-project/organizer/internal/pipeline/stage2_enricher"
+	"github.com/autoget-project/autoget/organizer/internal/model"
+	stage2enricher "github.com/autoget-project/autoget/organizer/internal/pipeline/stage2_enricher"
 )
 
 // TestE2E_BangoMoverWithActorStore drives the bango mover with an actor store.

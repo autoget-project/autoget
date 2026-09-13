@@ -14,13 +14,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/autoget-project/organizer/internal/ai"
-	"github.com/autoget-project/organizer/internal/ai/mock"
-	"github.com/autoget-project/organizer/internal/model"
-	"github.com/autoget-project/organizer/internal/pipeline"
-	stage2enricher "github.com/autoget-project/organizer/internal/pipeline/stage2_enricher"
-	"github.com/autoget-project/organizer/internal/ptr"
-	"github.com/autoget-project/organizer/internal/service"
+	"github.com/autoget-project/autoget/organizer/internal/ai"
+	"github.com/autoget-project/autoget/organizer/internal/ai/mock"
+	"github.com/autoget-project/autoget/organizer/internal/model"
+	"github.com/autoget-project/autoget/organizer/internal/pipeline"
+	stage2enricher "github.com/autoget-project/autoget/organizer/internal/pipeline/stage2_enricher"
+	"github.com/autoget-project/autoget/organizer/internal/ptr"
+	"github.com/autoget-project/autoget/organizer/internal/service"
 )
 
 // env is an offline test server wiring every REST endpoint around a mock
@@ -235,7 +235,7 @@ func TestReplanHandler_TVDomainRouting(t *testing.T) {
 	rec := postJSON(t, e, "/v1/replan-with-hint", model.APIReplanRequest{
 		Files:    []string{"Show S01E01.mkv", "Show S01E02.mkv"},
 		Metadata: map[string]interface{}{"title": "Show"},
-		PreviousResponse: model.PlanResponse{Plan: []model.PlanAction{
+		PreviousResponse: &model.PlanResponse{Plan: []model.PlanAction{
 			{File: "Show S01E01.mkv", Action: "move", Target: &prevTarget},
 		}},
 		UserHint: "these are actually season 2 episodes",
@@ -282,7 +282,7 @@ func TestReplanHandler_EmptyPlanFallsBackToGenericPrompt(t *testing.T) {
 	rec := postJSON(t, e, "/v1/replan-with-hint", model.APIReplanRequest{
 		Files:            []string{"movie.mkv"},
 		Metadata:         map[string]interface{}{"title": "Movie"},
-		PreviousResponse: model.PlanResponse{Plan: []model.PlanAction{}},
+		PreviousResponse: &model.PlanResponse{Plan: []model.PlanAction{}},
 		UserHint:         "the year should be 2000, not 2024",
 	})
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -312,7 +312,7 @@ func TestReplanHandler_UnknownRootFallsBackToGenericPrompt(t *testing.T) {
 	unknownRoot := "weird_root/a.mkv"
 	rec := postJSON(t, e, "/v1/replan-with-hint", model.APIReplanRequest{
 		Files: []string{"a.mkv"},
-		PreviousResponse: model.PlanResponse{Plan: []model.PlanAction{
+		PreviousResponse: &model.PlanResponse{Plan: []model.PlanAction{
 			{File: "a.mkv", Action: "move", Target: &unknownRoot},
 		}},
 		UserHint: "unknown domain",
@@ -340,7 +340,7 @@ func TestReplanHandler_LLMFailure500(t *testing.T) {
 
 	rec := postJSON(t, e, "/v1/replan-with-hint", model.APIReplanRequest{
 		Files:            []string{"a.mkv"},
-		PreviousResponse: model.PlanResponse{Plan: []model.PlanAction{}},
+		PreviousResponse: &model.PlanResponse{Plan: []model.PlanAction{}},
 		UserHint:         "fix it",
 	})
 	require.Equal(t, http.StatusInternalServerError, rec.Code)

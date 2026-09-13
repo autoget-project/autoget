@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/autoget-project/organizer/internal/ai"
+	"github.com/autoget-project/autoget/organizer/internal/ai"
 )
 
 // CallRecord records details of a call to GenerateStructured.
