@@ -29,7 +29,7 @@
               },
               {
                 "id": "421",
-                "name": "电影/Blu-Ray",
+                "name": "电影/BluRay",
                 "Order": 4,
                 "NumericID": 421
               },
@@ -61,7 +61,7 @@
               },
               {
                 "id": "438",
-                "name": "影剧/综艺/BD",
+                "name": "影剧/综艺/BluRay",
                 "Order": 3,
                 "NumericID": 438
               },
@@ -138,6 +138,12 @@
                 "name": "动画",
                 "Order": 1,
                 "NumericID": 405
+              },
+              {
+                "id": "453",
+                "name": "动画/BluRay",
+                "Order": 2,
+                "NumericID": 453
               }
             ],
             "Order": 7,
@@ -523,7 +529,7 @@
         ]
       },
       "421": {
-        "name": "电影/Blu-Ray",
+        "name": "电影/BluRay",
         "mode": "normal",
         "categories": [
           "421"
@@ -687,7 +693,7 @@
         ]
       },
       "438": {
-        "name": "影剧/综艺/BD",
+        "name": "影剧/综艺/BluRay",
         "mode": "normal",
         "categories": [
           "438"
@@ -769,7 +775,8 @@
         "name": "動漫",
         "mode": "normal",
         "categories": [
-          "405"
+          "405",
+          "453"
         ],
         "organizer_category": [
           "tv_series",
@@ -794,6 +801,14 @@
         "mode": "normal",
         "categories": [
           "451"
+        ],
+        "organizer_category": []
+      },
+      "453": {
+        "name": "动画/BluRay",
+        "mode": "normal",
+        "categories": [
+          "453"
         ],
         "organizer_category": []
       },
@@ -1508,7 +1523,7 @@
     "10": "TrueHD Atmos",
     "11": "DTS-HD MA",
     "12": "E-AC3(DDP)",
-    "13": "E-AC3 Atoms(DDP Atoms)",
+    "13": "E-AC3 Atmos(DDP Atmos)",
     "14": "LPCM/PCM",
     "15": "WAV",
     "2": "APE",
