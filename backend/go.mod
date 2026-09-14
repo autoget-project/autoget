@@ -5,7 +5,8 @@ go 1.27.1
 require (
 	github.com/PuerkitoBio/goquery v1.13.0
 	github.com/anacrolix/torrent v1.61.0
-	github.com/autoget-project/autoget/protocol v0.0.0-00010101000000-000000000000
+	github.com/autoget-project/autoget/organizer v0.0.0
+	github.com/autoget-project/autoget/protocol v0.0.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-telegram/bot v1.25.0
@@ -26,7 +27,6 @@ require (
 	github.com/anacrolix/missinggo v1.3.0 // indirect
 	github.com/anacrolix/missinggo/v2 v2.11.0 // indirect
 	github.com/andybalholm/cascadia v1.3.4 // indirect
-	github.com/autoget-project/autoget/organizer v0.0.0
 	github.com/bytedance/gopkg v0.1.4 // indirect
 	github.com/bytedance/sonic v1.15.3 // indirect
 	github.com/bytedance/sonic/loader v0.5.2 // indirect

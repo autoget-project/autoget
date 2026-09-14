@@ -2,6 +2,7 @@ package nyaa
 
 import (
 	_ "embed"
+	"os"
 	"testing"
 
 	"github.com/mmcdole/gofeed"
@@ -14,6 +15,10 @@ import (
 )
 
 func TestCategories(t *testing.T) {
+	if os.Getenv("LOCAL_TEST") == "" {
+		t.Skip("LOCAL_TEST not set; skipping live network test")
+	}
+
 	n := NewClient(&Config{UseProxy: true}, "", nil, nil)
 	got, err := n.Categories()
 	require.Nil(t, err)
@@ -22,6 +27,10 @@ func TestCategories(t *testing.T) {
 }
 
 func TestDetail(t *testing.T) {
+	if os.Getenv("LOCAL_TEST") == "" {
+		t.Skip("LOCAL_TEST not set; skipping live network test")
+	}
+
 	n := NewClient(&Config{UseProxy: true}, "", nil, nil)
 	got, err := n.Detail("1980585", true)
 	require.Nil(t, err)
@@ -105,6 +114,10 @@ func TestHumanSizeToBytes(t *testing.T) {
 }
 
 func TestList(t *testing.T) {
+	if os.Getenv("LOCAL_TEST") == "" {
+		t.Skip("LOCAL_TEST not set; skipping live network test")
+	}
+
 	n := NewClient(&Config{UseProxy: true}, "", nil, nil)
 
 	tests := []struct {
@@ -153,6 +166,10 @@ func TestList(t *testing.T) {
 }
 
 func TestDownload(t *testing.T) {
+	if os.Getenv("LOCAL_TEST") == "" {
+		t.Skip("LOCAL_TEST not set; skipping live network test")
+	}
+
 	dir := t.TempDir()
 	d, err := db.SqliteForTest()
 	require.NoError(t, err)
@@ -165,6 +182,10 @@ func TestDownload(t *testing.T) {
 }
 
 func TestPullRSS(t *testing.T) {
+	if os.Getenv("LOCAL_TEST") == "" {
+		t.Skip("LOCAL_TEST not set; skipping live network test")
+	}
+
 	n := NewClient(&Config{UseProxy: true}, "", nil, nil)
 	items, err := n.pullRSS()
 	require.NoError(t, err)

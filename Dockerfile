@@ -23,6 +23,7 @@ RUN apk add --no-cache git
 
 # Cache module downloads independently of source changes
 COPY protocol/go.mod ./protocol/
+COPY organizer/go.mod ./organizer/
 COPY backend/go.mod backend/go.sum ./backend/
 
 WORKDIR /src/backend
@@ -30,6 +31,7 @@ RUN go mod download
 
 WORKDIR /src
 COPY protocol/ ./protocol/
+COPY organizer/ ./organizer/
 COPY backend/ ./backend/
 
 WORKDIR /src/backend

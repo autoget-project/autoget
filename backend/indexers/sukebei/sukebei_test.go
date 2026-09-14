@@ -2,6 +2,7 @@ package sukebei
 
 import (
 	_ "embed"
+	"os"
 	"testing"
 
 	"github.com/mmcdole/gofeed"
@@ -15,6 +16,10 @@ import (
 )
 
 func TestCategories(t *testing.T) {
+	if os.Getenv("LOCAL_TEST") == "" {
+		t.Skip("LOCAL_TEST not set; skipping live network test")
+	}
+
 	n := NewClient(&nyaa.Config{UseProxy: true}, "", nil, nil)
 	got, err := n.Categories()
 	require.Nil(t, err)
@@ -23,6 +28,10 @@ func TestCategories(t *testing.T) {
 }
 
 func TestList(t *testing.T) {
+	if os.Getenv("LOCAL_TEST") == "" {
+		t.Skip("LOCAL_TEST not set; skipping live network test")
+	}
+
 	n := NewClient(&nyaa.Config{UseProxy: true}, "", nil, nil)
 
 	tests := []struct {
@@ -71,6 +80,10 @@ func TestList(t *testing.T) {
 }
 
 func TestDownload(t *testing.T) {
+	if os.Getenv("LOCAL_TEST") == "" {
+		t.Skip("LOCAL_TEST not set; skipping live network test")
+	}
+
 	dir := t.TempDir()
 	d, err := db.SqliteForTest()
 	require.NoError(t, err)
@@ -83,6 +96,10 @@ func TestDownload(t *testing.T) {
 }
 
 func TestDetail(t *testing.T) {
+	if os.Getenv("LOCAL_TEST") == "" {
+		t.Skip("LOCAL_TEST not set; skipping live network test")
+	}
+
 	n := NewClient(&nyaa.Config{UseProxy: true}, "", nil, nil)
 	got, err := n.Detail("4322631", true)
 	require.Nil(t, err)

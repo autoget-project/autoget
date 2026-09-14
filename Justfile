@@ -77,9 +77,10 @@ test: test-protocol test-backend test-organizer test-frontend
 test-protocol:
     cd protocol && go test -v ./...
 
-# Run backend tests
+# Run backend tests; LOCAL_TEST guards tests that hit live indexer sites,
+# which are often blocked on CI runners
 test-backend:
-    cd backend && go test -v ./...
+    cd backend && LOCAL_TEST=1 go test -v ./...
 
 # Run organizer tests
 test-organizer:

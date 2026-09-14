@@ -2,6 +2,7 @@ package prefetcheddata
 
 import (
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/PuerkitoBio/goquery"
@@ -16,6 +17,10 @@ const (
 )
 
 func TestCategories(t *testing.T) {
+	if os.Getenv("LOCAL_TEST") == "" {
+		t.Skip("LOCAL_TEST not set; skipping live network test")
+	}
+
 	res, err := http.Get(baseURL)
 	require.NoError(t, err)
 
