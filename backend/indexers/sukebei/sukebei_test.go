@@ -133,6 +133,10 @@ var (
 )
 
 func TestSearchRSS(t *testing.T) {
+	if os.Getenv("LOCAL_TEST") == "" {
+		t.Skip("LOCAL_TEST not set; skipping live network test")
+	}
+
 	dir := t.TempDir()
 	d, err := db.SqliteForTest()
 	require.NoError(t, err)
