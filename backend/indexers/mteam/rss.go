@@ -12,6 +12,7 @@ import (
 
 func (m *MTeam) RegisterRSSCronjob(cron *cron.Cron) {
 	if m.config.RSS == "" {
+		logger.Info().Str("name", m.Name()).Msg("RSS is not configured")
 		return
 	}
 

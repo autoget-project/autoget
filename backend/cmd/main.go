@@ -100,6 +100,7 @@ func main() {
 	}
 
 	go func() {
+		log.Info().Str("addr", cfg.Port).Msg("server started")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal().Err(err).Msg("listen")
 		}
