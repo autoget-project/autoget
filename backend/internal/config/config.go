@@ -38,6 +38,10 @@ func ReadConfig(path string) (*Config, error) {
 		return nil, err
 	}
 
+	if config.Port == "" {
+		config.Port = "8080"
+	}
+
 	if config.Nyaa != nil {
 		config.Nyaa.SetProxyURL(config.ProxyURL)
 	}
