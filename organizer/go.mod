@@ -5,7 +5,7 @@ go 1.27.1
 require (
 	github.com/autoget-project/autoget/protocol v0.0.0
 	github.com/stretchr/testify v1.12.1
-	golang.org/x/sys v0.47.0
+	golang.org/x/sys v0.48.0
 	google.golang.org/genai v1.71.0
 )
 
