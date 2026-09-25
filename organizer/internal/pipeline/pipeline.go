@@ -55,9 +55,6 @@ func NewPipeline(provider ai.Provider, enricher *stage2enricher.Enricher, downlo
 // degradation keeps the response error null (M6).
 func (p *Pipeline) CreatePlan(ctx context.Context, dir string, files []string, metadata map[string]interface{}) (model.PlanResponse, error) {
 	tr := p.tracer
-	if tr == nil {
-		tr = telemetry.Tracer()
-	}
 	spanAttrs := []attribute.KeyValue{
 		attribute.String(telemetry.AttrOrganizerDir, dir),
 		attribute.Int(telemetry.AttrOrganizerFilesCount, len(files)),
@@ -118,7 +115,13 @@ func (p *Pipeline) CreatePlan(ctx context.Context, dir string, files []string, m
 	var enriched model.EnrichedMetadata
 	if p.enricher != nil {
 		var s2Detail stage2enricher.EnricherDetail
-		enriched, s2Detail, _ = p.enricher.EnrichWithDetail(ctxStage2, res.Category, files, metadata, res.Entities)
+		var s2Err error
+		enriched, s2Detail, s2Err = p.enricher.EnrichWithDetail(ctxStage2, res.Category, files, metadata, res.Entities)
+		if s2Err != nil {
+			spanStage2.AddEvent("stage2_degraded", trace.WithAttributes(
+				attribute.String("warning", s2Err.Error()),
+			))
+		}
 		spanStage2.SetAttributes(
 			attribute.Bool(telemetry.AttrStage2Skipped, false),
 			attribute.String(telemetry.AttrStage2EnrichedTitle, enriched.Title),

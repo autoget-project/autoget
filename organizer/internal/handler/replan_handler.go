@@ -81,11 +81,7 @@ func NewReplanHandler(provider ai.Provider, tracer trace.Tracer, opts ...ReplanH
 // else (empty plan or unknown root) falls back to the generic replan prompt.
 func (h *ReplanHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	tr := h.tracer
-	if tr == nil {
-		tr = telemetry.Tracer()
-	}
-	ctx, span := tr.Start(r.Context(), telemetry.SpanHTTPReplan)
+	ctx, span := h.tracer.Start(r.Context(), telemetry.SpanHTTPReplan)
 	defer span.End()
 
 	traceID := telemetry.TraceIDFromContext(ctx)

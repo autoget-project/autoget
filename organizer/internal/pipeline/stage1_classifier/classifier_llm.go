@@ -44,7 +44,6 @@ func (c *ClassifierLLM) Classify(ctx context.Context, files []string, metadata m
 
 // ClassifyWithDetail runs specialist checkers and returns diagnostic details along with the result.
 func (c *ClassifierLLM) ClassifyWithDetail(ctx context.Context, files []string, metadata map[string]interface{}) (model.ClassifierResult, ClassifierDetail, error) {
-
 	if c.provider == nil {
 		return model.ClassifierResult{
 			Category: model.CategoryUnknown,
@@ -86,7 +85,6 @@ func (c *ClassifierLLM) ClassifyWithDetail(ctx context.Context, files []string, 
 			continue
 		}
 
-		curTpl := promptTpl
 		wg.Add(1)
 		go func(idx int, category model.Category, tpl string) {
 			defer wg.Done()
@@ -96,7 +94,7 @@ func (c *ClassifierLLM) ClassifyWithDetail(ctx context.Context, files []string, 
 				Response: resp,
 				Err:      err,
 			}
-		}(i, cat, curTpl)
+		}(i, cat, promptTpl)
 	}
 
 	wg.Wait()

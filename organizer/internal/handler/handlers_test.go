@@ -47,6 +47,9 @@ func newTestEnv(t *testing.T, prov *mock.Provider) *env {
 	targetDir := t.TempDir()
 
 	tp, exp := telemetry.NewTestTracerProvider()
+	t.Cleanup(func() {
+		_ = tp.Shutdown(context.Background())
+	})
 	tracer := tp.Tracer("test-handler")
 
 	pipe := pipeline.NewPipeline(prov, stage2enricher.NewEnricher(nil, nil, nil, nil), downloadDir, targetDir, nil, tracer)
@@ -116,6 +119,22 @@ func TestPlanHandler_OKContract(t *testing.T) {
 	assert.Equal(t, "mybook.epub", action["file"])
 	assert.Equal(t, "move", action["action"])
 	assert.Equal(t, "book/mybook.epub", action["target"])
+
+	// Verify handler span hierarchy: http.plan is parent, pipeline.CreatePlan is child
+	spans := e.exp.GetSpans()
+	require.NotEmpty(t, spans)
+	var httpPlanSpan, pipeSpan *tracetest.SpanStub
+	for i := range spans {
+		if spans[i].Name == telemetry.SpanHTTPPlan {
+			httpPlanSpan = &spans[i]
+		}
+		if spans[i].Name == telemetry.SpanPipelineCreatePlan {
+			pipeSpan = &spans[i]
+		}
+	}
+	require.NotNil(t, httpPlanSpan, "organizer.http.plan span should exist")
+	require.NotNil(t, pipeSpan, "organizer.pipeline.CreatePlan span should exist")
+	assert.Equal(t, httpPlanSpan.SpanContext.SpanID(), pipeSpan.Parent.SpanID(), "pipeline span must be child of http span")
 }
 
 func TestPlanHandler_FatalError500(t *testing.T) {

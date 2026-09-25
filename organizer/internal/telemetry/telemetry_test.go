@@ -45,9 +45,9 @@ func TestTelemetryInit_None(t *testing.T) {
 
 func TestTelemetryInit_InMemory(t *testing.T) {
 	tp, exp := telemetry.NewTestTracerProvider()
-	defer func() {
+	t.Cleanup(func() {
 		_ = tp.Shutdown(context.Background())
-	}()
+	})
 
 	tr := tp.Tracer("test")
 	ctx, span := tr.Start(context.Background(), telemetry.SpanStage1Classify)
@@ -134,7 +134,7 @@ func TestTelemetryInit_GCP_MissingProjectID(t *testing.T) {
 	assert.Contains(t, err.Error(), "gcp exporter requires GCP_PROJECT_ID or GOOGLE_CLOUD_PROJECT to be set")
 }
 
-// blockingExporter blocks on ExportSpans until context cancellation
+// blockingExporter blocks on ExportSpans until context cancellation.
 type blockingExporter struct{}
 
 func (b *blockingExporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpan) error {
@@ -175,9 +175,9 @@ func TestTraceIDFromContext(t *testing.T) {
 
 	// With active test span
 	tp, _ := telemetry.NewTestTracerProvider()
-	defer func() {
+	t.Cleanup(func() {
 		_ = tp.Shutdown(context.Background())
-	}()
+	})
 
 	tr := tp.Tracer("test")
 	ctx, span := tr.Start(context.Background(), "active-span")
@@ -193,19 +193,23 @@ func TestTelemetrySampling(t *testing.T) {
 
 	// Ratio = 0.0 -> no spans sampled
 	tpZero, expZero := telemetry.NewTestTracerProvider(0.0)
+	t.Cleanup(func() {
+		_ = tpZero.Shutdown(context.Background())
+	})
 	trZero := tpZero.Tracer("test")
 	_, spanZero := trZero.Start(context.Background(), "unsampled")
 	spanZero.End()
 	assert.Empty(t, expZero.GetSpans())
-	_ = tpZero.Shutdown(context.Background())
 
 	// Ratio = 1.0 -> all spans sampled
 	tpOne, expOne := telemetry.NewTestTracerProvider(1.0)
+	t.Cleanup(func() {
+		_ = tpOne.Shutdown(context.Background())
+	})
 	trOne := tpOne.Tracer("test")
 	_, spanOne := trOne.Start(context.Background(), "sampled")
 	spanOne.End()
 	assert.Len(t, expOne.GetSpans(), 1)
-	_ = tpOne.Shutdown(context.Background())
 }
 
 func TestTelemetry_ConcurrentSpans_Shutdown(t *testing.T) {

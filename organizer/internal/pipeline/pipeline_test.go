@@ -190,7 +190,7 @@ func TestCreatePlan_InMemorySpanValidation(t *testing.T) {
 	spans := exp.GetSpans()
 	require.NotEmpty(t, spans)
 
-	var rootSpanFound, s1SpanFound, s3SpanFound bool
+	var rootSpanFound, s1SpanFound, s2SpanFound, s3SpanFound, s4SpanFound bool
 	for _, s := range spans {
 		switch s.Name {
 		case telemetry.SpanPipelineCreatePlan:
@@ -207,6 +207,8 @@ func TestCreatePlan_InMemorySpanValidation(t *testing.T) {
 					assert.Equal(t, string(model.CategoryTVSeries), a.Value.AsString())
 				}
 			}
+		case telemetry.SpanStage2Enrich:
+			s2SpanFound = true
 		case telemetry.SpanStage3Plan:
 			s3SpanFound = true
 			for _, a := range s.Attributes {
@@ -214,11 +216,20 @@ func TestCreatePlan_InMemorySpanValidation(t *testing.T) {
 					assert.Equal(t, string(model.CategoryTVSeries), a.Value.AsString())
 				}
 			}
+		case telemetry.SpanStage4PostProcess:
+			s4SpanFound = true
+			for _, a := range s.Attributes {
+				if string(a.Key) == telemetry.AttrStage4FinalActionsCount {
+					assert.Equal(t, int64(1), a.Value.AsInt64())
+				}
+			}
 		}
 	}
 	assert.True(t, rootSpanFound, "root pipeline span should be recorded")
 	assert.True(t, s1SpanFound, "stage 1 span should be recorded")
+	assert.True(t, s2SpanFound, "stage 2 span should be recorded")
 	assert.True(t, s3SpanFound, "stage 3 span should be recorded")
+	assert.True(t, s4SpanFound, "stage 4 span should be recorded")
 	assert.Equal(t, "move", resp.Plan[0].Action)
 }
 
@@ -388,6 +399,9 @@ func TestCreatePlan_OpenTelemetry_ErrorRecording(t *testing.T) {
 	t.Parallel()
 
 	tp, exp := telemetry.NewTestTracerProvider()
+	t.Cleanup(func() {
+		_ = tp.Shutdown(context.Background())
+	})
 	tracer := tp.Tracer("test-tracer")
 
 	prov := mock.NewProvider()

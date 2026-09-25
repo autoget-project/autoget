@@ -41,6 +41,11 @@ func main() {
 	}
 
 	// 1. Offline replay mode (--last or --trace-id)
+	if *lastFlag && *traceIDFlag != "" {
+		fmt.Fprintf(os.Stderr, "Error: --last and --trace-id flags are mutually exclusive\n")
+		os.Exit(1)
+	}
+
 	if *lastFlag || *traceIDFlag != "" {
 		targetTraceID := *traceIDFlag
 		if *lastFlag {

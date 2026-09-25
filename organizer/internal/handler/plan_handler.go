@@ -56,11 +56,7 @@ func NewPlanHandler(p *pipeline.Pipeline, tracer trace.Tracer, opts ...PlanHandl
 // the unknown category) keeps the response contract with error set to null.
 func (h *PlanHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	tr := h.tracer
-	if tr == nil {
-		tr = telemetry.Tracer()
-	}
-	ctx, span := tr.Start(r.Context(), telemetry.SpanHTTPPlan)
+	ctx, span := h.tracer.Start(r.Context(), telemetry.SpanHTTPPlan)
 	defer span.End()
 
 	traceID := telemetry.TraceIDFromContext(ctx)

@@ -53,11 +53,7 @@ func NewExecuteHandler(e *service.Executor, tracer trace.Tracer, opts ...Execute
 // (including source directory archiving) returns HTTP 200 with an empty list.
 func (h *ExecuteHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	tr := h.tracer
-	if tr == nil {
-		tr = telemetry.Tracer()
-	}
-	ctx, span := tr.Start(r.Context(), telemetry.SpanHTTPExecute)
+	ctx, span := h.tracer.Start(r.Context(), telemetry.SpanHTTPExecute)
 	defer span.End()
 
 	traceID := telemetry.TraceIDFromContext(ctx)
