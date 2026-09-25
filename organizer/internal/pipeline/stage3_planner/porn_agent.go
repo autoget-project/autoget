@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -163,7 +162,6 @@ func (p *PornPlanner) planWithAgent(ctx context.Context, tp ai.ToolProvider, pc 
 		}
 		cand, ok := whitelist[d.Slug]
 		if !ok {
-			log.Printf("stage3 porn agent: ignoring fabricated slug %q for file %q (not returned by search_porn)", d.Slug, d.File)
 			continue
 		}
 		decided[d.File] = cand

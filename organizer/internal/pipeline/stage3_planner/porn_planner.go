@@ -2,7 +2,6 @@ package stage3planner
 
 import (
 	"context"
-	"log"
 	"path"
 	"path/filepath"
 	"strings"
@@ -54,7 +53,6 @@ func (p *PornPlanner) Plan(ctx context.Context, pc *PlannerContext) ([]model.Pla
 		if err == nil {
 			return append(actions, skipOthers(others)...), nil
 		}
-		log.Printf("[degrade] porn tpdb agent failed, falling back to local chain: %v", err)
 	}
 
 	root := string(model.TargetDirPorn)

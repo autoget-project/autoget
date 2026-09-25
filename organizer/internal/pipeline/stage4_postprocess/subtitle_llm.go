@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -95,10 +94,6 @@ func (sp *SubtitlePlanner) PairSubtitles(ctx context.Context, dir string, subtit
 	if err := sp.provider.GenerateStructured(ctx, prompt, SubtitleLLMResponse{}, &resp); err != nil {
 		return nil, fmt.Errorf("subtitle llm generation failed: %w", err)
 	}
-	for _, item := range resp.Plan {
-		log.Printf("stage4 subtitle llm: file=%q action=%q matched_video=%q language=%q reason=%q",
-			item.File, item.Action, item.MatchedVideo, item.Language, item.Reason)
-	}
 
 	videoTarget := make(map[string]string, len(videoPlan))
 	for _, a := range videoPlan {
@@ -121,13 +116,11 @@ func (sp *SubtitlePlanner) PairSubtitles(ctx context.Context, dir string, subtit
 		covered[item.File] = struct{}{}
 		isMoveAction := item.Action == "move" || item.Action == "rename_and_move"
 		if !isMoveAction || item.MatchedVideo == "" {
-			log.Printf("stage4 subtitle pairing: %q forced skip (llm action=%q, matched_video=%q)", item.File, item.Action, item.MatchedVideo)
 			actions = append(actions, model.PlanAction{File: item.File, Action: "skip"})
 			continue
 		}
 		videoTargetPath, ok := videoTarget[item.MatchedVideo]
 		if !ok {
-			log.Printf("stage4 subtitle pairing: %q forced skip (matched video %q not in the video move plan)", item.File, item.MatchedVideo)
 			actions = append(actions, model.PlanAction{File: item.File, Action: "skip"})
 			continue
 		}
@@ -142,7 +135,6 @@ func (sp *SubtitlePlanner) PairSubtitles(ctx context.Context, dir string, subtit
 	// Subtitles never mentioned by the LLM are explicitly skipped.
 	for _, f := range subtitleFiles {
 		if _, ok := covered[f]; !ok {
-			log.Printf("stage4 subtitle pairing: %q forced skip (not mentioned by the subtitle llm)", f)
 			actions = append(actions, model.PlanAction{File: f, Action: "skip"})
 		}
 	}

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -40,18 +41,37 @@ var targetRootToDomain = map[string]replanDomain{
 	string(model.TargetDirMadou):        domainBango,
 }
 
+// ReplanHandlerOption configures optional settings on ReplanHandler.
+type ReplanHandlerOption func(*ReplanHandler)
+
+// WithReplanSummaryFn sets a custom summary logger function (used for testing without stdout pollution).
+func WithReplanSummaryFn(fn func(format string, args ...any)) ReplanHandlerOption {
+	return func(h *ReplanHandler) {
+		h.summaryFn = fn
+	}
+}
+
 // ReplanHandler serves POST /v1/replan-with-hint.
 type ReplanHandler struct {
-	provider ai.Provider
-	tracer   trace.Tracer
+	provider  ai.Provider
+	tracer    trace.Tracer
+	summaryFn func(format string, args ...any)
 }
 
 // NewReplanHandler creates a new ReplanHandler.
-func NewReplanHandler(provider ai.Provider, tracer trace.Tracer) *ReplanHandler {
+func NewReplanHandler(provider ai.Provider, tracer trace.Tracer, opts ...ReplanHandlerOption) *ReplanHandler {
 	if tracer == nil {
 		tracer = telemetry.Tracer()
 	}
-	return &ReplanHandler{provider: provider, tracer: tracer}
+	h := &ReplanHandler{
+		provider:  provider,
+		tracer:    tracer,
+		summaryFn: log.Printf,
+	}
+	for _, opt := range opts {
+		opt(h)
+	}
+	return h
 }
 
 // Handle performs a single replan driven by the user hint. Stage 1
@@ -60,6 +80,7 @@ func NewReplanHandler(provider ai.Provider, tracer trace.Tracer) *ReplanHandler 
 // category roots route to the matching Stage 3 domain LLM replan; anything
 // else (empty plan or unknown root) falls back to the generic replan prompt.
 func (h *ReplanHandler) Handle(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	tr := h.tracer
 	if tr == nil {
 		tr = telemetry.Tracer()
@@ -80,15 +101,10 @@ func (h *ReplanHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if reqJSON, err := json.Marshal(req); err == nil {
-		log.Printf("[ORGANIZER_REQUEST] POST /v1/replan-with-hint: %s", string(reqJSON))
-	}
-
 	items, err := h.callReplanLLM(ctx, req)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
-		log.Printf("[ORGANIZER_RESPONSE] POST /v1/replan-with-hint failed: %v", err)
 		msg := err.Error()
 		writeJSON(w, http.StatusInternalServerError, model.PlanResponse{Plan: []model.PlanAction{}, Error: &msg})
 		return
@@ -96,7 +112,10 @@ func (h *ReplanHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	plan := stage3planner.ItemsToActions(items, req.Files)
 	sanitized := stage4postprocess.SanitizePlan(plan)
-	log.Printf("[ORGANIZER_RESPONSE] POST /v1/replan-with-hint actions=%d", len(sanitized))
+	if h.summaryFn != nil {
+		h.summaryFn("[REPLAN] trace_id=%s actions=%d status=OK duration_ms=%d",
+			traceID, len(sanitized), time.Since(start).Milliseconds())
+	}
 	writeJSON(w, http.StatusOK, model.PlanResponse{
 		Plan:  sanitized,
 		Error: nil,
@@ -139,9 +158,6 @@ func (h *ReplanHandler) callReplanLLM(ctx context.Context, req model.APIReplanRe
 	var resp stage3planner.LLMPlanResponse
 	if err := h.provider.GenerateStructured(ctx, prompt, stage3planner.LLMPlanResponse{}, &resp); err != nil {
 		return nil, fmt.Errorf("replan llm generation failed: %w", err)
-	}
-	for _, item := range resp.Plan {
-		log.Printf("replan llm: file=%q action=%q target=%q reason=%q", item.File, item.Action, item.Target, item.Reason)
 	}
 	return resp.Plan, nil
 }

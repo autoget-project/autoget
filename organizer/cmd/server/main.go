@@ -36,6 +36,10 @@ func main() {
 		log.Fatalf("startup check failed: %v", err)
 	}
 
+	if _, err := telemetry.Init(cfg.Telemetry); err != nil {
+		log.Fatalf("telemetry initialization failed: %v", err)
+	}
+
 	provider, err := resolveProvider(cfg)
 	if err != nil {
 		log.Fatalf("provider resolution failed: %v", err)
@@ -105,6 +109,13 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("graceful shutdown failed: %v", err)
 	}
+
+	otelCtx, otelCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer otelCancel()
+	if err := telemetry.Shutdown(otelCtx); err != nil {
+		log.Printf("telemetry shutdown failed: %v", err)
+	}
+
 	log.Printf("organizer server stopped")
 }
 

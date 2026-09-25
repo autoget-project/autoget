@@ -2,8 +2,10 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -446,6 +448,87 @@ func TestHandlers_TraceHeaders(t *testing.T) {
 	traceIDReplan := recReplan.Header().Get("X-Trace-Id")
 	assert.NotEmpty(t, traceIDReplan, "X-Trace-Id header should be set on /v1/replan-with-hint")
 	assert.Len(t, traceIDReplan, 32, "trace ID should be 32 hex chars")
+}
+
+func TestPlanHandler_SummaryLog_And_TraceHeader(t *testing.T) {
+	t.Parallel()
+
+	var logLines []string
+	summaryFn := func(format string, args ...any) {
+		logLines = append(logLines, fmt.Sprintf(format, args...))
+	}
+
+	downloadDir := t.TempDir()
+	targetDir := t.TempDir()
+	tp, _ := telemetry.NewTestTracerProvider()
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+	tracer := tp.Tracer("test-handler-summary")
+
+	pipe := pipeline.NewPipeline(mock.NewProvider(), stage2enricher.NewEnricher(nil, nil, nil, nil), downloadDir, targetDir, nil, tracer)
+	planHandler := NewPlanHandler(pipe, tracer, WithPlanSummaryFn(summaryFn))
+
+	reqBody := `{"dir":"dir1","files":["book.epub"]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/plan", strings.NewReader(reqBody))
+	rec := httptest.NewRecorder()
+
+	planHandler.Handle(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	traceID := rec.Header().Get("X-Trace-Id")
+	require.NotEmpty(t, traceID)
+	require.Len(t, traceID, 32)
+
+	require.Len(t, logLines, 1, "exactly one summary log line should be emitted")
+	line := logLines[0]
+	assert.Contains(t, line, "[PLAN]")
+	assert.Contains(t, line, "trace_id="+traceID)
+	assert.Contains(t, line, `dir="dir1"`)
+	assert.Contains(t, line, "files=1")
+	assert.Contains(t, line, "actions=1")
+	assert.Contains(t, line, "status=OK")
+	assert.Contains(t, line, "duration_ms=")
+	assert.NotContains(t, line, `{"dir"`, "raw request JSON should not be dumped into summary log")
+}
+
+func TestPlanHandler_ErrorSummaryLog(t *testing.T) {
+	t.Parallel()
+
+	var logLines []string
+	summaryFn := func(format string, args ...any) {
+		logLines = append(logLines, fmt.Sprintf(format, args...))
+	}
+
+	downloadDir := t.TempDir()
+	targetDir := t.TempDir()
+	tp, _ := telemetry.NewTestTracerProvider()
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+	tracer := tp.Tracer("test-handler-err-summary")
+
+	prov := mock.NewProvider()
+	prov.SetDefaultResponse(nil, errors.New("backend failed"))
+	pipe := pipeline.NewPipeline(prov, stage2enricher.NewEnricher(nil, nil, nil, nil), downloadDir, targetDir, nil, tracer)
+	planHandler := NewPlanHandler(pipe, tracer, WithPlanSummaryFn(summaryFn))
+
+	// Unknown extension forces LLM which fails
+	reqBody := `{"dir":"err_dir","files":["mystery.bin"]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/plan", strings.NewReader(reqBody))
+	rec := httptest.NewRecorder()
+
+	planHandler.Handle(rec, req)
+
+	require.Equal(t, http.StatusInternalServerError, rec.Code)
+	traceID := rec.Header().Get("X-Trace-Id")
+	require.NotEmpty(t, traceID)
+
+	require.Len(t, logLines, 1, "exactly one summary log line should be emitted on error")
+	line := logLines[0]
+	assert.Contains(t, line, "[PLAN]")
+	assert.Contains(t, line, "trace_id="+traceID)
+	assert.Contains(t, line, `dir="err_dir"`)
+	assert.Contains(t, line, "files=1")
+	assert.Contains(t, line, "status=ERROR")
+	assert.Contains(t, line, "backend failed")
+	assert.Contains(t, line, "duration_ms=")
 }
 
 // Compile-time interface guards.

@@ -2,7 +2,6 @@ package stage4postprocess
 
 import (
 	"fmt"
-	"log"
 	"path/filepath"
 	"strings"
 
@@ -56,7 +55,6 @@ func SanitizePlanWithDetail(plan []model.PlanAction) ([]model.PlanAction, PostPr
 	var detail PostProcessDetail
 	for _, action := range plan {
 		if _, ok := garbageExtensions[strings.ToLower(filepath.Ext(action.File))]; ok {
-			log.Printf("stage4 sanitize: %q forced skip (garbage extension)", action.File)
 			detail.ForcedSkips = append(detail.ForcedSkips, action.File+": garbage extension")
 			sanitized = append(sanitized, model.PlanAction{File: action.File, Action: "skip"})
 			continue
@@ -66,14 +64,12 @@ func SanitizePlanWithDetail(plan []model.PlanAction) ([]model.PlanAction, PostPr
 			continue
 		}
 		if action.Target == nil || strings.TrimSpace(*action.Target) == "" {
-			log.Printf("stage4 sanitize: %q forced skip (move action without target)", action.File)
 			detail.ForcedSkips = append(detail.ForcedSkips, action.File+": move action without target")
 			sanitized = append(sanitized, model.PlanAction{File: action.File, Action: "skip"})
 			continue
 		}
 		cleaned, err := SanitizeRelativeTarget(*action.Target)
 		if err != nil {
-			log.Printf("stage4 sanitize: %q forced skip (invalid target %q: %v)", action.File, *action.Target, err)
 			detail.ForcedSkips = append(detail.ForcedSkips, fmt.Sprintf("%s: invalid target %q (%v)", action.File, *action.Target, err))
 			sanitized = append(sanitized, model.PlanAction{File: action.File, Action: "skip"})
 			continue

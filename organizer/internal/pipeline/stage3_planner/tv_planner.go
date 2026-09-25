@@ -62,7 +62,6 @@ func (p *TVPlanner) PlanItems(ctx context.Context, pc *PlannerContext) ([]FilePl
 	if err := p.provider.GenerateStructured(ctx, prompt, LLMPlanResponse{}, &resp); err != nil {
 		return nil, fmt.Errorf("tv planner llm generation failed: %w", err)
 	}
-	logLLMPlanItems("tv", resp.Plan)
 	return resp.Plan, nil
 }
 

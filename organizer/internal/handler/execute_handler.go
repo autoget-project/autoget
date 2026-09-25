@@ -3,7 +3,9 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"time"
 
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -13,24 +15,44 @@ import (
 	"github.com/autoget-project/autoget/organizer/internal/telemetry"
 )
 
+// ExecuteHandlerOption configures optional settings on ExecuteHandler.
+type ExecuteHandlerOption func(*ExecuteHandler)
+
+// WithExecuteSummaryFn sets a custom summary logger function (used for testing without stdout pollution).
+func WithExecuteSummaryFn(fn func(format string, args ...any)) ExecuteHandlerOption {
+	return func(h *ExecuteHandler) {
+		h.summaryFn = fn
+	}
+}
+
 // ExecuteHandler serves POST /v1/execute.
 type ExecuteHandler struct {
-	executor *service.Executor
-	tracer   trace.Tracer
+	executor  *service.Executor
+	tracer    trace.Tracer
+	summaryFn func(format string, args ...any)
 }
 
 // NewExecuteHandler creates a new ExecuteHandler.
-func NewExecuteHandler(e *service.Executor, tracer trace.Tracer) *ExecuteHandler {
+func NewExecuteHandler(e *service.Executor, tracer trace.Tracer, opts ...ExecuteHandlerOption) *ExecuteHandler {
 	if tracer == nil {
 		tracer = telemetry.Tracer()
 	}
-	return &ExecuteHandler{executor: e, tracer: tracer}
+	h := &ExecuteHandler{
+		executor:  e,
+		tracer:    tracer,
+		summaryFn: log.Printf,
+	}
+	for _, opt := range opts {
+		opt(h)
+	}
+	return h
 }
 
 // Handle physically executes the plan. Any aggregated failed_move entry
 // results in HTTP 400 carrying the full failure list; a fully successful run
 // (including source directory archiving) returns HTTP 200 with an empty list.
 func (h *ExecuteHandler) Handle(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	tr := h.tracer
 	if tr == nil {
 		tr = telemetry.Tracer()
@@ -66,5 +88,9 @@ func (h *ExecuteHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.summaryFn != nil {
+		h.summaryFn("[EXECUTE] trace_id=%s actions=%d status=OK duration_ms=%d",
+			traceID, len(req.Plan), time.Since(start).Milliseconds())
+	}
 	writeJSON(w, http.StatusOK, resp)
 }

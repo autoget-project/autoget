@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"path/filepath"
 	"strings"
 	"time"
@@ -60,11 +59,25 @@ func (p *Pipeline) CreatePlan(ctx context.Context, dir string, files []string, m
 	if tr == nil {
 		tr = telemetry.Tracer()
 	}
+	spanAttrs := []attribute.KeyValue{
+		attribute.String(telemetry.AttrOrganizerDir, dir),
+		attribute.Int(telemetry.AttrOrganizerFilesCount, len(files)),
+	}
+	if len(files) > 0 {
+		spanAttrs = append(spanAttrs, attribute.StringSlice(telemetry.AttrOrganizerFiles, files))
+	}
+	if len(metadata) > 0 {
+		if mJSON, jerr := json.Marshal(metadata); jerr == nil {
+			const maxMetadataBytes = 16 * 1024
+			mStr := string(mJSON)
+			if len(mStr) > maxMetadataBytes {
+				mStr = mStr[:maxMetadataBytes] + "...(truncated)"
+			}
+			spanAttrs = append(spanAttrs, attribute.String(telemetry.AttrOrganizerMetadataJSON, mStr))
+		}
+	}
 	ctx, rootSpan := tr.Start(ctx, telemetry.SpanPipelineCreatePlan,
-		trace.WithAttributes(
-			attribute.String(telemetry.AttrOrganizerDir, dir),
-			attribute.Int(telemetry.AttrOrganizerFilesCount, len(files)),
-		),
+		trace.WithAttributes(spanAttrs...),
 	)
 	defer rootSpan.End()
 
@@ -74,12 +87,6 @@ func (p *Pipeline) CreatePlan(ctx context.Context, dir string, files []string, m
 		stgTrace.Dir = dir
 		stgTrace.Files = files
 		stgTrace.Metadata = metadata
-	}
-
-	if metaJSON, err := json.Marshal(metadata); err == nil {
-		log.Printf("pipeline request: dir=%q files=%q metadata=%s", dir, files, metaJSON)
-	} else {
-		log.Printf("pipeline request: dir=%q files=%q metadata=%v (marshal error: %v)", dir, files, metadata, err)
 	}
 
 	// Stage 1: classification (rule screening first, LLM fallback).
@@ -127,7 +134,6 @@ func (p *Pipeline) CreatePlan(ctx context.Context, dir string, files []string, m
 		return model.PlanResponse{}, fmt.Errorf("stage1 classification failed: %w", err)
 	}
 	spanStage1.End()
-	log.Printf("pipeline stage1 final: dir=%q files=%d category=%s", dir, len(files), res.Category)
 
 	// Stage 2: metadata enrichment with graceful degradation (M6: never fatal).
 	ctxStage2, spanStage2 := tr.Start(ctx, telemetry.SpanStage2Enrich)
@@ -151,9 +157,6 @@ func (p *Pipeline) CreatePlan(ctx context.Context, dir string, files []string, m
 			if err != nil {
 				stgTrace.Stage2.Err = err.Error()
 			}
-		}
-		if err != nil {
-			log.Printf("[M6 degrade] stage2 enrichment failed for %s: %v; continuing with local metadata", res.Category, err)
 		}
 	} else {
 		spanStage2.SetAttributes(attribute.Bool(telemetry.AttrStage2Skipped, true))
@@ -227,19 +230,15 @@ func (p *Pipeline) CreatePlan(ctx context.Context, dir string, files []string, m
 			spanStage4.SetAttributes(attribute.String(telemetry.AttrStage4ForcedSkipsJSON, string(skipsJSON)))
 		}
 	}
+	if planJSON, jsonErr := json.Marshal(finalPlan); jsonErr == nil {
+		spanStage4.SetAttributes(attribute.String(telemetry.AttrStage4FinalPlanJSON, string(planJSON)))
+	}
 	spanStage4.End()
 
 	if stgTrace != nil {
 		stgTrace.Stage4.SanitizedPlan = finalPlan
 		stgTrace.FinalPlan = finalPlan
 		stgTrace.DurationMs = time.Since(stgTrace.StartTime).Milliseconds()
-	}
-	for i := range finalPlan {
-		if finalPlan[i].Action == "move" && finalPlan[i].Target != nil {
-			log.Printf("pipeline final plan: %q -> %q", finalPlan[i].File, *finalPlan[i].Target)
-		} else {
-			log.Printf("pipeline final plan: %q -> %s", finalPlan[i].File, finalPlan[i].Action)
-		}
 	}
 	return model.PlanResponse{
 		Plan:  finalPlan,
@@ -270,7 +269,6 @@ func (p *Pipeline) pairSubtitles(ctx context.Context, dir string, files []string
 
 	subActions, err := p.subtitles.PairSubtitles(ctx, dir, subtitles, plan)
 	if err != nil {
-		log.Printf("[M6 degrade] stage4 subtitle pairing failed: %v; subtitles left unplanned", err)
 		return nil
 	}
 	return subActions

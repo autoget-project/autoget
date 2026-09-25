@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -54,6 +55,7 @@ func NewPlanHandler(p *pipeline.Pipeline, tracer trace.Tracer, opts ...PlanHandl
 // Fatal unrecoverable internal errors map to HTTP 500; normal planning (including
 // the unknown category) keeps the response contract with error set to null.
 func (h *PlanHandler) Handle(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	tr := h.tracer
 	if tr == nil {
 		tr = telemetry.Tracer()
@@ -70,6 +72,10 @@ func (h *PlanHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
+		if h.summaryFn != nil {
+			h.summaryFn("[PLAN] trace_id=%s dir=%q files=%d status=ERROR err=%q duration_ms=%d",
+				traceID, req.Dir, len(req.Files), err.Error(), time.Since(start).Milliseconds())
+		}
 		http.Error(w, fmt.Sprintf("invalid request body: %v", err), http.StatusBadRequest)
 		return
 	}
@@ -79,22 +85,24 @@ func (h *PlanHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		attribute.Int(telemetry.AttrOrganizerFilesCount, len(req.Files)),
 	)
 
-	if reqJSON, err := json.Marshal(req); err == nil {
-		log.Printf("[ORGANIZER_REQUEST] POST /v1/plan: %s", string(reqJSON))
-	}
-
 	resp, err := h.pipeline.CreatePlan(ctx, req.Dir, req.Files, req.Metadata)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
-		log.Printf("[ORGANIZER_RESPONSE] POST /v1/plan dir=%q failed: %v", req.Dir, err)
+		if h.summaryFn != nil {
+			h.summaryFn("[PLAN] trace_id=%s dir=%q files=%d status=ERROR err=%q duration_ms=%d",
+				traceID, req.Dir, len(req.Files), err.Error(), time.Since(start).Milliseconds())
+		}
 		// Fatal internal failure -> 500 while preserving the response shape.
 		msg := err.Error()
 		writeJSON(w, http.StatusInternalServerError, model.PlanResponse{Plan: []model.PlanAction{}, Error: &msg})
 		return
 	}
 
-	log.Printf("[ORGANIZER_RESPONSE] POST /v1/plan dir=%q actions=%d", req.Dir, len(resp.Plan))
+	if h.summaryFn != nil {
+		h.summaryFn("[PLAN] trace_id=%s dir=%q files=%d actions=%d status=OK duration_ms=%d",
+			traceID, req.Dir, len(req.Files), len(resp.Plan), time.Since(start).Milliseconds())
+	}
 	// Normal planning: error stays null (contract compatibility).
 	writeJSON(w, http.StatusOK, resp)
 }

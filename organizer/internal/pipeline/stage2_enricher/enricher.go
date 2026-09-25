@@ -3,7 +3,6 @@ package stage2enricher
 import (
 	"context"
 	"fmt"
-	"log"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -96,13 +95,10 @@ func (e *Enricher) EnrichWithDetail(ctx context.Context, cat model.Category, fil
 		enriched, err = e.enrichPorn(ctx, files, metadata, entities)
 	default:
 		// simple categories (book, music, photobook, audio_book, music_video) or unknown: skip Stage 2
-		log.Printf("stage2 enrichment: category=%s skipped (simple or unknown category)", cat)
 		return model.EnrichedMetadata{
 			Language: model.LanguageOthers,
 		}, detail, nil
 	}
-	log.Printf("stage2 enrichment: category=%s title=%q year=%d bango=%q actors=%v language=%s is_vr=%t from_madou=%t",
-		cat, enriched.Title, enriched.Year, enriched.Bango, enriched.Actors, enriched.Language, enriched.IsVR, enriched.FromMadou)
 	return enriched, detail, err
 }
 
@@ -127,7 +123,6 @@ func (e *Enricher) enrichMovieWithDetail(ctx context.Context, files []string, me
 		} else {
 			warn := fmt.Sprintf("tmdb find_by_imdb_id failed for movie (%s): %v, falling back to title search", imdbID, err)
 			detail.DegradeWarnings = append(detail.DegradeWarnings, warn)
-			log.Printf("[M6 degrade] %s", warn)
 		}
 	}
 
@@ -143,7 +138,6 @@ func (e *Enricher) enrichMovieWithDetail(ctx context.Context, files []string, me
 		} else {
 			warn := fmt.Sprintf("tmdb search_movies failed for (%s): %v", titleCandidate, err)
 			detail.DegradeWarnings = append(detail.DegradeWarnings, warn)
-			log.Printf("[M6 degrade] %s", warn)
 		}
 	}
 
@@ -185,7 +179,6 @@ func (e *Enricher) enrichTVSeriesWithDetail(ctx context.Context, files []string,
 		} else {
 			warn := fmt.Sprintf("tmdb find_by_imdb_id failed for tv_series (%s): %v, falling back to title search", imdbID, err)
 			detail.DegradeWarnings = append(detail.DegradeWarnings, warn)
-			log.Printf("[M6 degrade] %s", warn)
 		}
 	}
 
@@ -201,7 +194,6 @@ func (e *Enricher) enrichTVSeriesWithDetail(ctx context.Context, files []string,
 		} else {
 			warn := fmt.Sprintf("tmdb search_tv_shows failed for (%s): %v", titleCandidate, err)
 			detail.DegradeWarnings = append(detail.DegradeWarnings, warn)
-			log.Printf("[M6 degrade] %s", warn)
 		}
 	}
 
@@ -247,7 +239,6 @@ func (e *Enricher) enrichBangoPornWithDetail(ctx context.Context, files []string
 		} else {
 			warn := fmt.Sprintf("metatube search_japanese_porn failed for (%s): %v", searchKey, err)
 			detail.DegradeWarnings = append(detail.DegradeWarnings, warn)
-			log.Printf("[M6 degrade] %s", warn)
 		}
 	}
 

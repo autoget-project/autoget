@@ -3,7 +3,6 @@ package stage1classifier
 import (
 	"context"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -122,13 +121,10 @@ func (c *ClassifierLLM) ClassifyWithDetail(ctx context.Context, files []string, 
 	var yesResults []CheckerResult
 	var maybeResults []CheckerResult
 
-	verdicts := make([]string, 0, len(results))
 	for _, res := range results {
 		if res.Err != nil {
-			verdicts = append(verdicts, fmt.Sprintf("%s=error(%v)", res.Category, res.Err))
 			continue
 		}
-		verdicts = append(verdicts, fmt.Sprintf("%s=%s", res.Category, res.Response.Confidence))
 		switch res.Response.Confidence {
 		case ConfidenceYes:
 			yesResults = append(yesResults, res)
@@ -136,12 +132,10 @@ func (c *ClassifierLLM) ClassifyWithDetail(ctx context.Context, files []string, 
 			maybeResults = append(maybeResults, res)
 		}
 	}
-	log.Printf("stage1 specialist verdicts: [%s]", strings.Join(verdicts, ", "))
 
 	// Fast path: Exactly one specialist returned "yes" with no conflicts
 	if len(yesResults) == 1 {
 		chosen := yesResults[0]
-		log.Printf("stage1 fast path: single yes from %s, reason=%q", chosen.Category, chosen.Response.Reason)
 		return model.ClassifierResult{
 			Category: chosen.Category,
 			NeedLLM:  true,
@@ -152,7 +146,6 @@ func (c *ClassifierLLM) ClassifyWithDetail(ctx context.Context, files []string, 
 	// If no yes, but exactly one maybe and no other maybes or yeses
 	if len(yesResults) == 0 && len(maybeResults) == 1 {
 		chosen := maybeResults[0]
-		log.Printf("stage1 fast path: single maybe from %s, reason=%q", chosen.Category, chosen.Response.Reason)
 		return model.ClassifierResult{
 			Category: chosen.Category,
 			NeedLLM:  true,
@@ -167,7 +160,6 @@ func (c *ClassifierLLM) ClassifyWithDetail(ctx context.Context, files []string, 
 	detail.ArbiterUsed = true
 	decision, err := DecideArbiter(ctx, c.provider, files, metadata, results, searchCtx)
 	if err != nil {
-		log.Printf("stage1 arbiter failed: %v", err)
 		// Fallback: if we had at least one yes, take the first one
 		if len(yesResults) > 0 {
 			return model.ClassifierResult{
@@ -184,7 +176,6 @@ func (c *ClassifierLLM) ClassifyWithDetail(ctx context.Context, files []string, 
 	}
 
 	detail.ArbiterReason = decision.Reason
-	logArbiterDecision(decision)
 
 	return model.ClassifierResult{
 		Category: decision.Category,
@@ -199,10 +190,6 @@ func entitiesFor(e CheckerEntities, reason string, searchCtx SearchContext) map[
 	m := entitiesToMap(e, reason)
 	mergeSearchFacts(m, searchCtx)
 	return m
-}
-
-func logArbiterDecision(d ArbiterDecision) {
-	log.Printf("stage1 arbiter decision: category=%s reason=%q", d.Category, d.Reason)
 }
 
 func entitiesToMap(e CheckerEntities, reason string) map[string]interface{} {
@@ -300,7 +287,6 @@ func ClassifyPipeline(ctx context.Context, provider ai.Provider, files []string,
 func ClassifyPipelineWithDetail(ctx context.Context, provider ai.Provider, files []string, metadata map[string]interface{}) (model.ClassifierResult, ClassifierDetail, error) {
 	res, matched := MatchByRules(files, metadata)
 	if matched {
-		log.Printf("stage1 rule match: category=%s", res.Category)
 		return res, ClassifierDetail{}, nil
 	}
 

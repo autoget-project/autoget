@@ -1,20 +1,11 @@
 package stage3planner
 
 import (
-	"log"
 	"path/filepath"
 	"strings"
 
 	"github.com/autoget-project/autoget/organizer/internal/model"
 )
-
-// logLLMPlanItems logs every file mapping returned by a planner LLM so
-// regressions can be traced from the service logs.
-func logLLMPlanItems(agent string, items []FilePlanItem) {
-	for _, item := range items {
-		log.Printf("stage3 %s llm: file=%q action=%q target=%q reason=%q", agent, item.File, item.Action, item.Target, item.Reason)
-	}
-}
 
 // FilePlanItem is a single file mapping produced by a video planner LLM.
 type FilePlanItem struct {

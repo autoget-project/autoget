@@ -16,6 +16,8 @@ const (
 const (
 	AttrOrganizerDir               = "organizer.dir"
 	AttrOrganizerFilesCount        = "organizer.files_count"
+	AttrOrganizerFiles             = "organizer.files"
+	AttrOrganizerMetadataJSON      = "organizer.metadata_json"
 	AttrStage1Category             = "organizer.stage1.category"
 	AttrStage1RuleMatched          = "organizer.stage1.rule_matched"
 	AttrStage1ArbiterUsed          = "organizer.stage1.arbiter_used"
@@ -32,4 +34,5 @@ const (
 	AttrStage4SubtitlesPairedCount = "organizer.stage4.subtitles_paired_count"
 	AttrStage4FinalActionsCount    = "organizer.stage4.final_actions_count"
 	AttrStage4ForcedSkipsJSON      = "organizer.stage4.forced_skips_json"
+	AttrStage4FinalPlanJSON        = "organizer.stage4.final_plan_json"
 )

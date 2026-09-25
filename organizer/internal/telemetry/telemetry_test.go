@@ -207,3 +207,45 @@ func TestTelemetrySampling(t *testing.T) {
 	assert.Len(t, expOne.GetSpans(), 1)
 	_ = tpOne.Shutdown(context.Background())
 }
+
+func TestTelemetry_ConcurrentSpans_Shutdown(t *testing.T) {
+	t.Parallel()
+
+	tp, _ := telemetry.NewTestTracerProvider(1.0)
+	tr := tp.Tracer("concurrent-test")
+
+	const goroutines = 20
+	const iterations = 50
+
+	stop := make(chan struct{})
+	done := make(chan struct{}, goroutines)
+
+	for g := 0; g < goroutines; g++ {
+		go func(id int) {
+			defer func() { done <- struct{}{} }()
+			for i := 0; i < iterations; i++ {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				_, span := tr.Start(context.Background(), "concurrent-span")
+				span.SetAttributes(attribute.Int("worker", id), attribute.Int("iter", i))
+				span.End()
+			}
+		}(g)
+	}
+
+	time.Sleep(10 * time.Millisecond)
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := tp.Shutdown(shutdownCtx)
+	require.NoError(t, err)
+
+	close(stop)
+	for g := 0; g < goroutines; g++ {
+		<-done
+	}
+}

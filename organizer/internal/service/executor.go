@@ -6,7 +6,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -148,7 +147,6 @@ func (e *Executor) archiveSourceDir(dir string) error {
 	if _, err := os.Stat(sourceDir); err != nil {
 		if os.IsNotExist(err) {
 			// L15: already cleaned externally -> skip archiving without error.
-			log.Printf("[L15] source dir %s no longer exists, skip archiving", sourceDir)
 			return nil
 		}
 		return fmt.Errorf("stat source dir %s failed: %w", sourceDir, err)

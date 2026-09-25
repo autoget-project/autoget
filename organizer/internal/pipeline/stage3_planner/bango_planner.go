@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"path"
 	"path/filepath"
 	"strings"
@@ -94,9 +93,6 @@ func (p *BangoPlanner) Plan(ctx context.Context, pc *PlannerContext) ([]model.Pl
 	prompt := fmt.Sprintf(bangoPlannerPrompt, string(payload))
 	if err := p.provider.GenerateStructured(ctx, prompt, BangoLLMResponse{}, &resp); err != nil {
 		return nil, fmt.Errorf("bango planner llm generation failed: %w", err)
-	}
-	for _, m := range resp.Filenames {
-		log.Printf("stage3 bango llm: file=%q new_filename=%q target_dir=%q", m.File, m.NewFilename, targetDir)
 	}
 
 	byFile := make(map[string]string, len(resp.Filenames))

@@ -299,6 +299,9 @@ func TestCreatePlan_OpenTelemetry_SpanHierarchy(t *testing.T) {
 	}
 	assert.Equal(t, "show_otel", rootAttrMap[telemetry.AttrOrganizerDir])
 	assert.Equal(t, int64(2), rootAttrMap[telemetry.AttrOrganizerFilesCount])
+	assert.Equal(t, []string{"ep1.mkv", "cover.nfo"}, rootAttrMap[telemetry.AttrOrganizerFiles])
+	require.Contains(t, rootAttrMap, telemetry.AttrOrganizerMetadataJSON)
+	assert.Contains(t, rootAttrMap[telemetry.AttrOrganizerMetadataJSON].(string), "Test Series")
 
 	// Verify Stage 1 attributes
 	s1 := spansByName[telemetry.SpanStage1Classify]
@@ -346,6 +349,10 @@ func TestCreatePlan_OpenTelemetry_SpanHierarchy(t *testing.T) {
 	require.Contains(t, attrMap4, telemetry.AttrStage4ForcedSkipsJSON)
 	assert.NotEmpty(t, attrMap4[telemetry.AttrStage4ForcedSkipsJSON])
 	assert.Contains(t, attrMap4[telemetry.AttrStage4ForcedSkipsJSON].(string), "cover.nfo")
+	require.Contains(t, attrMap4, telemetry.AttrStage4FinalPlanJSON)
+	assert.NotEmpty(t, attrMap4[telemetry.AttrStage4FinalPlanJSON])
+	assert.Contains(t, attrMap4[telemetry.AttrStage4FinalPlanJSON].(string), "ep1.mkv")
+	assert.Contains(t, attrMap4[telemetry.AttrStage4FinalPlanJSON].(string), "Test Series (2020) S01E01.mkv")
 }
 
 func TestCreatePlan_OpenTelemetry_ErrorRecording(t *testing.T) {

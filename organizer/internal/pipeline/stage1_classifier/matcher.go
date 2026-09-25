@@ -1,7 +1,6 @@
 package stage1classifier
 
 import (
-	"log"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -53,19 +52,14 @@ func MatchByRules(files []string, metadata map[string]interface{}) (model.Classi
 	// 1. organizer_category fault-tolerant parsing (M8a)
 	if metadata != nil {
 		if rawVal, ok := metadata["organizer_category"]; ok && rawVal != nil {
+			// Multi-valued organizer_category means the upstream source
+			// itself is unsure (e.g. ["bango_porn","porn"]): it is not a
+			// high-confidence signal, so degrade to the LLM classifier.
 			if cats := parseOrganizerCategories(rawVal); len(cats) == 1 {
-				log.Printf("stage1 rule match: organizer_category=%v -> category=%s", rawVal, cats[0])
 				return model.ClassifierResult{
 					Category: cats[0],
 					NeedLLM:  false,
 				}, true
-			} else if len(cats) > 1 {
-				// Multi-valued organizer_category means the upstream source
-				// itself is unsure (e.g. ["bango_porn","porn"]): it is not a
-				// high-confidence signal, so degrade to the LLM classifier.
-				log.Printf("stage1 rule match: ambiguous organizer_category=%v (%s), degrading to LLM classification", rawVal, cats)
-			} else {
-				log.Printf("organizer_category provided but no valid Category found in: %v", rawVal)
 			}
 		}
 	}
@@ -75,7 +69,6 @@ func MatchByRules(files []string, metadata map[string]interface{}) (model.Classi
 		if dmmID, ok := metadata["dmm_id"]; ok && dmmID != nil {
 			dmmStr := strings.TrimSpace(toString(dmmID))
 			if dmmStr != "" {
-				log.Printf("stage1 rule match: metadata dmm_id=%q -> category=bango_porn", dmmStr)
 				entities := map[string]interface{}{
 					"dmm_id": dmmStr,
 				}
@@ -94,7 +87,6 @@ func MatchByRules(files []string, metadata map[string]interface{}) (model.Classi
 
 	// 3. Pure eBook extensions -> book
 	if allMatchExtensions(files, bookExtensions) {
-		log.Printf("stage1 rule match: all files are eBook extensions -> category=book")
 		return model.ClassifierResult{
 			Category: model.CategoryBook,
 			NeedLLM:  false,
@@ -116,7 +108,6 @@ func MatchByRules(files []string, metadata map[string]interface{}) (model.Classi
 		stem := strings.TrimSuffix(base, ext)
 
 		if standardBangoRegex.MatchString(stem) || fc2BangoRegex.MatchString(stem) {
-			log.Printf("stage1 rule match: filename %q matches bango pattern -> category=bango_porn", base)
 			entities := map[string]interface{}{
 				"bango": strings.ToUpper(stem),
 			}
