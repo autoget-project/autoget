@@ -46,32 +46,93 @@ func NewRouter(provider ai.Provider, targetDir string, tpdb PornSource) *Router 
 	}
 }
 
-// Plan routes the request to the planner matching the category:
-//   - tv_series / movie / bango_porn -> dedicated LLM planners;
-//   - porn -> local Porn Planner (naming fallback chain);
-//   - simple categories -> local Simple Planner three-branch strategy;
-//   - unknown -> empty plan with nil error.
+// ActionReason records why a single plan action was produced.
+type ActionReason struct {
+	File   string `json:"file"`
+	Reason string `json:"reason,omitempty"`
+}
+
+// PlannerDetail captures diagnostic details from Stage 3 domain planning.
+type PlannerDetail struct {
+	Planner       string         `json:"planner"`
+	ActionReasons []ActionReason `json:"action_reasons,omitempty"`
+}
+
+// Plan routes the request to the planner matching the category.
 func (r *Router) Plan(ctx context.Context, cat model.Category, pc *PlannerContext) ([]model.PlanAction, error) {
+	actions, _, err := r.PlanWithDetail(ctx, cat, pc)
+	return actions, err
+}
+
+// PlanWithDetail routes the request to the domain planner matching the category:
+//   - tv_series -> TVPlanner (LLM-based Jellyfin naming)
+//   - movie -> MoviePlanner (LLM-based feature extraction and Jellyfin naming)
+//   - bango_porn -> BangoPlanner (decision matrix + LLM filename canonicalization)
+//   - porn -> PornPlanner (ThePornDB tool agent with local fallback chain)
+//   - {photobook, audio_book, book, music, music_video} -> SimplePlan (local deterministic move)
+//   - unknown -> empty plan and nil error
+//
+// It returns the planned actions, a PlannerDetail with per-action reasons (when provided
+// by LLM planners), and any error.
+func (r *Router) PlanWithDetail(ctx context.Context, cat model.Category, pc *PlannerContext) ([]model.PlanAction, PlannerDetail, error) {
 	if pc == nil {
-		return nil, fmt.Errorf("planner context is nil")
+		return nil, PlannerDetail{}, fmt.Errorf("planner context is nil")
+	}
+
+	detail := PlannerDetail{
+		Planner: string(cat),
 	}
 
 	switch cat {
 	case model.CategoryTVSeries:
-		return r.tv.Plan(ctx, pc)
+		items, err := r.tv.PlanItems(ctx, pc)
+		if err != nil {
+			return nil, detail, err
+		}
+		detail.ActionReasons = reasonsFromItems(items)
+		actions := buildActionsFromItems(items, pc.Files)
+		return actions, detail, nil
 	case model.CategoryMovie:
-		return r.movie.Plan(ctx, pc)
+		items, err := r.movie.PlanItems(ctx, pc)
+		if err != nil {
+			return nil, detail, err
+		}
+		detail.ActionReasons = reasonsFromItems(items)
+		actions := buildActionsFromItems(items, pc.Files)
+		return actions, detail, nil
 	case model.CategoryBangoPorn:
-		return r.bango.Plan(ctx, pc)
+		actions, err := r.bango.Plan(ctx, pc)
+		return actions, detail, err
 	case model.CategoryPorn:
-		return r.porn.Plan(ctx, pc)
+		actions, err := r.porn.Plan(ctx, pc)
+		return actions, detail, err
 	default:
 		if IsSimpleMoveCategory(cat) {
-			return SimplePlan(cat, pc.Files), nil
+			return SimplePlan(cat, pc.Files), detail, nil
 		}
 		// unknown: empty plan and nil error (normal planning outcome).
-		return nil, nil
+		return nil, detail, nil
 	}
+}
+
+func reasonsFromItems(items []FilePlanItem) []ActionReason {
+	out := make([]ActionReason, 0, len(items))
+	for _, it := range items {
+		if it.Reason == "" {
+			continue
+		}
+		out = append(out, ActionReason{File: it.File, Reason: it.Reason})
+	}
+	return out
+}
+
+func buildActionsFromItems(items []FilePlanItem, files []string) []model.PlanAction {
+	videos, _, others := partitionFiles(files)
+	actions := ItemsToActions(items, videos)
+	for _, o := range others {
+		actions = append(actions, model.PlanAction{File: o, Action: "skip"})
+	}
+	return actions
 }
 
 // IsSimpleMoveCategory reports whether the category belongs to the simple

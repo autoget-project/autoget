@@ -296,3 +296,30 @@ func TestEnricher_MovieTitleSearchFallback(t *testing.T) {
 	assert.Equal(t, 2010, res.Year)
 	assert.Equal(t, model.LanguageEnglish, res.Language)
 }
+
+func TestEnricher_EnrichWithDetail(t *testing.T) {
+	t.Parallel()
+
+	tmdbMock := &mockTMDBSource{
+		findByIMDbIDFunc: func(ctx context.Context, imdbID string) (metadata.FindResult, error) {
+			return metadata.FindResult{}, errors.New("tmdb down")
+		},
+		searchMoviesFunc: func(ctx context.Context, title string) ([]metadata.Movie, error) {
+			return nil, errors.New("search down")
+		},
+	}
+
+	enricher := NewEnricher(tmdbMock, nil, nil, nil)
+	meta, detail, err := enricher.EnrichWithDetail(
+		context.Background(),
+		model.CategoryMovie,
+		[]string{"Inception.2010.mkv"},
+		map[string]interface{}{"imdb_id": "tt1375666"},
+		nil,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, "Inception.2010", meta.Title)
+	assert.Equal(t, 2010, meta.Year)
+	assert.False(t, detail.TMDBHit)
+	assert.Len(t, detail.DegradeWarnings, 2)
+}

@@ -35,16 +35,29 @@ func SanitizeRelativeTarget(target string) (string, error) {
 	return cleaned, nil
 }
 
+// PostProcessDetail captures diagnostic information from Stage 4 postprocessing.
+type PostProcessDetail struct {
+	ForcedSkips []string `json:"forced_skips"`
+}
+
 // SanitizePlan enforces the physical security bottom line on every action:
 //   - garbage files (.nfo, .url, .torrent ...) are forced to skip;
 //   - move actions without a target are forced to skip;
 //   - every move target is filepath.Clean'ed, and any absolute or escaping
 //     ("../") target is rejected and forced to skip.
 func SanitizePlan(plan []model.PlanAction) []model.PlanAction {
+	sanitized, _ := SanitizePlanWithDetail(plan)
+	return sanitized
+}
+
+// SanitizePlanWithDetail performs SanitizePlan and returns PostProcessDetail.
+func SanitizePlanWithDetail(plan []model.PlanAction) ([]model.PlanAction, PostProcessDetail) {
 	sanitized := make([]model.PlanAction, 0, len(plan))
+	var detail PostProcessDetail
 	for _, action := range plan {
 		if _, ok := garbageExtensions[strings.ToLower(filepath.Ext(action.File))]; ok {
 			log.Printf("stage4 sanitize: %q forced skip (garbage extension)", action.File)
+			detail.ForcedSkips = append(detail.ForcedSkips, action.File+": garbage extension")
 			sanitized = append(sanitized, model.PlanAction{File: action.File, Action: "skip"})
 			continue
 		}
@@ -54,17 +67,19 @@ func SanitizePlan(plan []model.PlanAction) []model.PlanAction {
 		}
 		if action.Target == nil || strings.TrimSpace(*action.Target) == "" {
 			log.Printf("stage4 sanitize: %q forced skip (move action without target)", action.File)
+			detail.ForcedSkips = append(detail.ForcedSkips, action.File+": move action without target")
 			sanitized = append(sanitized, model.PlanAction{File: action.File, Action: "skip"})
 			continue
 		}
 		cleaned, err := SanitizeRelativeTarget(*action.Target)
 		if err != nil {
 			log.Printf("stage4 sanitize: %q forced skip (invalid target %q: %v)", action.File, *action.Target, err)
+			detail.ForcedSkips = append(detail.ForcedSkips, fmt.Sprintf("%s: invalid target %q (%v)", action.File, *action.Target, err))
 			sanitized = append(sanitized, model.PlanAction{File: action.File, Action: "skip"})
 			continue
 		}
 		target := cleaned
 		sanitized = append(sanitized, model.PlanAction{File: action.File, Action: "move", Target: &target})
 	}
-	return sanitized
+	return sanitized, detail
 }

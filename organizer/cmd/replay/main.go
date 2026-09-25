@@ -83,7 +83,7 @@ func main() {
 		tpdb = metadata.NewThePornDB(cfg.TPDBAPIToken)
 	}
 
-	pipe := pipeline.NewPipeline(provider, enricher, cfg.DownloadCompletedDir, cfg.TargetDir, tpdb)
+	pipe := pipeline.NewPipeline(provider, enricher, cfg.DownloadCompletedDir, cfg.TargetDir, tpdb, nil)
 
 	trace := &pipeline.StageTrace{}
 	ctx := pipeline.WithTraceCollector(context.Background(), trace)

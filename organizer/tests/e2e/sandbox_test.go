@@ -170,13 +170,13 @@ func newSandboxWithActorStore(t *testing.T, prov ai.Provider, store *stage2enric
 	if tok := strings.TrimSpace(os.Getenv("TPDB_API_TOKEN")); tok != "" {
 		tpdb = metadata.NewThePornDB(tok)
 	}
-	pipe := pipeline.NewPipeline(prov, stage2enricher.NewEnricher(nil, nil, store, prov), downloadDir, targetDir, tpdb)
+	pipe := pipeline.NewPipeline(prov, stage2enricher.NewEnricher(nil, nil, store, prov), downloadDir, targetDir, tpdb, nil)
 	exec := service.NewExecutor(downloadDir, targetDir)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /v1/plan", handler.NewPlanHandler(pipe).Handle)
-	mux.HandleFunc("POST /v1/execute", handler.NewExecuteHandler(exec).Handle)
-	mux.HandleFunc("POST /v1/replan-with-hint", handler.NewReplanHandler(prov).Handle)
+	mux.HandleFunc("POST /v1/plan", handler.NewPlanHandler(pipe, nil).Handle)
+	mux.HandleFunc("POST /v1/execute", handler.NewExecuteHandler(exec, nil).Handle)
+	mux.HandleFunc("POST /v1/replan-with-hint", handler.NewReplanHandler(prov, nil).Handle)
 
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)

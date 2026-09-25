@@ -9,10 +9,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/autoget-project/autoget/organizer/internal/ai"
 	"github.com/autoget-project/autoget/organizer/internal/model"
 	stage3planner "github.com/autoget-project/autoget/organizer/internal/pipeline/stage3_planner"
 	stage4postprocess "github.com/autoget-project/autoget/organizer/internal/pipeline/stage4_postprocess"
+	"github.com/autoget-project/autoget/organizer/internal/telemetry"
 )
 
 // replanDomain identifies the Stage 3 domain an existing plan belongs to.
@@ -39,11 +43,15 @@ var targetRootToDomain = map[string]replanDomain{
 // ReplanHandler serves POST /v1/replan-with-hint.
 type ReplanHandler struct {
 	provider ai.Provider
+	tracer   trace.Tracer
 }
 
 // NewReplanHandler creates a new ReplanHandler.
-func NewReplanHandler(provider ai.Provider) *ReplanHandler {
-	return &ReplanHandler{provider: provider}
+func NewReplanHandler(provider ai.Provider, tracer trace.Tracer) *ReplanHandler {
+	if tracer == nil {
+		tracer = telemetry.Tracer()
+	}
+	return &ReplanHandler{provider: provider, tracer: tracer}
 }
 
 // Handle performs a single replan driven by the user hint. Stage 1
@@ -52,8 +60,22 @@ func NewReplanHandler(provider ai.Provider) *ReplanHandler {
 // category roots route to the matching Stage 3 domain LLM replan; anything
 // else (empty plan or unknown root) falls back to the generic replan prompt.
 func (h *ReplanHandler) Handle(w http.ResponseWriter, r *http.Request) {
+	tr := h.tracer
+	if tr == nil {
+		tr = telemetry.Tracer()
+	}
+	ctx, span := tr.Start(r.Context(), telemetry.SpanHTTPReplan)
+	defer span.End()
+
+	traceID := telemetry.TraceIDFromContext(ctx)
+	if traceID != "" {
+		w.Header().Set("X-Trace-Id", traceID)
+	}
+
 	var req model.APIReplanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		http.Error(w, fmt.Sprintf("invalid request body: %v", err), http.StatusBadRequest)
 		return
 	}
@@ -62,8 +84,10 @@ func (h *ReplanHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[ORGANIZER_REQUEST] POST /v1/replan-with-hint: %s", string(reqJSON))
 	}
 
-	items, err := h.callReplanLLM(r.Context(), req)
+	items, err := h.callReplanLLM(ctx, req)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		log.Printf("[ORGANIZER_RESPONSE] POST /v1/replan-with-hint failed: %v", err)
 		msg := err.Error()
 		writeJSON(w, http.StatusInternalServerError, model.PlanResponse{Plan: []model.PlanAction{}, Error: &msg})

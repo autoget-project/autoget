@@ -2,6 +2,7 @@ package stage2enricher
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"path/filepath"
 	"regexp"
@@ -65,17 +66,32 @@ func NewEnricher(tmdb TMDBSource, jav JAVSource, actorStore *ActorStore, aiProvi
 	}
 }
 
+// EnricherDetail captures diagnostic details and degradation warnings from Stage 2 enrichment.
+type EnricherDetail struct {
+	TMDBHit         bool     `json:"tmdb_hit"`
+	MetaTubeHit     bool     `json:"metatube_hit"`
+	ActorStoreHit   bool     `json:"actor_store_hit"`
+	DegradeWarnings []string `json:"degrade_warnings"`
+}
+
 // Enrich enriches metadata according to media Category, applying graceful degradation on failures (M6).
 func (e *Enricher) Enrich(ctx context.Context, cat model.Category, files []string, metadata map[string]interface{}, entities map[string]interface{}) (model.EnrichedMetadata, error) {
+	meta, _, err := e.EnrichWithDetail(ctx, cat, files, metadata, entities)
+	return meta, err
+}
+
+// EnrichWithDetail enriches metadata and returns detailed diagnostics and degradation warnings.
+func (e *Enricher) EnrichWithDetail(ctx context.Context, cat model.Category, files []string, metadata map[string]interface{}, entities map[string]interface{}) (model.EnrichedMetadata, EnricherDetail, error) {
 	var enriched model.EnrichedMetadata
+	var detail EnricherDetail
 	var err error
 	switch cat {
 	case model.CategoryMovie:
-		enriched, err = e.enrichMovie(ctx, files, metadata, entities)
+		enriched, detail, err = e.enrichMovieWithDetail(ctx, files, metadata, entities)
 	case model.CategoryTVSeries:
-		enriched, err = e.enrichTVSeries(ctx, files, metadata, entities)
+		enriched, detail, err = e.enrichTVSeriesWithDetail(ctx, files, metadata, entities)
 	case model.CategoryBangoPorn:
-		enriched, err = e.enrichBangoPorn(ctx, files, metadata, entities)
+		enriched, detail, err = e.enrichBangoPornWithDetail(ctx, files, metadata, entities)
 	case model.CategoryPorn:
 		enriched, err = e.enrichPorn(ctx, files, metadata, entities)
 	default:
@@ -83,15 +99,16 @@ func (e *Enricher) Enrich(ctx context.Context, cat model.Category, files []strin
 		log.Printf("stage2 enrichment: category=%s skipped (simple or unknown category)", cat)
 		return model.EnrichedMetadata{
 			Language: model.LanguageOthers,
-		}, nil
+		}, detail, nil
 	}
 	log.Printf("stage2 enrichment: category=%s title=%q year=%d bango=%q actors=%v language=%s is_vr=%t from_madou=%t",
 		cat, enriched.Title, enriched.Year, enriched.Bango, enriched.Actors, enriched.Language, enriched.IsVR, enriched.FromMadou)
-	return enriched, err
+	return enriched, detail, err
 }
 
-func (e *Enricher) enrichMovie(ctx context.Context, files []string, metadata map[string]interface{}, entities map[string]interface{}) (model.EnrichedMetadata, error) {
+func (e *Enricher) enrichMovieWithDetail(ctx context.Context, files []string, metadata map[string]interface{}, entities map[string]interface{}) (model.EnrichedMetadata, EnricherDetail, error) {
 	var enriched model.EnrichedMetadata
+	var detail EnricherDetail
 	enriched.Language = model.LanguageOthers
 
 	imdbID := getIMDbID(metadata, entities)
@@ -104,10 +121,13 @@ func (e *Enricher) enrichMovie(ctx context.Context, files []string, metadata map
 		if err == nil {
 			if len(res.Movies) > 0 {
 				movieFound = true
+				detail.TMDBHit = true
 				e.populateMovieFromTMDB(&enriched, res.Movies[0])
 			}
 		} else {
-			log.Printf("[M6 degrade] tmdb find_by_imdb_id failed for movie (%s): %v, falling back to title search", imdbID, err)
+			warn := fmt.Sprintf("tmdb find_by_imdb_id failed for movie (%s): %v, falling back to title search", imdbID, err)
+			detail.DegradeWarnings = append(detail.DegradeWarnings, warn)
+			log.Printf("[M6 degrade] %s", warn)
 		}
 	}
 
@@ -117,10 +137,13 @@ func (e *Enricher) enrichMovie(ctx context.Context, files []string, metadata map
 		if err == nil {
 			if len(movies) > 0 {
 				movieFound = true
+				detail.TMDBHit = true
 				e.populateMovieFromTMDB(&enriched, movies[0])
 			}
 		} else {
-			log.Printf("[M6 degrade] tmdb search_movies failed for (%s): %v", titleCandidate, err)
+			warn := fmt.Sprintf("tmdb search_movies failed for (%s): %v", titleCandidate, err)
+			detail.DegradeWarnings = append(detail.DegradeWarnings, warn)
+			log.Printf("[M6 degrade] %s", warn)
 		}
 	}
 
@@ -139,11 +162,12 @@ func (e *Enricher) enrichMovie(ctx context.Context, files []string, metadata map
 		enriched.IsAnim = detectIsAnim(files, metadata, enriched.Title)
 	}
 
-	return enriched, nil
+	return enriched, detail, nil
 }
 
-func (e *Enricher) enrichTVSeries(ctx context.Context, files []string, metadata map[string]interface{}, entities map[string]interface{}) (model.EnrichedMetadata, error) {
+func (e *Enricher) enrichTVSeriesWithDetail(ctx context.Context, files []string, metadata map[string]interface{}, entities map[string]interface{}) (model.EnrichedMetadata, EnricherDetail, error) {
 	var enriched model.EnrichedMetadata
+	var detail EnricherDetail
 	enriched.Language = model.LanguageOthers
 
 	imdbID := getIMDbID(metadata, entities)
@@ -155,10 +179,13 @@ func (e *Enricher) enrichTVSeries(ctx context.Context, files []string, metadata 
 		if err == nil {
 			if len(res.TVs) > 0 {
 				tvFound = true
+				detail.TMDBHit = true
 				e.populateTVFromTMDB(&enriched, res.TVs[0])
 			}
 		} else {
-			log.Printf("[M6 degrade] tmdb find_by_imdb_id failed for tv_series (%s): %v, falling back to title search", imdbID, err)
+			warn := fmt.Sprintf("tmdb find_by_imdb_id failed for tv_series (%s): %v, falling back to title search", imdbID, err)
+			detail.DegradeWarnings = append(detail.DegradeWarnings, warn)
+			log.Printf("[M6 degrade] %s", warn)
 		}
 	}
 
@@ -168,10 +195,13 @@ func (e *Enricher) enrichTVSeries(ctx context.Context, files []string, metadata 
 		if err == nil {
 			if len(tvs) > 0 {
 				tvFound = true
+				detail.TMDBHit = true
 				e.populateTVFromTMDB(&enriched, tvs[0])
 			}
 		} else {
-			log.Printf("[M6 degrade] tmdb search_tv_shows failed for (%s): %v", titleCandidate, err)
+			warn := fmt.Sprintf("tmdb search_tv_shows failed for (%s): %v", titleCandidate, err)
+			detail.DegradeWarnings = append(detail.DegradeWarnings, warn)
+			log.Printf("[M6 degrade] %s", warn)
 		}
 	}
 
@@ -188,16 +218,14 @@ func (e *Enricher) enrichTVSeries(ctx context.Context, files []string, metadata 
 		enriched.IsAnim = detectIsAnim(files, metadata, enriched.Title)
 	}
 
-	return enriched, nil
+	return enriched, detail, nil
 }
 
-func (e *Enricher) enrichBangoPorn(ctx context.Context, files []string, metadata map[string]interface{}, entities map[string]interface{}) (model.EnrichedMetadata, error) {
+func (e *Enricher) enrichBangoPornWithDetail(ctx context.Context, files []string, metadata map[string]interface{}, entities map[string]interface{}) (model.EnrichedMetadata, EnricherDetail, error) {
 	var enriched model.EnrichedMetadata
+	var detail EnricherDetail
 	enriched.Language = model.LanguageJapanese
 
-	// The dmm-derived candidate only serves as the JAV search key; per spec M6
-	// the final bango must be the canonical hyphenated form derived from the
-	// filename whenever the search fails or returns nothing.
 	searchKey := getBangoCandidate(files, metadata, entities)
 	bangoCandidate := searchKey
 
@@ -206,6 +234,7 @@ func (e *Enricher) enrichBangoPorn(ctx context.Context, files []string, metadata
 		javs, err := e.jav.SearchJapanesePorn(ctx, searchKey)
 		if err == nil {
 			if len(javs) > 0 {
+				detail.MetaTubeHit = true
 				jav := javs[0]
 				for _, a := range jav.Actors {
 					if actStr := strings.TrimSpace(a); actStr != "" {
@@ -216,27 +245,22 @@ func (e *Enricher) enrichBangoPorn(ctx context.Context, files []string, metadata
 				enriched.Title = jav.Title
 			}
 		} else {
-			log.Printf("[M6 degrade] metatube search_japanese_porn failed for (%s): %v", searchKey, err)
+			warn := fmt.Sprintf("metatube search_japanese_porn failed for (%s): %v", searchKey, err)
+			detail.DegradeWarnings = append(detail.DegradeWarnings, warn)
+			log.Printf("[M6 degrade] %s", warn)
 		}
 	}
 
-	// The canonical bango must always be the filename-derived hyphenated form
-	// when available (parity with bango_porn_mover.py), regardless of whether
-	// the MCP search used a dmm-derived key and succeeded; this keeps the final
-	// Bango (and the VR target dir derived from it) in canonical form.
 	if fb := bangoFromFiles(files); fb != "" {
 		bangoCandidate = fb
 	}
 	enriched.Bango = bangoCandidate
 
-	// Check Madou prefix against the exact label set (on the final bango).
 	if isMadouBango(bangoCandidate) {
 		enriched.FromMadou = true
 		enriched.Language = model.LanguageChinese
 	}
 
-	// If no actresses found, check entities or metadata.
-	// Tolerate []interface{} in case entities round-tripped through JSON.
 	if len(enriched.Actors) == 0 {
 		if actorArr := toStringSlice(entities["actors"]); len(actorArr) > 0 {
 			enriched.Actors = actorArr
@@ -245,11 +269,6 @@ func (e *Enricher) enrichBangoPorn(ctx context.Context, files []string, metadata
 		}
 	}
 
-	// VR flag: trust the is_vr fact declared by Stage 1 (web-search grounded
-	// LLM reasoning) or by the upstream metadata. Otherwise fall back to the
-	// bango label convention: JAV VR series codes end in VR (IPVR-002,
-	// SIVR-...). Filenames are never pattern-matched for VR markers here — VR
-	// is a semantic property of the content, decided elsewhere.
 	if !enriched.IsVR {
 		if v, ok := boolField(entities, "is_vr"); ok {
 			enriched.IsVR = v
@@ -266,13 +285,13 @@ func (e *Enricher) enrichBangoPorn(ctx context.Context, files []string, metadata
 		if len(enriched.Actors) > 0 {
 			actorDir, err := e.actorStore.SearchAndEnrichActor(ctx, enriched.Actors)
 			if err == nil && actorDir != "" {
-				// Store the chosen actor dir as the first element or in Actors
+				detail.ActorStoreHit = true
 				enriched.Actors = append([]string{actorDir}, enriched.Actors...)
 			}
 		}
 	}
 
-	return enriched, nil
+	return enriched, detail, nil
 }
 
 func (e *Enricher) enrichPorn(ctx context.Context, files []string, metadata map[string]interface{}, entities map[string]interface{}) (model.EnrichedMetadata, error) {

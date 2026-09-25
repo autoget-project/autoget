@@ -30,13 +30,11 @@ func NewMoviePlanner(provider ai.Provider) *MoviePlanner {
 	return &MoviePlanner{provider: provider}
 }
 
-// Plan generates the Jellyfin-compatible move plan for movie videos.
-func (p *MoviePlanner) Plan(ctx context.Context, pc *PlannerContext) ([]model.PlanAction, error) {
-	videos, _, others := partitionFiles(pc.Files)
+// PlanItems calls the LLM and returns the raw FilePlanItems.
+func (p *MoviePlanner) PlanItems(ctx context.Context, pc *PlannerContext) ([]FilePlanItem, error) {
+	videos, _, _ := partitionFiles(pc.Files)
 	if len(videos) == 0 {
-		// No videos: skip the wasted LLM call; garbage files stay skip actions
-		// and subtitles are handled by Stage 4.
-		return skipOthers(others), nil
+		return nil, nil
 	}
 
 	root := movieTargetRoot(pc.Metadata.IsAnim)
@@ -65,8 +63,24 @@ func (p *MoviePlanner) Plan(ctx context.Context, pc *PlannerContext) ([]model.Pl
 		return nil, fmt.Errorf("movie planner llm generation failed: %w", err)
 	}
 	logLLMPlanItems("movie", resp.Plan)
+	return resp.Plan, nil
+}
 
-	actions := ItemsToActions(resp.Plan, videos)
+// Plan generates the Jellyfin-compatible move plan for movie videos.
+func (p *MoviePlanner) Plan(ctx context.Context, pc *PlannerContext) ([]model.PlanAction, error) {
+	videos, _, others := partitionFiles(pc.Files)
+	if len(videos) == 0 {
+		// No videos: skip the wasted LLM call; garbage files stay skip actions
+		// and subtitles are handled by Stage 4.
+		return skipOthers(others), nil
+	}
+
+	items, err := p.PlanItems(ctx, pc)
+	if err != nil {
+		return nil, err
+	}
+
+	actions := ItemsToActions(items, videos)
 	for _, o := range others {
 		actions = append(actions, model.PlanAction{File: o, Action: "skip"})
 	}

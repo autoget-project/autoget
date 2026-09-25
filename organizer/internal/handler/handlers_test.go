@@ -14,6 +14,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+
 	"github.com/autoget-project/autoget/organizer/internal/ai"
 	"github.com/autoget-project/autoget/organizer/internal/ai/mock"
 	"github.com/autoget-project/autoget/organizer/internal/model"
@@ -21,6 +24,7 @@ import (
 	stage2enricher "github.com/autoget-project/autoget/organizer/internal/pipeline/stage2_enricher"
 	"github.com/autoget-project/autoget/organizer/internal/ptr"
 	"github.com/autoget-project/autoget/organizer/internal/service"
+	"github.com/autoget-project/autoget/organizer/internal/telemetry"
 )
 
 // env is an offline test server wiring every REST endpoint around a mock
@@ -30,6 +34,8 @@ type env struct {
 	downloadDir string
 	targetDir   string
 	provider    *mock.Provider
+	tp          *sdktrace.TracerProvider
+	exp         *tracetest.InMemoryExporter
 }
 
 func newTestEnv(t *testing.T, prov *mock.Provider) *env {
@@ -38,19 +44,24 @@ func newTestEnv(t *testing.T, prov *mock.Provider) *env {
 	downloadDir := t.TempDir()
 	targetDir := t.TempDir()
 
-	pipe := pipeline.NewPipeline(prov, stage2enricher.NewEnricher(nil, nil, nil, nil), downloadDir, targetDir, nil)
+	tp, exp := telemetry.NewTestTracerProvider()
+	tracer := tp.Tracer("test-handler")
+
+	pipe := pipeline.NewPipeline(prov, stage2enricher.NewEnricher(nil, nil, nil, nil), downloadDir, targetDir, nil, tracer)
 	exec := service.NewExecutor(downloadDir, targetDir)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /v1/plan", NewPlanHandler(pipe).Handle)
-	mux.HandleFunc("POST /v1/execute", NewExecuteHandler(exec).Handle)
-	mux.HandleFunc("POST /v1/replan-with-hint", NewReplanHandler(prov).Handle)
+	mux.HandleFunc("POST /v1/plan", NewPlanHandler(pipe, tracer).Handle)
+	mux.HandleFunc("POST /v1/execute", NewExecuteHandler(exec, tracer).Handle)
+	mux.HandleFunc("POST /v1/replan-with-hint", NewReplanHandler(prov, tracer).Handle)
 
 	return &env{
 		mux:         mux,
 		downloadDir: downloadDir,
 		targetDir:   targetDir,
 		provider:    prov,
+		tp:          tp,
+		exp:         exp,
 	}
 }
 
@@ -392,6 +403,49 @@ func TestReplanHandler_InvalidBody400(t *testing.T) {
 	e.mux.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestHandlers_TraceHeaders(t *testing.T) {
+	t.Parallel()
+
+	e := newTestEnv(t, mock.NewProvider())
+
+	// Test Plan handler returns X-Trace-Id
+	recPlan := postJSON(t, e, "/v1/plan", model.APIPlanRequest{
+		Dir:   "trace_test",
+		Files: []string{"test.epub"},
+	})
+	assert.Equal(t, http.StatusOK, recPlan.Code)
+	traceIDPlan := recPlan.Header().Get("X-Trace-Id")
+	assert.NotEmpty(t, traceIDPlan, "X-Trace-Id header should be set on /v1/plan")
+	assert.Len(t, traceIDPlan, 32, "trace ID should be 32 hex chars")
+
+	// Test Execute handler returns X-Trace-Id
+	recExec := postJSON(t, e, "/v1/execute", model.APIExecuteRequest{
+		Dir:  "trace_test",
+		Plan: []model.PlanAction{},
+	})
+	assert.Equal(t, http.StatusOK, recExec.Code)
+	traceIDExec := recExec.Header().Get("X-Trace-Id")
+	assert.NotEmpty(t, traceIDExec, "X-Trace-Id header should be set on /v1/execute")
+	assert.Len(t, traceIDExec, 32, "trace ID should be 32 hex chars")
+
+	// Test Replan handler returns X-Trace-Id
+	prov := mock.NewProvider()
+	prov.AddRule(mock.Rule{
+		PromptPattern: "file organization plans",
+		Response:      `{"plan":[{"file":"a.mkv","action":"skip"}]}`,
+	})
+	eReplan := newTestEnv(t, prov)
+	recReplan := postJSON(t, eReplan, "/v1/replan-with-hint", model.APIReplanRequest{
+		Files:            []string{"a.mkv"},
+		PreviousResponse: &model.PlanResponse{Plan: []model.PlanAction{}},
+		UserHint:         "hint",
+	})
+	assert.Equal(t, http.StatusOK, recReplan.Code)
+	traceIDReplan := recReplan.Header().Get("X-Trace-Id")
+	assert.NotEmpty(t, traceIDReplan, "X-Trace-Id header should be set on /v1/replan-with-hint")
+	assert.Len(t, traceIDReplan, 32, "trace ID should be 32 hex chars")
 }
 
 // Compile-time interface guards.

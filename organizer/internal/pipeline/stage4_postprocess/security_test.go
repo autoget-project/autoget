@@ -122,3 +122,17 @@ func findAction(t *testing.T, actions []model.PlanAction, file string) model.Pla
 	t.Fatalf("action for file %q not found in plan", file)
 	return model.PlanAction{}
 }
+
+func TestSanitizePlanWithDetail(t *testing.T) {
+	t.Parallel()
+
+	plan := []model.PlanAction{
+		{File: "cover.nfo", Action: "move", Target: mustStrPtr("movie/cover.nfo")},
+		{File: "bad.mkv", Action: "move", Target: mustStrPtr("../../etc/passwd")},
+		{File: "good.mkv", Action: "move", Target: mustStrPtr("movie/good.mkv")},
+	}
+
+	sanitized, detail := SanitizePlanWithDetail(plan)
+	require.Len(t, sanitized, 3)
+	assert.Len(t, detail.ForcedSkips, 2)
+}

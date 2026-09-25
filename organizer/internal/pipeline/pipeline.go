@@ -13,12 +13,17 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/autoget-project/autoget/organizer/internal/ai"
 	"github.com/autoget-project/autoget/organizer/internal/model"
 	stage1classifier "github.com/autoget-project/autoget/organizer/internal/pipeline/stage1_classifier"
 	stage2enricher "github.com/autoget-project/autoget/organizer/internal/pipeline/stage2_enricher"
 	stage3planner "github.com/autoget-project/autoget/organizer/internal/pipeline/stage3_planner"
 	stage4postprocess "github.com/autoget-project/autoget/organizer/internal/pipeline/stage4_postprocess"
+	"github.com/autoget-project/autoget/organizer/internal/telemetry"
 )
 
 // Pipeline is the 4-stage planning orchestrator.
@@ -27,17 +32,23 @@ type Pipeline struct {
 	enricher  *stage2enricher.Enricher
 	router    *stage3planner.Router
 	subtitles *stage4postprocess.SubtitlePlanner
+	tracer    trace.Tracer
 }
 
 // NewPipeline wires the pipeline around the given AI provider and Stage 2
 // enricher (both may be replaced by mocks in offline tests). tpdb may be nil,
-// disabling the porn agent wiring in Stage 3.
-func NewPipeline(provider ai.Provider, enricher *stage2enricher.Enricher, downloadDir, targetDir string, tpdb stage3planner.PornSource) *Pipeline {
+// disabling the porn agent wiring in Stage 3. tracer may be nil, in which case
+// it defaults to telemetry.Tracer().
+func NewPipeline(provider ai.Provider, enricher *stage2enricher.Enricher, downloadDir, targetDir string, tpdb stage3planner.PornSource, tracer trace.Tracer) *Pipeline {
+	if tracer == nil {
+		tracer = telemetry.Tracer()
+	}
 	return &Pipeline{
 		provider:  provider,
 		enricher:  enricher,
 		router:    stage3planner.NewRouter(provider, targetDir, tpdb),
 		subtitles: stage4postprocess.NewSubtitlePlanner(provider, downloadDir),
+		tracer:    tracer,
 	}
 }
 
@@ -45,12 +56,24 @@ func NewPipeline(provider ai.Provider, enricher *stage2enricher.Enricher, downlo
 // returned as error (mapped to HTTP 500 by the handler layer); normal business
 // degradation keeps the response error null (M6).
 func (p *Pipeline) CreatePlan(ctx context.Context, dir string, files []string, metadata map[string]interface{}) (model.PlanResponse, error) {
-	trace := TraceFromContext(ctx)
-	if trace != nil {
-		trace.StartTime = time.Now()
-		trace.Dir = dir
-		trace.Files = files
-		trace.Metadata = metadata
+	tr := p.tracer
+	if tr == nil {
+		tr = telemetry.Tracer()
+	}
+	ctx, rootSpan := tr.Start(ctx, telemetry.SpanPipelineCreatePlan,
+		trace.WithAttributes(
+			attribute.String(telemetry.AttrOrganizerDir, dir),
+			attribute.Int(telemetry.AttrOrganizerFilesCount, len(files)),
+		),
+	)
+	defer rootSpan.End()
+
+	stgTrace := TraceFromContext(ctx)
+	if stgTrace != nil {
+		stgTrace.StartTime = time.Now()
+		stgTrace.Dir = dir
+		stgTrace.Files = files
+		stgTrace.Metadata = metadata
 	}
 
 	if metaJSON, err := json.Marshal(metadata); err == nil {
@@ -60,83 +83,156 @@ func (p *Pipeline) CreatePlan(ctx context.Context, dir string, files []string, m
 	}
 
 	// Stage 1: classification (rule screening first, LLM fallback).
-	res, s1Detail, err := stage1classifier.ClassifyPipelineWithDetail(ctx, p.provider, files, metadata)
-	if trace != nil {
-		trace.Stage1.RuleMatched = !res.NeedLLM
-		trace.Stage1.SearchContext = s1Detail.SearchContext
-		trace.Stage1.Specialists = s1Detail.Specialists
-		trace.Stage1.ArbiterUsed = s1Detail.ArbiterUsed
-		trace.Stage1.ArbiterReason = s1Detail.ArbiterReason
-		trace.Stage1.Category = res.Category
-		trace.Stage1.Entities = res.Entities
+	ctxStage1, spanStage1 := tr.Start(ctx, telemetry.SpanStage1Classify)
+	res, s1Detail, err := stage1classifier.ClassifyPipelineWithDetail(ctxStage1, p.provider, files, metadata)
+	spanStage1.SetAttributes(
+		attribute.Bool(telemetry.AttrStage1RuleMatched, !res.NeedLLM),
+		attribute.String(telemetry.AttrStage1Category, string(res.Category)),
+		attribute.Bool(telemetry.AttrStage1ArbiterUsed, s1Detail.ArbiterUsed),
+	)
+	if s1Detail.ArbiterUsed && s1Detail.ArbiterReason != "" {
+		spanStage1.SetAttributes(attribute.String(telemetry.AttrStage1ArbiterReason, s1Detail.ArbiterReason))
+	}
+	if len(s1Detail.Specialists) > 0 {
+		if specJSON, jsonErr := json.Marshal(s1Detail.Specialists); jsonErr == nil {
+			spanStage1.SetAttributes(attribute.String(telemetry.AttrStage1SpecialistsJSON, string(specJSON)))
+		}
+	}
+	if s1Detail.SearchContext.HasInfo() {
+		if scJSON, jsonErr := json.Marshal(s1Detail.SearchContext); jsonErr == nil {
+			spanStage1.SetAttributes(attribute.String(telemetry.AttrStage1SearchContextJSON, string(scJSON)))
+		}
+	}
+	if stgTrace != nil {
+		stgTrace.Stage1.RuleMatched = !res.NeedLLM
+		stgTrace.Stage1.SearchContext = s1Detail.SearchContext
+		stgTrace.Stage1.Specialists = s1Detail.Specialists
+		stgTrace.Stage1.ArbiterUsed = s1Detail.ArbiterUsed
+		stgTrace.Stage1.ArbiterReason = s1Detail.ArbiterReason
+		stgTrace.Stage1.Category = res.Category
+		stgTrace.Stage1.Entities = res.Entities
 	}
 	if err != nil {
-		if trace != nil {
-			trace.Error = fmt.Sprintf("stage1 classification failed: %v", err)
-			trace.DurationMs = time.Since(trace.StartTime).Milliseconds()
+		spanStage1.RecordError(err)
+		spanStage1.SetStatus(codes.Error, err.Error())
+		spanStage1.End()
+
+		rootSpan.RecordError(err)
+		rootSpan.SetStatus(codes.Error, err.Error())
+
+		if stgTrace != nil {
+			stgTrace.Error = fmt.Sprintf("stage1 classification failed: %v", err)
+			stgTrace.DurationMs = time.Since(stgTrace.StartTime).Milliseconds()
 		}
 		return model.PlanResponse{}, fmt.Errorf("stage1 classification failed: %w", err)
 	}
+	spanStage1.End()
 	log.Printf("pipeline stage1 final: dir=%q files=%d category=%s", dir, len(files), res.Category)
 
 	// Stage 2: metadata enrichment with graceful degradation (M6: never fatal).
+	ctxStage2, spanStage2 := tr.Start(ctx, telemetry.SpanStage2Enrich)
 	var enriched model.EnrichedMetadata
 	if p.enricher != nil {
-		enriched, err = p.enricher.Enrich(ctx, res.Category, files, metadata, res.Entities)
-		if trace != nil {
-			trace.Stage2.Enriched = enriched
+		var s2Detail stage2enricher.EnricherDetail
+		enriched, s2Detail, err = p.enricher.EnrichWithDetail(ctxStage2, res.Category, files, metadata, res.Entities)
+		spanStage2.SetAttributes(
+			attribute.Bool(telemetry.AttrStage2Skipped, false),
+			attribute.String(telemetry.AttrStage2EnrichedTitle, enriched.Title),
+			attribute.Int(telemetry.AttrStage2EnrichedYear, enriched.Year),
+			attribute.String(telemetry.AttrStage2EnrichedBango, enriched.Bango),
+		)
+		for _, warn := range s2Detail.DegradeWarnings {
+			spanStage2.AddEvent("stage2_degraded", trace.WithAttributes(
+				attribute.String("warning", warn),
+			))
+		}
+		if stgTrace != nil {
+			stgTrace.Stage2.Enriched = enriched
 			if err != nil {
-				trace.Stage2.Err = err.Error()
+				stgTrace.Stage2.Err = err.Error()
 			}
 		}
 		if err != nil {
 			log.Printf("[M6 degrade] stage2 enrichment failed for %s: %v; continuing with local metadata", res.Category, err)
 		}
-	} else if trace != nil {
-		trace.Stage2.Skipped = true
+	} else {
+		spanStage2.SetAttributes(attribute.Bool(telemetry.AttrStage2Skipped, true))
+		if stgTrace != nil {
+			stgTrace.Stage2.Skipped = true
+		}
 	}
+	spanStage2.End()
 
 	// Stage 3: domain planner routing.
-	if trace != nil {
-		trace.Stage3.PlannerName = string(res.Category)
+	ctxStage3, spanStage3 := tr.Start(ctx, telemetry.SpanStage3Plan)
+	spanStage3.SetAttributes(attribute.String(telemetry.AttrStage3Planner, string(res.Category)))
+	if stgTrace != nil {
+		stgTrace.Stage3.PlannerName = string(res.Category)
 	}
-	actions, err := p.router.Plan(ctx, res.Category, &stage3planner.PlannerContext{
+	actions, s3Detail, err := p.router.PlanWithDetail(ctxStage3, res.Category, &stage3planner.PlannerContext{
 		Dir:      dir,
 		Files:    files,
 		Metadata: enriched,
 		Entities: res.Entities,
 	})
-	if trace != nil {
-		trace.Stage3.RawPlan = actions
+	spanStage3.SetAttributes(attribute.Int(telemetry.AttrStage3RawActionsCount, len(actions)))
+	if len(s3Detail.ActionReasons) > 0 {
+		if rJSON, jsonErr := json.Marshal(s3Detail.ActionReasons); jsonErr == nil {
+			spanStage3.SetAttributes(attribute.String(telemetry.AttrStage3ActionReasonsJSON, string(rJSON)))
+		}
+	}
+	if stgTrace != nil {
+		stgTrace.Stage3.RawPlan = actions
 		if err != nil {
-			trace.Stage3.Err = err.Error()
+			stgTrace.Stage3.Err = err.Error()
 		}
 	}
 	if err != nil {
-		if trace != nil {
-			trace.Error = fmt.Sprintf("stage3 planning failed for %s: %v", res.Category, err)
-			trace.DurationMs = time.Since(trace.StartTime).Milliseconds()
+		spanStage3.RecordError(err)
+		spanStage3.SetStatus(codes.Error, err.Error())
+		spanStage3.End()
+
+		rootSpan.RecordError(err)
+		rootSpan.SetStatus(codes.Error, err.Error())
+
+		if stgTrace != nil {
+			stgTrace.Error = fmt.Sprintf("stage3 planning failed for %s: %v", res.Category, err)
+			stgTrace.DurationMs = time.Since(stgTrace.StartTime).Milliseconds()
 		}
 		return model.PlanResponse{}, fmt.Errorf("stage3 planning failed for %s: %w", res.Category, err)
 	}
+	spanStage3.End()
 
-	// Stage 4a: companion subtitle semantic pairing for media categories.
+	// Stage 4: companion subtitle semantic pairing and physical security sanitization.
+	ctxStage4, spanStage4 := tr.Start(ctx, telemetry.SpanStage4PostProcess)
 	plan := actions
+	subtitlesPairedCount := 0
 	if isMediaCategory(res.Category) {
-		if subActions := p.pairSubtitles(ctx, dir, files, plan); len(subActions) > 0 {
-			if trace != nil {
-				trace.Stage4.SubtitlesPlanned = subActions
+		if subActions := p.pairSubtitles(ctxStage4, dir, files, plan); len(subActions) > 0 {
+			subtitlesPairedCount = len(subActions)
+			if stgTrace != nil {
+				stgTrace.Stage4.SubtitlesPlanned = subActions
 			}
 			plan = append(plan, subActions...)
 		}
 	}
 
-	// Stage 4b: physical security sanitization (traversal defense + garbage skip).
-	finalPlan := stage4postprocess.SanitizePlan(plan)
-	if trace != nil {
-		trace.Stage4.SanitizedPlan = finalPlan
-		trace.FinalPlan = finalPlan
-		trace.DurationMs = time.Since(trace.StartTime).Milliseconds()
+	finalPlan, s4Detail := stage4postprocess.SanitizePlanWithDetail(plan)
+	spanStage4.SetAttributes(
+		attribute.Int(telemetry.AttrStage4SubtitlesPairedCount, subtitlesPairedCount),
+		attribute.Int(telemetry.AttrStage4FinalActionsCount, len(finalPlan)),
+	)
+	if len(s4Detail.ForcedSkips) > 0 {
+		if skipsJSON, jsonErr := json.Marshal(s4Detail.ForcedSkips); jsonErr == nil {
+			spanStage4.SetAttributes(attribute.String(telemetry.AttrStage4ForcedSkipsJSON, string(skipsJSON)))
+		}
+	}
+	spanStage4.End()
+
+	if stgTrace != nil {
+		stgTrace.Stage4.SanitizedPlan = finalPlan
+		stgTrace.FinalPlan = finalPlan
+		stgTrace.DurationMs = time.Since(stgTrace.StartTime).Milliseconds()
 	}
 	for i := range finalPlan {
 		if finalPlan[i].Action == "move" && finalPlan[i].Target != nil {

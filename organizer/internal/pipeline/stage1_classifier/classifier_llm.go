@@ -87,16 +87,17 @@ func (c *ClassifierLLM) ClassifyWithDetail(ctx context.Context, files []string, 
 			continue
 		}
 
+		curTpl := promptTpl
 		wg.Add(1)
-		go func() {
+		go func(idx int, category model.Category, tpl string) {
 			defer wg.Done()
-			resp, err := runSpecialistChecker(ctx, c.provider, cat, promptTpl, files, metadata, searchCtx)
-			results[i] = CheckerResult{
-				Category: cat,
+			resp, err := runSpecialistChecker(ctx, c.provider, category, tpl, files, metadata, searchCtx)
+			results[idx] = CheckerResult{
+				Category: category,
 				Response: resp,
 				Err:      err,
 			}
-		}()
+		}(i, cat, curTpl)
 	}
 
 	wg.Wait()

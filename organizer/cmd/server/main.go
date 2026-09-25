@@ -24,6 +24,7 @@ import (
 	stage2enricher "github.com/autoget-project/autoget/organizer/internal/pipeline/stage2_enricher"
 	stage3planner "github.com/autoget-project/autoget/organizer/internal/pipeline/stage3_planner"
 	"github.com/autoget-project/autoget/organizer/internal/service"
+	"github.com/autoget-project/autoget/organizer/internal/telemetry"
 	"github.com/autoget-project/autoget/organizer/upload"
 )
 
@@ -52,7 +53,8 @@ func main() {
 	if cfg.TPDBAPIToken != "" {
 		tpdb = metadata.NewThePornDB(cfg.TPDBAPIToken)
 	}
-	pipe := pipeline.NewPipeline(provider, enricher, cfg.DownloadCompletedDir, cfg.TargetDir, tpdb)
+	tracer := telemetry.Tracer()
+	pipe := pipeline.NewPipeline(provider, enricher, cfg.DownloadCompletedDir, cfg.TargetDir, tpdb, tracer)
 	exec := service.NewExecutor(cfg.DownloadCompletedDir, cfg.TargetDir)
 
 	uploadStore, err := upload.NewStore(cfg.UploadTempDir, cfg.DownloadCompletedDir, cfg.UploadReserveBytes)
@@ -62,9 +64,9 @@ func main() {
 	uploadHandler := upload.NewHandler(uploadStore)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /v1/plan", handler.NewPlanHandler(pipe).Handle)
-	mux.HandleFunc("POST /v1/execute", handler.NewExecuteHandler(exec).Handle)
-	mux.HandleFunc("POST /v1/replan-with-hint", handler.NewReplanHandler(provider).Handle)
+	mux.HandleFunc("POST /v1/plan", handler.NewPlanHandler(pipe, tracer).Handle)
+	mux.HandleFunc("POST /v1/execute", handler.NewExecuteHandler(exec, tracer).Handle)
+	mux.HandleFunc("POST /v1/replan-with-hint", handler.NewReplanHandler(provider, tracer).Handle)
 	upload.RegisterRoutes(mux, uploadHandler)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
