@@ -165,6 +165,22 @@ func TestTelemetryInit_GCP_MissingProjectID(t *testing.T) {
 	assert.Contains(t, err.Error(), "gcp exporter requires GCP_PROJECT_ID or GOOGLE_CLOUD_PROJECT to be set")
 }
 
+func TestLoadTelemetryConfig_EnvAliasesAndCredsExtraction(t *testing.T) {
+	tempDir := t.TempDir()
+	credsFile := filepath.Join(tempDir, "fake-sa.json")
+	require.NoError(t, os.WriteFile(credsFile, []byte(`{"project_id":"auto-detected-project"}`), 0o644))
+
+	t.Setenv("TRACE_EXPORTER", "gcp")
+	t.Setenv("OTEL_TRACES_EXPORTER", "")
+	t.Setenv("GCP_PROJECT_ID", "")
+	t.Setenv("GOOGLE_CLOUD_PROJECT", "")
+	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", credsFile)
+
+	cfg := telemetry.LoadTelemetryConfig()
+	assert.Equal(t, "gcp", cfg.Exporter)
+	assert.Equal(t, "auto-detected-project", cfg.GCPProjectID)
+}
+
 // blockingExporter blocks on ExportSpans until context cancellation.
 type blockingExporter struct{}
 

@@ -39,6 +39,8 @@ func main() {
 	if _, err := telemetry.Init(cfg.Telemetry); err != nil {
 		log.Fatalf("telemetry initialization failed: %v", err)
 	}
+	log.Printf("telemetry initialized: exporter=%s service=%s project=%s file=%s sample_ratio=%.2f",
+		cfg.Telemetry.Exporter, cfg.Telemetry.ServiceName, cfg.Telemetry.GCPProjectID, cfg.Telemetry.FilePath, cfg.Telemetry.SampleRatio)
 
 	provider, err := resolveProvider(cfg)
 	if err != nil {

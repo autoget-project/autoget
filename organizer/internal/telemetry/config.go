@@ -1,6 +1,7 @@
 package telemetry
 
 import (
+	"encoding/json"
 	"os"
 	"strconv"
 )
@@ -17,7 +18,10 @@ type TelemetryConfig struct {
 
 // LoadTelemetryConfig loads telemetry configuration from environment variables.
 func LoadTelemetryConfig() TelemetryConfig {
-	exporter := os.Getenv("OTEL_TRACES_EXPORTER")
+	exporter := os.Getenv("TRACE_EXPORTER")
+	if exporter == "" {
+		exporter = os.Getenv("OTEL_TRACES_EXPORTER")
+	}
 	if exporter == "" {
 		exporter = "none"
 	}
@@ -36,6 +40,10 @@ func LoadTelemetryConfig() TelemetryConfig {
 	if gcpProjectID == "" {
 		gcpProjectID = os.Getenv("GOOGLE_CLOUD_PROJECT")
 	}
+	if gcpProjectID == "" {
+		// Try reading project_id from GOOGLE_APPLICATION_CREDENTIALS json file if available
+		gcpProjectID = extractProjectIDFromCreds(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+	}
 
 	sampleRatio := 1.0
 	if ratioStr := os.Getenv("OTEL_SAMPLE_RATIO"); ratioStr != "" {
@@ -51,4 +59,22 @@ func LoadTelemetryConfig() TelemetryConfig {
 		GCPProjectID: gcpProjectID,
 		SampleRatio:  sampleRatio,
 	}
+}
+
+// extractProjectIDFromCreds attempts to parse project_id from a Google service account JSON key file.
+func extractProjectIDFromCreds(credsPath string) string {
+	if credsPath == "" {
+		return ""
+	}
+	data, err := os.ReadFile(credsPath)
+	if err != nil {
+		return ""
+	}
+	var sa struct {
+		ProjectID string `json:"project_id"`
+	}
+	if err := json.Unmarshal(data, &sa); err == nil && sa.ProjectID != "" {
+		return sa.ProjectID
+	}
+	return ""
 }
