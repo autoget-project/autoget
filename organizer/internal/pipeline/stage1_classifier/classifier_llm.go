@@ -24,6 +24,14 @@ type ClassifierLLM struct {
 	provider ai.Provider
 }
 
+// ClassifierDetail captures intermediate results from LLM classification for diagnostics.
+type ClassifierDetail struct {
+	SearchContext SearchContext
+	Specialists   []CheckerResult
+	ArbiterUsed   bool
+	ArbiterReason string
+}
+
 // NewClassifierLLM creates a new ClassifierLLM instance.
 func NewClassifierLLM(provider ai.Provider) *ClassifierLLM {
 	return &ClassifierLLM{provider: provider}
@@ -31,11 +39,18 @@ func NewClassifierLLM(provider ai.Provider) *ClassifierLLM {
 
 // Classify runs specialist checkers concurrently and arbitrates results.
 func (c *ClassifierLLM) Classify(ctx context.Context, files []string, metadata map[string]interface{}) (model.ClassifierResult, error) {
+	res, _, err := c.ClassifyWithDetail(ctx, files, metadata)
+	return res, err
+}
+
+// ClassifyWithDetail runs specialist checkers and returns diagnostic details along with the result.
+func (c *ClassifierLLM) ClassifyWithDetail(ctx context.Context, files []string, metadata map[string]interface{}) (model.ClassifierResult, ClassifierDetail, error) {
+
 	if c.provider == nil {
 		return model.ClassifierResult{
 			Category: model.CategoryUnknown,
 			NeedLLM:  true,
-		}, fmt.Errorf("classifier llm provider is nil")
+		}, ClassifierDetail{}, fmt.Errorf("classifier llm provider is nil")
 	}
 
 	// Backward compatibility check for mock provider / legacy single-pass prompt:
@@ -48,14 +63,17 @@ func (c *ClassifierLLM) Classify(ctx context.Context, files []string, metadata m
 				Category: legacyResp.Category,
 				NeedLLM:  true,
 				Entities: entitiesToMap(legacyResp.Entities, legacyResp.Reason),
-			}, nil
+			}, ClassifierDetail{}, nil
 		} else if err != nil && !strings.Contains(err.Error(), "no matching rule") {
-			return model.ClassifierResult{Category: model.CategoryUnknown, NeedLLM: true}, err
+			return model.ClassifierResult{Category: model.CategoryUnknown, NeedLLM: true}, ClassifierDetail{}, err
 		}
 	}
 
 	// Step 0: Single search grounding pass (only if provider supports search, e.g. Gemini)
 	searchCtx := GroundWithSearch(ctx, c.provider, files, metadata)
+	detail := ClassifierDetail{
+		SearchContext: searchCtx,
+	}
 
 	candidates := selectCandidates(files, metadata)
 	results := make([]CheckerResult, len(candidates))
@@ -82,6 +100,7 @@ func (c *ClassifierLLM) Classify(ctx context.Context, files []string, metadata m
 	}
 
 	wg.Wait()
+	detail.Specialists = results
 
 	// Check if all checkers failed with error
 	var firstErr error
@@ -95,7 +114,7 @@ func (c *ClassifierLLM) Classify(ctx context.Context, files []string, metadata m
 		}
 	}
 	if len(results) > 0 && errCount == len(results) {
-		return model.ClassifierResult{Category: model.CategoryUnknown, NeedLLM: true}, fmt.Errorf("all specialist checkers failed: %w", firstErr)
+		return model.ClassifierResult{Category: model.CategoryUnknown, NeedLLM: true}, detail, fmt.Errorf("all specialist checkers failed: %w", firstErr)
 	}
 
 	// Analyze checker outputs
@@ -126,7 +145,7 @@ func (c *ClassifierLLM) Classify(ctx context.Context, files []string, metadata m
 			Category: chosen.Category,
 			NeedLLM:  true,
 			Entities: entitiesFor(chosen.Response.Entities, chosen.Response.Reason, searchCtx),
-		}, nil
+		}, detail, nil
 	}
 
 	// If no yes, but exactly one maybe and no other maybes or yeses
@@ -137,13 +156,14 @@ func (c *ClassifierLLM) Classify(ctx context.Context, files []string, metadata m
 			Category: chosen.Category,
 			NeedLLM:  true,
 			Entities: entitiesFor(chosen.Response.Entities, chosen.Response.Reason, searchCtx),
-		}, nil
+		}, detail, nil
 	}
 
 	// If all checkers explicitly returned ConfidenceNo, we can safely treat as unknown without forcing arbiter error
 	allNo := len(yesResults) == 0 && len(maybeResults) == 0
 
 	// Ambiguous, multiple "yes" conflicts, multiple "maybe", or all "no": call Arbiter
+	detail.ArbiterUsed = true
 	decision, err := DecideArbiter(ctx, c.provider, files, metadata, results, searchCtx)
 	if err != nil {
 		log.Printf("stage1 arbiter failed: %v", err)
@@ -153,22 +173,23 @@ func (c *ClassifierLLM) Classify(ctx context.Context, files []string, metadata m
 				Category: yesResults[0].Category,
 				NeedLLM:  true,
 				Entities: entitiesFor(yesResults[0].Response.Entities, yesResults[0].Response.Reason, searchCtx),
-			}, nil
+			}, detail, nil
 		}
 		// If all checkers returned "no", it is legitimately unknown
 		if allNo {
-			return model.ClassifierResult{Category: model.CategoryUnknown, NeedLLM: true}, nil
+			return model.ClassifierResult{Category: model.CategoryUnknown, NeedLLM: true}, detail, nil
 		}
-		return model.ClassifierResult{Category: model.CategoryUnknown, NeedLLM: true}, err
+		return model.ClassifierResult{Category: model.CategoryUnknown, NeedLLM: true}, detail, err
 	}
 
+	detail.ArbiterReason = decision.Reason
 	logArbiterDecision(decision)
 
 	return model.ClassifierResult{
 		Category: decision.Category,
 		NeedLLM:  true,
 		Entities: entitiesFor(decision.Entities, decision.Reason, searchCtx),
-	}, nil
+	}, detail, nil
 }
 
 // entitiesFor builds the Stage 1 entities from a checker/arbiter extraction
@@ -270,12 +291,18 @@ func releaseDateYear(date string) int {
 
 // ClassifyPipeline executes Rule matcher first, falling back to ClassifierLLM if unmatched.
 func ClassifyPipeline(ctx context.Context, provider ai.Provider, files []string, metadata map[string]interface{}) (model.ClassifierResult, error) {
+	res, _, err := ClassifyPipelineWithDetail(ctx, provider, files, metadata)
+	return res, err
+}
+
+// ClassifyPipelineWithDetail executes Rule matcher first, falling back to ClassifierLLM with detailed diagnostics.
+func ClassifyPipelineWithDetail(ctx context.Context, provider ai.Provider, files []string, metadata map[string]interface{}) (model.ClassifierResult, ClassifierDetail, error) {
 	res, matched := MatchByRules(files, metadata)
 	if matched {
 		log.Printf("stage1 rule match: category=%s", res.Category)
-		return res, nil
+		return res, ClassifierDetail{}, nil
 	}
 
 	llm := NewClassifierLLM(provider)
-	return llm.Classify(ctx, files, metadata)
+	return llm.ClassifyWithDetail(ctx, files, metadata)
 }

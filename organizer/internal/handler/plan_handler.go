@@ -5,6 +5,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/autoget-project/autoget/organizer/internal/model"
@@ -31,14 +32,20 @@ func (h *PlanHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if reqJSON, err := json.Marshal(req); err == nil {
+		log.Printf("[ORGANIZER_REQUEST] POST /v1/plan: %s", string(reqJSON))
+	}
+
 	resp, err := h.pipeline.CreatePlan(r.Context(), req.Dir, req.Files, req.Metadata)
 	if err != nil {
+		log.Printf("[ORGANIZER_RESPONSE] POST /v1/plan dir=%q failed: %v", req.Dir, err)
 		// Fatal internal failure -> 500 while preserving the response shape.
 		msg := err.Error()
 		writeJSON(w, http.StatusInternalServerError, model.PlanResponse{Plan: []model.PlanAction{}, Error: &msg})
 		return
 	}
 
+	log.Printf("[ORGANIZER_RESPONSE] POST /v1/plan dir=%q actions=%d", req.Dir, len(resp.Plan))
 	// Normal planning: error stays null (contract compatibility).
 	writeJSON(w, http.StatusOK, resp)
 }

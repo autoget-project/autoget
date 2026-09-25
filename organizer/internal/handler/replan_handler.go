@@ -58,16 +58,23 @@ func (h *ReplanHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if reqJSON, err := json.Marshal(req); err == nil {
+		log.Printf("[ORGANIZER_REQUEST] POST /v1/replan-with-hint: %s", string(reqJSON))
+	}
+
 	items, err := h.callReplanLLM(r.Context(), req)
 	if err != nil {
+		log.Printf("[ORGANIZER_RESPONSE] POST /v1/replan-with-hint failed: %v", err)
 		msg := err.Error()
 		writeJSON(w, http.StatusInternalServerError, model.PlanResponse{Plan: []model.PlanAction{}, Error: &msg})
 		return
 	}
 
 	plan := stage3planner.ItemsToActions(items, req.Files)
+	sanitized := stage4postprocess.SanitizePlan(plan)
+	log.Printf("[ORGANIZER_RESPONSE] POST /v1/replan-with-hint actions=%d", len(sanitized))
 	writeJSON(w, http.StatusOK, model.PlanResponse{
-		Plan:  stage4postprocess.SanitizePlan(plan),
+		Plan:  sanitized,
 		Error: nil,
 	})
 }

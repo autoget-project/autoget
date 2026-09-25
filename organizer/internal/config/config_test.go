@@ -47,6 +47,11 @@ func TestLoadConfigDefaults(t *testing.T) {
 	assert.Equal(t, filepath.Join("/downloads", ".uploads"), cfg.UploadTempDir)
 	assert.Equal(t, 72, cfg.UploadExpireHours)
 	assert.Equal(t, uint64(1024*1024*1024), cfg.UploadReserveBytes)
+
+	// Telemetry defaults
+	assert.Equal(t, "none", cfg.Telemetry.Exporter)
+	assert.Equal(t, ".local/traces.jsonl", cfg.Telemetry.FilePath)
+	assert.Equal(t, 1.0, cfg.Telemetry.SampleRatio)
 }
 
 func TestResolveProvider(t *testing.T) {

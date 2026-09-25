@@ -10,6 +10,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/autoget-project/autoget/organizer/internal/model"
+	"github.com/autoget-project/autoget/organizer/internal/telemetry"
 )
 
 // Config holds the application configuration loaded from environment variables.
@@ -36,6 +37,9 @@ type Config struct {
 	UploadTempDir      string
 	UploadExpireHours  int
 	UploadReserveBytes uint64
+
+	// Telemetry configuration
+	Telemetry telemetry.TelemetryConfig
 }
 
 // LoadConfig reads configuration from environment variables.
@@ -83,6 +87,7 @@ func LoadConfig() *Config {
 		UploadTempDir:        uploadTempDir,
 		UploadExpireHours:    uploadExpireHours,
 		UploadReserveBytes:   uploadReserveBytes,
+		Telemetry:            telemetry.LoadTelemetryConfig(),
 	}
 }
 

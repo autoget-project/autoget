@@ -9,9 +9,10 @@ build: build-backend build-organizer build-frontend
 build-backend:
     cd backend && go build -o bin/autoget ./cmd/main.go
 
-# Build Go organizer binary
+# Build Go organizer binary and replay CLI
 build-organizer:
     cd organizer && go build -o bin/organizer ./cmd/server
+    cd organizer && go build -o bin/replay ./cmd/replay
 
 # Build frontend production bundle
 build-frontend:
@@ -97,6 +98,10 @@ test-e2e:
 # Run the organizer HTTP service locally
 run-organizer:
     cd organizer && go run ./cmd/server
+
+# Replay an organizer plan request locally with step-by-step trace
+replay-organizer +args:
+    cd organizer && go run ./cmd/replay {{args}}
 
 # Format protocol, backend, organizer and frontend code
 fmt: fmt-protocol fmt-backend fmt-organizer fmt-frontend

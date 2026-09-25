@@ -151,3 +151,39 @@ func TestCreatePlan_Stage3LLMFailureIsFatal(t *testing.T) {
 	_, err := p.CreatePlan(context.Background(), "show", []string{"show/ep01.mkv"}, nil)
 	assert.Error(t, err, "stage 3 LLM failure must surface as a fatal error")
 }
+
+func TestCreatePlan_WithTraceCollector(t *testing.T) {
+	t.Parallel()
+
+	downloadDir := t.TempDir()
+	subDir := filepath.Join(downloadDir, "show_trace")
+	require.NoError(t, os.MkdirAll(subDir, 0o755))
+
+	prov := mock.NewProvider()
+	prov.AddRule(mock.Rule{
+		PromptPattern: "media categorization assistant",
+		Response:      `{"category":"tv_series","reason":"episodic series","entities":{"clean_title":"Test Series"}}`,
+	})
+	prov.AddRule(mock.Rule{
+		PromptPattern: "organizes TV series downloads",
+		Response: `{"plan":[{"file":"ep1.mkv","action":"move",
+			"target":"tv_series/Others/Test Series (2020)/Season 01/Test Series (2020) S01E01.mkv"}]}`,
+	})
+
+	p := newTestPipeline(t, prov, downloadDir)
+
+	trace := &StageTrace{}
+	ctx := WithTraceCollector(context.Background(), trace)
+
+	resp, err := p.CreatePlan(ctx, "show_trace", []string{"ep1.mkv"}, map[string]interface{}{"title": "Test Series"})
+	require.NoError(t, err)
+	require.Len(t, resp.Plan, 1)
+
+	assert.Equal(t, "show_trace", trace.Dir)
+	assert.Equal(t, model.CategoryTVSeries, trace.Stage1.Category)
+	assert.False(t, trace.Stage1.RuleMatched)
+	assert.Equal(t, "tv_series", trace.Stage3.PlannerName)
+	assert.Len(t, trace.Stage3.RawPlan, 1)
+	assert.Len(t, trace.FinalPlan, 1)
+	assert.Equal(t, "move", trace.FinalPlan[0].Action)
+}
