@@ -18,10 +18,7 @@ type TelemetryConfig struct {
 
 // LoadTelemetryConfig loads telemetry configuration from environment variables.
 func LoadTelemetryConfig() TelemetryConfig {
-	exporter := os.Getenv("TRACE_EXPORTER")
-	if exporter == "" {
-		exporter = os.Getenv("OTEL_TRACES_EXPORTER")
-	}
+	exporter := os.Getenv("OTEL_TRACES_EXPORTER")
 	if exporter == "" {
 		exporter = "none"
 	}

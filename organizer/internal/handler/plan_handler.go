@@ -64,17 +64,20 @@ func (h *PlanHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Trace-Id", traceID)
 	}
 
+	shortTraceID := shortID(traceID, 8)
+
 	var req model.APIPlanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		if h.summaryFn != nil {
 			h.summaryFn("[PLAN] trace_id=%s dir=%q files=%d status=ERROR err=%q duration_ms=%d",
-				traceID, req.Dir, len(req.Files), err.Error(), time.Since(start).Milliseconds())
+				shortTraceID, shortID(req.Dir, 8), len(req.Files), err.Error(), time.Since(start).Milliseconds())
 		}
 		http.Error(w, fmt.Sprintf("invalid request body: %v", err), http.StatusBadRequest)
 		return
 	}
+	shortDir := shortID(req.Dir, 8)
 
 	span.SetAttributes(
 		attribute.String(telemetry.AttrOrganizerDir, req.Dir),
@@ -87,7 +90,7 @@ func (h *PlanHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		span.SetStatus(codes.Error, err.Error())
 		if h.summaryFn != nil {
 			h.summaryFn("[PLAN] trace_id=%s dir=%q files=%d status=ERROR err=%q duration_ms=%d",
-				traceID, req.Dir, len(req.Files), err.Error(), time.Since(start).Milliseconds())
+				shortTraceID, shortDir, len(req.Files), err.Error(), time.Since(start).Milliseconds())
 		}
 		// Fatal internal failure -> 500 while preserving the response shape.
 		msg := err.Error()
@@ -97,10 +100,17 @@ func (h *PlanHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	if h.summaryFn != nil {
 		h.summaryFn("[PLAN] trace_id=%s dir=%q files=%d actions=%d status=OK duration_ms=%d",
-			traceID, req.Dir, len(req.Files), len(resp.Plan), time.Since(start).Milliseconds())
+			shortTraceID, shortDir, len(req.Files), len(resp.Plan), time.Since(start).Milliseconds())
 	}
 	// Normal planning: error stays null (contract compatibility).
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func shortID(s string, maxLen int) string {
+	if len(s) > maxLen {
+		return s[:maxLen]
+	}
+	return s
 }
 
 // writeJSON serializes v as JSON with the given status code.

@@ -170,8 +170,7 @@ func TestLoadTelemetryConfig_EnvAliasesAndCredsExtraction(t *testing.T) {
 	credsFile := filepath.Join(tempDir, "fake-sa.json")
 	require.NoError(t, os.WriteFile(credsFile, []byte(`{"project_id":"auto-detected-project"}`), 0o644))
 
-	t.Setenv("TRACE_EXPORTER", "gcp")
-	t.Setenv("OTEL_TRACES_EXPORTER", "")
+	t.Setenv("OTEL_TRACES_EXPORTER", "gcp")
 	t.Setenv("GCP_PROJECT_ID", "")
 	t.Setenv("GOOGLE_CLOUD_PROJECT", "")
 	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", credsFile)

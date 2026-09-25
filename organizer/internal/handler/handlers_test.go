@@ -500,7 +500,7 @@ func TestPlanHandler_SummaryLog_And_TraceHeader(t *testing.T) {
 	require.Len(t, logLines, 1, "exactly one summary log line should be emitted")
 	line := logLines[0]
 	assert.Contains(t, line, "[PLAN]")
-	assert.Contains(t, line, "trace_id="+traceID)
+	assert.Contains(t, line, "trace_id="+traceID[:8])
 	assert.Contains(t, line, `dir="dir1"`)
 	assert.Contains(t, line, "files=1")
 	assert.Contains(t, line, "actions=1")
@@ -542,7 +542,7 @@ func TestPlanHandler_ErrorSummaryLog(t *testing.T) {
 	require.Len(t, logLines, 1, "exactly one summary log line should be emitted on error")
 	line := logLines[0]
 	assert.Contains(t, line, "[PLAN]")
-	assert.Contains(t, line, "trace_id="+traceID)
+	assert.Contains(t, line, "trace_id="+traceID[:8])
 	assert.Contains(t, line, `dir="err_dir"`)
 	assert.Contains(t, line, "files=1")
 	assert.Contains(t, line, "status=ERROR")
