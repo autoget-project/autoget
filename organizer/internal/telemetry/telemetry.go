@@ -6,14 +6,17 @@ import (
 	"sync"
 	"time"
 
-	gcpexporter "github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/oauth"
 )
 
 const (
@@ -60,16 +63,15 @@ func Init(cfg TelemetryConfig) (*ProviderState, error) {
 	return state, nil
 }
 
-// buildResource constructs an OTel Resource with service.name configured.
-func buildResource(serviceName string) (*resource.Resource, error) {
+// buildResource constructs an OTel Resource with service.name and any additional attributes configured.
+func buildResource(serviceName string, extraAttrs ...attribute.KeyValue) (*resource.Resource, error) {
 	if serviceName == "" {
 		serviceName = defaultTracerName
 	}
+	attrs := append([]attribute.KeyValue{semconv.ServiceNameKey.String(serviceName)}, extraAttrs...)
 	return resource.Merge(
 		resource.Default(),
-		resource.NewSchemaless(
-			semconv.ServiceNameKey.String(serviceName),
-		),
+		resource.NewSchemaless(attrs...),
 	)
 }
 
@@ -124,13 +126,30 @@ func newProviderState(cfg TelemetryConfig) (*ProviderState, error) {
 		if cfg.GCPProjectID == "" {
 			return nil, fmt.Errorf("gcp exporter requires GCP_PROJECT_ID or GOOGLE_CLOUD_PROJECT to be set")
 		}
-		res, err := buildResource(cfg.ServiceName)
+		res, err := buildResource(
+			cfg.ServiceName,
+			attribute.String("gcp.project_id", cfg.GCPProjectID),
+		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build resource: %w", err)
 		}
-		exp, err := gcpexporter.New(gcpexporter.WithProjectID(cfg.GCPProjectID))
+
+		creds, err := oauth.NewApplicationDefault(
+			context.Background(),
+			"https://www.googleapis.com/auth/cloud-platform",
+			"https://www.googleapis.com/auth/trace.append",
+		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create GCP trace exporter: %w", err)
+			return nil, fmt.Errorf("failed to acquire Google ADC credentials for OTLP gRPC: %w", err)
+		}
+
+		exp, err := otlptracegrpc.New(
+			context.Background(),
+			otlptracegrpc.WithEndpoint("telemetry.googleapis.com:443"),
+			otlptracegrpc.WithDialOption(grpc.WithPerRPCCredentials(creds)),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create GCP OTLP trace exporter: %w", err)
 		}
 		bsp := sdktrace.NewBatchSpanProcessor(exp)
 		tp := sdktrace.NewTracerProvider(

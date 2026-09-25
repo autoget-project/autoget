@@ -174,23 +174,43 @@ func main() {
 	}
 }
 
+func cleanRequestJSON(data []byte) []byte {
+	trimmed := strings.TrimSpace(string(data))
+	// If the user piped or pasted a log line containing "[PLAN_REQ]", extract the JSON part.
+	if idx := strings.Index(trimmed, "[PLAN_REQ]"); idx != -1 {
+		trimmed = strings.TrimSpace(trimmed[idx+len("[PLAN_REQ]"):])
+	}
+	// If wrapped in quotes or extra whitespace, trim it
+	return []byte(trimmed)
+}
+
 func readInput(fileFlag string, args []string) ([]byte, error) {
+	var raw []byte
+	var err error
+
 	if fileFlag != "" && fileFlag != "-" {
-		return os.ReadFile(fileFlag)
-	}
-	if len(args) > 0 && strings.TrimSpace(args[0]) != "" {
+		raw, err = os.ReadFile(fileFlag)
+	} else if len(args) > 0 && strings.TrimSpace(args[0]) != "" {
 		first := strings.TrimSpace(args[0])
-		if strings.HasPrefix(first, "{") {
-			return []byte(first), nil
+		if strings.HasPrefix(first, "{") || strings.Contains(first, "[PLAN_REQ]") {
+			raw = []byte(first)
+		} else {
+			raw, err = os.ReadFile(first)
 		}
-		return os.ReadFile(first)
+	} else {
+		// Read from stdin
+		stat, _ := os.Stdin.Stat()
+		if (stat.Mode() & os.ModeCharDevice) == 0 {
+			raw, err = io.ReadAll(os.Stdin)
+		} else {
+			return nil, errors.New("no request JSON input provided. Usage: replay -file req.json OR replay '{\"dir\":\"...\"}' OR cat req.json | replay OR docker logs ... | replay")
+		}
 	}
-	// Read from stdin
-	stat, _ := os.Stdin.Stat()
-	if (stat.Mode() & os.ModeCharDevice) == 0 {
-		return io.ReadAll(os.Stdin)
+
+	if err != nil {
+		return nil, err
 	}
-	return nil, errors.New("no request JSON input provided. Usage: replay -file req.json OR replay '{\"dir\":\"...\"}' OR cat req.json | replay")
+	return cleanRequestJSON(raw), nil
 }
 
 func resolveAIProvider(cfg *config.Config) (ai.Provider, error) {

@@ -3,8 +3,10 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -66,8 +68,16 @@ func (h *PlanHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	shortTraceID := shortID(traceID, 8)
 
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		http.Error(w, fmt.Sprintf("failed to read request body: %v", err), http.StatusBadRequest)
+		return
+	}
+
 	var req model.APIPlanRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.Unmarshal(bodyBytes, &req); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		if h.summaryFn != nil {
@@ -78,6 +88,16 @@ func (h *PlanHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	shortDir := shortID(req.Dir, 8)
+
+	// Log raw request JSON so users can replay via CLI or inspect full payloads offline.
+	if h.summaryFn != nil {
+		var compactBuf bytes.Buffer
+		if compactErr := json.Compact(&compactBuf, bodyBytes); compactErr == nil {
+			h.summaryFn("[PLAN_REQ] %s", compactBuf.String())
+		} else {
+			h.summaryFn("[PLAN_REQ] %s", string(bytes.TrimSpace(bodyBytes)))
+		}
+	}
 
 	span.SetAttributes(
 		attribute.String(telemetry.AttrOrganizerDir, req.Dir),

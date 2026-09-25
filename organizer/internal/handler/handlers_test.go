@@ -497,16 +497,19 @@ func TestPlanHandler_SummaryLog_And_TraceHeader(t *testing.T) {
 	require.NotEmpty(t, traceID)
 	require.Len(t, traceID, 32)
 
-	require.Len(t, logLines, 1, "exactly one summary log line should be emitted")
-	line := logLines[0]
-	assert.Contains(t, line, "[PLAN]")
-	assert.Contains(t, line, "trace_id="+traceID[:8])
-	assert.Contains(t, line, `dir="dir1"`)
-	assert.Contains(t, line, "files=1")
-	assert.Contains(t, line, "actions=1")
-	assert.Contains(t, line, "status=OK")
-	assert.Contains(t, line, "duration_ms=")
-	assert.NotContains(t, line, `{"dir"`, "raw request JSON should not be dumped into summary log")
+	require.Len(t, logLines, 2, "request log and summary log lines should be emitted")
+	reqLine := logLines[0]
+	assert.Contains(t, reqLine, "[PLAN_REQ]")
+	assert.Contains(t, reqLine, `{"dir":"dir1","files":["book.epub"]}`)
+
+	planLine := logLines[1]
+	assert.Contains(t, planLine, "[PLAN]")
+	assert.Contains(t, planLine, "trace_id="+traceID[:8])
+	assert.Contains(t, planLine, `dir="dir1"`)
+	assert.Contains(t, planLine, "files=1")
+	assert.Contains(t, planLine, "actions=1")
+	assert.Contains(t, planLine, "status=OK")
+	assert.Contains(t, planLine, "duration_ms=")
 }
 
 func TestPlanHandler_ErrorSummaryLog(t *testing.T) {
@@ -539,8 +542,11 @@ func TestPlanHandler_ErrorSummaryLog(t *testing.T) {
 	traceID := rec.Header().Get("X-Trace-Id")
 	require.NotEmpty(t, traceID)
 
-	require.Len(t, logLines, 1, "exactly one summary log line should be emitted on error")
-	line := logLines[0]
+	require.Len(t, logLines, 2, "request log and summary log line should be emitted on error")
+	assert.Contains(t, logLines[0], "[PLAN_REQ]")
+	assert.Contains(t, logLines[0], `{"dir":"err_dir","files":["mystery.bin"]}`)
+
+	line := logLines[1]
 	assert.Contains(t, line, "[PLAN]")
 	assert.Contains(t, line, "trace_id="+traceID[:8])
 	assert.Contains(t, line, `dir="err_dir"`)
