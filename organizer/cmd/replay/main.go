@@ -1,5 +1,6 @@
 // Command replay runs a saved /v1/plan request through the 4-stage pipeline
-// locally, printing detailed step-by-step diagnostic information at each stage.
+// locally, or inspects historical OpenTelemetry trace spans offline from .local/traces.jsonl,
+// printing detailed step-by-step diagnostic information at each stage.
 package main
 
 import (
@@ -11,6 +12,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/autoget-project/autoget/organizer/internal/ai"
 	"github.com/autoget-project/autoget/organizer/internal/ai/gemini"
@@ -20,14 +22,47 @@ import (
 	"github.com/autoget-project/autoget/organizer/internal/metadata"
 	"github.com/autoget-project/autoget/organizer/internal/model"
 	"github.com/autoget-project/autoget/organizer/internal/pipeline"
+	stage1classifier "github.com/autoget-project/autoget/organizer/internal/pipeline/stage1_classifier"
 	stage2enricher "github.com/autoget-project/autoget/organizer/internal/pipeline/stage2_enricher"
 	stage3planner "github.com/autoget-project/autoget/organizer/internal/pipeline/stage3_planner"
+	"github.com/autoget-project/autoget/organizer/internal/telemetry"
 )
 
 func main() {
 	filePath := flag.String("file", "", "Path to JSON file containing APIPlanRequest (or '-' / omit for stdin)")
+	traceIDFlag := flag.String("trace-id", "", "Replay offline diagnostics for a specific trace ID from local trace file")
+	lastFlag := flag.Bool("last", false, "Replay offline diagnostics for the most recent trace in local trace file")
 	flag.Parse()
 
+	cfg := config.LoadConfig()
+	traceFilePath := cfg.Telemetry.FilePath
+	if traceFilePath == "" {
+		traceFilePath = ".local/traces.jsonl"
+	}
+
+	// 1. Offline replay mode (--last or --trace-id)
+	if *lastFlag || *traceIDFlag != "" {
+		targetTraceID := *traceIDFlag
+		if *lastFlag {
+			latestID, err := telemetry.GetLatestTraceID(traceFilePath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error locating latest trace in %s: %v\n", traceFilePath, err)
+				os.Exit(1)
+			}
+			targetTraceID = latestID
+		}
+
+		spans, err := telemetry.ReadTraceSpans(traceFilePath, targetTraceID)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error reading trace %s from %s: %v\n", targetTraceID, traceFilePath, err)
+			os.Exit(1)
+		}
+
+		printOfflineTraceReport(targetTraceID, spans)
+		return
+	}
+
+	// 2. Live execution replay mode (-file or stdin)
 	inputBytes, err := readInput(*filePath, flag.Args())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading input: %v\n", err)
@@ -40,7 +75,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	cfg := config.LoadConfig()
+	// Set up local file telemetry exporter so live replay also persists trace spans
+	telCfg := cfg.Telemetry
+	telCfg.Exporter = "file"
+	telCfg.FilePath = traceFilePath
+	telCfg.SampleRatio = 1.0
+	_, err = telemetry.Init(telCfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to initialize telemetry file exporter: %v\n", err)
+	}
+
 	var provider ai.Provider
 	if cfg.Model == "" {
 		cfg.Model = "gemini:gemini-2.5-flash"
@@ -83,10 +127,7 @@ func main() {
 		tpdb = metadata.NewThePornDB(cfg.TPDBAPIToken)
 	}
 
-	pipe := pipeline.NewPipeline(provider, enricher, cfg.DownloadCompletedDir, cfg.TargetDir, tpdb, nil)
-
-	trace := &pipeline.StageTrace{}
-	ctx := pipeline.WithTraceCollector(context.Background(), trace)
+	pipe := pipeline.NewPipeline(provider, enricher, cfg.DownloadCompletedDir, cfg.TargetDir, tpdb, telemetry.Tracer("replay"))
 
 	printSection("REPLAY REQUEST INPUT")
 	fmt.Printf("Dir:      %s\n", req.Dir)
@@ -101,11 +142,29 @@ func main() {
 		fmt.Println("Metadata: (empty)")
 	}
 
-	resp, err := pipe.CreatePlan(ctx, req.Dir, req.Files, req.Metadata)
+	runCtx := context.Background()
+	resp, planErr := pipe.CreatePlan(runCtx, req.Dir, req.Files, req.Metadata)
 
-	printTraceReport(trace, resp, err)
+	// Flush and Shutdown telemetry before rendering reports to guarantee span persistence
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	_ = telemetry.Shutdown(shutdownCtx)
+	cancel()
 
-	if err != nil {
+	// Locate the latest trace ID to print the full diagnostic report
+	latestTraceID, lErr := telemetry.GetLatestTraceID(traceFilePath)
+	if lErr == nil && latestTraceID != "" {
+		if spans, sErr := telemetry.ReadTraceSpans(traceFilePath, latestTraceID); sErr == nil && len(spans) > 0 {
+			printOfflineTraceReport(latestTraceID, spans)
+			if planErr != nil {
+				os.Exit(1)
+			}
+			return
+		}
+	}
+
+	// Fallback print if reading trace failed
+	printLiveFallbackReport(resp, planErr)
+	if planErr != nil {
 		os.Exit(1)
 	}
 }
@@ -144,119 +203,234 @@ func printSection(title string) {
 	fmt.Printf("\n==================== [ %s ] ====================\n", title)
 }
 
-func printTraceReport(trace *pipeline.StageTrace, resp model.PlanResponse, planErr error) {
-	// Stage 1 Report
-	printSection("STAGE 1: MEDIA CLASSIFICATION")
-	if trace.Stage1.RuleMatched {
-		fmt.Println("Rule Match: YES (Fast path rule hit)")
-	} else {
-		fmt.Println("Rule Match: NO (Delegated to LLM)")
-		if trace.Stage1.SearchContext.HasInfo() {
-			sc := trace.Stage1.SearchContext
-			fmt.Printf("Search Grounding:\n")
-			fmt.Printf("  - Official Title: %s\n", sc.OfficialTitle)
-			fmt.Printf("  - Detected Type:  %s\n", sc.DetectedType)
-			fmt.Printf("  - Studio:         %s\n", sc.Studio)
-			fmt.Printf("  - Release Date:   %s\n", sc.ReleaseDate)
-			fmt.Printf("  - Actors:         %v\n", sc.Actors)
-			fmt.Printf("  - Is VR:          %t\n", sc.IsVR)
-			if sc.SearchSummary != "" {
-				fmt.Printf("  - Summary:        %s\n", sc.SearchSummary)
-			}
-		} else {
-			fmt.Println("Search Grounding: (none or unsupported)")
-		}
+func printOfflineTraceReport(traceID string, spans []telemetry.SpanRecord) {
+	var (
+		rootSpan   *telemetry.SpanRecord
+		stage1Span *telemetry.SpanRecord
+		stage2Span *telemetry.SpanRecord
+		stage3Span *telemetry.SpanRecord
+		stage4Span *telemetry.SpanRecord
+	)
 
-		if len(trace.Stage1.Specialists) > 0 {
-			fmt.Println("Specialist Checkers:")
-			for _, s := range trace.Stage1.Specialists {
-				if s.Err != nil {
-					fmt.Printf("  [%-12s] ERROR: %v\n", s.Category, s.Err)
-				} else {
-					fmt.Printf("  [%-12s] Confidence: %-5s | Reason: %s\n", s.Category, s.Response.Confidence, s.Response.Reason)
+	for i := range spans {
+		s := &spans[i]
+		switch s.Name {
+		case telemetry.SpanPipelineCreatePlan:
+			rootSpan = s
+		case telemetry.SpanStage1Classify:
+			stage1Span = s
+		case telemetry.SpanStage2Enrich:
+			stage2Span = s
+		case telemetry.SpanStage3Plan:
+			stage3Span = s
+		case telemetry.SpanStage4PostProcess:
+			stage4Span = s
+		}
+	}
+
+	printSection(fmt.Sprintf("TRACE DIAGNOSTICS: %s", traceID))
+
+	// Replay request inputs from root span
+	if rootSpan != nil {
+		fmt.Printf("Dir:      %s\n", rootSpan.StringAttr(telemetry.AttrOrganizerDir))
+		if filesCount := rootSpan.IntAttr(telemetry.AttrOrganizerFilesCount); filesCount > 0 {
+			fmt.Printf("Files (%d):\n", filesCount)
+			if fAttr, ok := rootSpan.Attributes[telemetry.AttrOrganizerFiles]; ok {
+				if fList, ok := fAttr.([]interface{}); ok {
+					for _, f := range fList {
+						fmt.Printf("  - %v\n", f)
+					}
 				}
 			}
 		}
-
-		if trace.Stage1.ArbiterUsed {
-			fmt.Printf("Arbiter Decision: Invoked (Reason: %s)\n", trace.Stage1.ArbiterReason)
-		} else {
-			fmt.Println("Arbiter Decision: Not needed (single clear candidate)")
+		if metaStr := rootSpan.StringAttr(telemetry.AttrOrganizerMetadataJSON); metaStr != "" {
+			var m map[string]interface{}
+			if err := json.Unmarshal([]byte(metaStr), &m); err == nil {
+				metaJSON, _ := json.MarshalIndent(m, "  ", "  ")
+				fmt.Printf("Metadata:\n  %s\n", string(metaJSON))
+			} else {
+				fmt.Printf("Metadata: %s\n", metaStr)
+			}
 		}
 	}
-	fmt.Printf("Final Category:  %s\n", trace.Stage1.Category)
-	if len(trace.Stage1.Entities) > 0 {
-		entJSON, _ := json.MarshalIndent(trace.Stage1.Entities, "  ", "  ")
-		fmt.Printf("Extracted Entities:\n  %s\n", string(entJSON))
+
+	// Stage 1 Report
+	printSection("STAGE 1: MEDIA CLASSIFICATION")
+	if stage1Span != nil {
+		ruleMatched := stage1Span.BoolAttr(telemetry.AttrStage1RuleMatched)
+		if ruleMatched {
+			fmt.Println("Rule Match: YES (Fast path rule hit)")
+		} else {
+			fmt.Println("Rule Match: NO (Delegated to LLM)")
+
+			// Search context
+			scStr := stage1Span.StringAttr(telemetry.AttrStage1SearchContextJSON)
+			if scStr != "" {
+				var sc stage1classifier.SearchContext
+				if err := json.Unmarshal([]byte(scStr), &sc); err == nil && sc.HasInfo() {
+					fmt.Printf("Search Grounding:\n")
+					fmt.Printf("  - Official Title: %s\n", sc.OfficialTitle)
+					fmt.Printf("  - Detected Type:  %s\n", sc.DetectedType)
+					fmt.Printf("  - Studio:         %s\n", sc.Studio)
+					fmt.Printf("  - Release Date:   %s\n", sc.ReleaseDate)
+					fmt.Printf("  - Actors:         %v\n", sc.Actors)
+					fmt.Printf("  - Is VR:          %t\n", sc.IsVR)
+					if sc.SearchSummary != "" {
+						fmt.Printf("  - Summary:        %s\n", sc.SearchSummary)
+					}
+				} else {
+					fmt.Println("Search Grounding: (none or unsupported)")
+				}
+			} else {
+				fmt.Println("Search Grounding: (none or unsupported)")
+			}
+
+			// Specialists
+			specStr := stage1Span.StringAttr(telemetry.AttrStage1SpecialistsJSON)
+			if specStr != "" {
+				var specs []stage1classifier.CheckerResult
+				if err := json.Unmarshal([]byte(specStr), &specs); err == nil && len(specs) > 0 {
+					fmt.Println("Specialist Checkers:")
+					for _, s := range specs {
+						if s.Err != nil {
+							fmt.Printf("  [%-12s] ERROR: %v\n", s.Category, s.Err)
+						} else {
+							fmt.Printf("  [%-12s] Confidence: %-5s | Reason: %s\n", s.Category, s.Response.Confidence, s.Response.Reason)
+						}
+					}
+				}
+			}
+
+			// Arbiter
+			arbiterUsed := stage1Span.BoolAttr(telemetry.AttrStage1ArbiterUsed)
+			if arbiterUsed {
+				fmt.Printf("Arbiter Decision: Invoked (Reason: %s)\n", stage1Span.StringAttr(telemetry.AttrStage1ArbiterReason))
+			} else {
+				fmt.Println("Arbiter Decision: Not needed (single clear candidate)")
+			}
+		}
+		fmt.Printf("Final Category:  %s\n", stage1Span.StringAttr(telemetry.AttrStage1Category))
+	} else {
+		fmt.Println("Stage 1 Span: NOT FOUND")
 	}
 
 	// Stage 2 Report
 	printSection("STAGE 2: METADATA ENRICHMENT")
-	if trace.Stage2.Skipped {
-		fmt.Println("Status: SKIPPED (Simple or unknown category, or enricher unconfigured)")
-	} else {
-		if trace.Stage2.Err != "" {
-			fmt.Printf("Warning: Enrichment degraded: %s\n", trace.Stage2.Err)
+	if stage2Span != nil {
+		skipped := stage2Span.BoolAttr(telemetry.AttrStage2Skipped)
+		if skipped {
+			fmt.Println("Status: SKIPPED (Simple or unknown category, or enricher unconfigured)")
 		} else {
-			fmt.Println("Status: SUCCESS")
+			// Check if any degrade events recorded
+			var degradeWarnings []string
+			for _, ev := range stage2Span.Events {
+				if ev.Name == "stage2_degraded" {
+					if w, ok := ev.Attributes["warning"]; ok {
+						degradeWarnings = append(degradeWarnings, fmt.Sprintf("%v", w))
+					}
+				}
+			}
+			if len(degradeWarnings) > 0 {
+				fmt.Printf("Warning: Enrichment degraded: %s\n", strings.Join(degradeWarnings, "; "))
+			} else {
+				fmt.Println("Status: SUCCESS")
+			}
+
+			if title := stage2Span.StringAttr(telemetry.AttrStage2EnrichedTitle); title != "" {
+				fmt.Printf("Enriched Title:    %s\n", title)
+			}
+			if year := stage2Span.IntAttr(telemetry.AttrStage2EnrichedYear); year > 0 {
+				fmt.Printf("Year:              %d\n", year)
+			}
+			if bango := stage2Span.StringAttr(telemetry.AttrStage2EnrichedBango); bango != "" {
+				fmt.Printf("Bango:             %s\n", bango)
+			}
 		}
-		en := trace.Stage2.Enriched
-		fmt.Printf("Enriched Title:    %s\n", en.Title)
-		if en.OriginalTitle != "" {
-			fmt.Printf("Original Title:    %s\n", en.OriginalTitle)
-		}
-		fmt.Printf("Year:              %d\n", en.Year)
-		fmt.Printf("Language:          %s\n", en.Language)
-		if en.Bango != "" {
-			fmt.Printf("Bango:             %s\n", en.Bango)
-		}
-		if len(en.Actors) > 0 {
-			fmt.Printf("Actors:            %v\n", en.Actors)
-		}
-		fmt.Printf("Is VR:             %t\n", en.IsVR)
-		fmt.Printf("Is Anim:           %t\n", en.IsAnim)
-		if en.FromMadou {
-			fmt.Printf("From Madou:        %t\n", en.FromMadou)
-		}
+	} else {
+		fmt.Println("Stage 2 Span: NOT FOUND")
 	}
 
 	// Stage 3 Report
 	printSection("STAGE 3: DOMAIN PLANNING")
-	fmt.Printf("Planner Selected: %s\n", trace.Stage3.PlannerName)
-	if trace.Stage3.Err != "" {
-		fmt.Printf("Planner Error:    %s\n", trace.Stage3.Err)
-	} else {
-		fmt.Printf("Raw Actions (%d):\n", len(trace.Stage3.RawPlan))
-		for _, a := range trace.Stage3.RawPlan {
-			if a.Action == "move" && a.Target != nil {
-				fmt.Printf("  MOVE: %s -> %s\n", a.File, *a.Target)
-			} else {
-				fmt.Printf("  SKIP: %s\n", a.File)
+	if stage3Span != nil {
+		fmt.Printf("Planner Selected: %s\n", stage3Span.StringAttr(telemetry.AttrStage3Planner))
+		if stage3Span.Status.Code == "Error" || stage3Span.Status.Description != "" {
+			fmt.Printf("Planner Error:    %s\n", stage3Span.Status.Description)
+		} else {
+			reasonsStr := stage3Span.StringAttr(telemetry.AttrStage3ActionReasonsJSON)
+			if reasonsStr != "" {
+				var reasons []stage3planner.ActionReason
+				if err := json.Unmarshal([]byte(reasonsStr), &reasons); err == nil {
+					fmt.Printf("Action Reasons (%d):\n", len(reasons))
+					for _, r := range reasons {
+						fmt.Printf("  - %s: %s\n", r.File, r.Reason)
+					}
+				}
 			}
 		}
+	} else {
+		fmt.Println("Stage 3 Span: NOT FOUND")
 	}
 
 	// Stage 4 Report
 	printSection("STAGE 4: POST-PROCESS & SUBTITLE PAIRING")
-	if len(trace.Stage4.SubtitlesPlanned) > 0 {
-		fmt.Printf("Subtitles Paired (%d):\n", len(trace.Stage4.SubtitlesPlanned))
-		for _, s := range trace.Stage4.SubtitlesPlanned {
-			if s.Action == "move" && s.Target != nil {
-				fmt.Printf("  SUBTITLE MOVE: %s -> %s\n", s.File, *s.Target)
-			} else {
-				fmt.Printf("  SUBTITLE SKIP: %s\n", s.File)
+	if stage4Span != nil {
+		subtitlesCount := stage4Span.IntAttr(telemetry.AttrStage4SubtitlesPairedCount)
+		if subtitlesCount > 0 {
+			fmt.Printf("Subtitles Paired: %d\n", subtitlesCount)
+		} else {
+			fmt.Println("Subtitles Paired: (none)")
+		}
+
+		forcedSkipsStr := stage4Span.StringAttr(telemetry.AttrStage4ForcedSkipsJSON)
+		if forcedSkipsStr != "" {
+			var forcedSkips []string
+			if err := json.Unmarshal([]byte(forcedSkipsStr), &forcedSkips); err == nil && len(forcedSkips) > 0 {
+				fmt.Println("Forced Skips:")
+				for _, fs := range forcedSkips {
+					fmt.Printf("  - %s\n", fs)
+				}
 			}
 		}
 	} else {
-		fmt.Println("Subtitles Paired: (none)")
+		fmt.Println("Stage 4 Span: NOT FOUND")
 	}
 
 	// Final Result
 	printSection("FINAL EXECUTION PLAN")
+	if rootSpan != nil {
+		if rootSpan.Status.Code == "Error" {
+			fmt.Printf("RESULT: FAILED (%s)\n", rootSpan.Status.Description)
+		} else {
+			fmt.Printf("RESULT: SUCCESS (Took %.1fms)\n", rootSpan.DurationMs)
+		}
+	}
+
+	if stage4Span != nil {
+		planJSONStr := stage4Span.StringAttr(telemetry.AttrStage4FinalPlanJSON)
+		if planJSONStr != "" {
+			var finalPlan []model.PlanAction
+			if err := json.Unmarshal([]byte(planJSONStr), &finalPlan); err == nil {
+				fmt.Printf("Plan Actions (%d):\n", len(finalPlan))
+				for i, a := range finalPlan {
+					if a.Action == "move" && a.Target != nil {
+						fmt.Printf("  [%2d] MOVE: %s\n       -->  %s\n", i+1, a.File, *a.Target)
+					} else {
+						fmt.Printf("  [%2d] SKIP: %s\n", i+1, a.File)
+					}
+				}
+			}
+		}
+	}
+	fmt.Println()
+}
+
+func printLiveFallbackReport(resp model.PlanResponse, planErr error) {
+	printSection("FINAL EXECUTION PLAN")
 	if planErr != nil {
 		fmt.Printf("RESULT: FAILED (%v)\n", planErr)
 	} else {
-		fmt.Printf("RESULT: SUCCESS (Took %dms)\n", trace.DurationMs)
+		fmt.Println("RESULT: SUCCESS")
 		fmt.Printf("Plan Actions (%d):\n", len(resp.Plan))
 		for i, a := range resp.Plan {
 			if a.Action == "move" && a.Target != nil {

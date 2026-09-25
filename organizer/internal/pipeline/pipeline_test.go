@@ -157,8 +157,14 @@ func TestCreatePlan_Stage3LLMFailureIsFatal(t *testing.T) {
 	assert.Error(t, err, "stage 3 LLM failure must surface as a fatal error")
 }
 
-func TestCreatePlan_WithTraceCollector(t *testing.T) {
+func TestCreatePlan_InMemorySpanValidation(t *testing.T) {
 	t.Parallel()
+
+	tp, exp := telemetry.NewTestTracerProvider()
+	t.Cleanup(func() {
+		_ = tp.Shutdown(context.Background())
+	})
+	tracer := tp.Tracer("test-tracer")
 
 	downloadDir := t.TempDir()
 	subDir := filepath.Join(downloadDir, "show_trace")
@@ -175,22 +181,45 @@ func TestCreatePlan_WithTraceCollector(t *testing.T) {
 			"target":"tv_series/Others/Test Series (2020)/Season 01/Test Series (2020) S01E01.mkv"}]}`,
 	})
 
-	p := newTestPipeline(t, prov, downloadDir)
+	p := NewPipeline(prov, stage2enricher.NewEnricher(nil, nil, nil, nil), downloadDir, "tp-test-target", nil, tracer)
 
-	trace := &StageTrace{}
-	ctx := WithTraceCollector(context.Background(), trace)
-
-	resp, err := p.CreatePlan(ctx, "show_trace", []string{"ep1.mkv"}, map[string]interface{}{"title": "Test Series"})
+	resp, err := p.CreatePlan(context.Background(), "show_trace", []string{"ep1.mkv"}, map[string]interface{}{"title": "Test Series"})
 	require.NoError(t, err)
 	require.Len(t, resp.Plan, 1)
 
-	assert.Equal(t, "show_trace", trace.Dir)
-	assert.Equal(t, model.CategoryTVSeries, trace.Stage1.Category)
-	assert.False(t, trace.Stage1.RuleMatched)
-	assert.Equal(t, "tv_series", trace.Stage3.PlannerName)
-	assert.Len(t, trace.Stage3.RawPlan, 1)
-	assert.Len(t, trace.FinalPlan, 1)
-	assert.Equal(t, "move", trace.FinalPlan[0].Action)
+	spans := exp.GetSpans()
+	require.NotEmpty(t, spans)
+
+	var rootSpanFound, s1SpanFound, s3SpanFound bool
+	for _, s := range spans {
+		switch s.Name {
+		case telemetry.SpanPipelineCreatePlan:
+			rootSpanFound = true
+			for _, a := range s.Attributes {
+				if string(a.Key) == telemetry.AttrOrganizerDir {
+					assert.Equal(t, "show_trace", a.Value.AsString())
+				}
+			}
+		case telemetry.SpanStage1Classify:
+			s1SpanFound = true
+			for _, a := range s.Attributes {
+				if string(a.Key) == telemetry.AttrStage1Category {
+					assert.Equal(t, string(model.CategoryTVSeries), a.Value.AsString())
+				}
+			}
+		case telemetry.SpanStage3Plan:
+			s3SpanFound = true
+			for _, a := range s.Attributes {
+				if string(a.Key) == telemetry.AttrStage3Planner {
+					assert.Equal(t, string(model.CategoryTVSeries), a.Value.AsString())
+				}
+			}
+		}
+	}
+	assert.True(t, rootSpanFound, "root pipeline span should be recorded")
+	assert.True(t, s1SpanFound, "stage 1 span should be recorded")
+	assert.True(t, s3SpanFound, "stage 3 span should be recorded")
+	assert.Equal(t, "move", resp.Plan[0].Action)
 }
 
 func TestCreatePlan_OpenTelemetry_SpanHierarchy(t *testing.T) {

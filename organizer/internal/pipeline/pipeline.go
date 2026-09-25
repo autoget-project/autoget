@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -81,14 +80,6 @@ func (p *Pipeline) CreatePlan(ctx context.Context, dir string, files []string, m
 	)
 	defer rootSpan.End()
 
-	stgTrace := TraceFromContext(ctx)
-	if stgTrace != nil {
-		stgTrace.StartTime = time.Now()
-		stgTrace.Dir = dir
-		stgTrace.Files = files
-		stgTrace.Metadata = metadata
-	}
-
 	// Stage 1: classification (rule screening first, LLM fallback).
 	ctxStage1, spanStage1 := tr.Start(ctx, telemetry.SpanStage1Classify)
 	res, s1Detail, err := stage1classifier.ClassifyPipelineWithDetail(ctxStage1, p.provider, files, metadata)
@@ -110,15 +101,6 @@ func (p *Pipeline) CreatePlan(ctx context.Context, dir string, files []string, m
 			spanStage1.SetAttributes(attribute.String(telemetry.AttrStage1SearchContextJSON, string(scJSON)))
 		}
 	}
-	if stgTrace != nil {
-		stgTrace.Stage1.RuleMatched = !res.NeedLLM
-		stgTrace.Stage1.SearchContext = s1Detail.SearchContext
-		stgTrace.Stage1.Specialists = s1Detail.Specialists
-		stgTrace.Stage1.ArbiterUsed = s1Detail.ArbiterUsed
-		stgTrace.Stage1.ArbiterReason = s1Detail.ArbiterReason
-		stgTrace.Stage1.Category = res.Category
-		stgTrace.Stage1.Entities = res.Entities
-	}
 	if err != nil {
 		spanStage1.RecordError(err)
 		spanStage1.SetStatus(codes.Error, err.Error())
@@ -127,10 +109,6 @@ func (p *Pipeline) CreatePlan(ctx context.Context, dir string, files []string, m
 		rootSpan.RecordError(err)
 		rootSpan.SetStatus(codes.Error, err.Error())
 
-		if stgTrace != nil {
-			stgTrace.Error = fmt.Sprintf("stage1 classification failed: %v", err)
-			stgTrace.DurationMs = time.Since(stgTrace.StartTime).Milliseconds()
-		}
 		return model.PlanResponse{}, fmt.Errorf("stage1 classification failed: %w", err)
 	}
 	spanStage1.End()
@@ -140,7 +118,7 @@ func (p *Pipeline) CreatePlan(ctx context.Context, dir string, files []string, m
 	var enriched model.EnrichedMetadata
 	if p.enricher != nil {
 		var s2Detail stage2enricher.EnricherDetail
-		enriched, s2Detail, err = p.enricher.EnrichWithDetail(ctxStage2, res.Category, files, metadata, res.Entities)
+		enriched, s2Detail, _ = p.enricher.EnrichWithDetail(ctxStage2, res.Category, files, metadata, res.Entities)
 		spanStage2.SetAttributes(
 			attribute.Bool(telemetry.AttrStage2Skipped, false),
 			attribute.String(telemetry.AttrStage2EnrichedTitle, enriched.Title),
@@ -152,26 +130,14 @@ func (p *Pipeline) CreatePlan(ctx context.Context, dir string, files []string, m
 				attribute.String("warning", warn),
 			))
 		}
-		if stgTrace != nil {
-			stgTrace.Stage2.Enriched = enriched
-			if err != nil {
-				stgTrace.Stage2.Err = err.Error()
-			}
-		}
 	} else {
 		spanStage2.SetAttributes(attribute.Bool(telemetry.AttrStage2Skipped, true))
-		if stgTrace != nil {
-			stgTrace.Stage2.Skipped = true
-		}
 	}
 	spanStage2.End()
 
 	// Stage 3: domain planner routing.
 	ctxStage3, spanStage3 := tr.Start(ctx, telemetry.SpanStage3Plan)
 	spanStage3.SetAttributes(attribute.String(telemetry.AttrStage3Planner, string(res.Category)))
-	if stgTrace != nil {
-		stgTrace.Stage3.PlannerName = string(res.Category)
-	}
 	actions, s3Detail, err := p.router.PlanWithDetail(ctxStage3, res.Category, &stage3planner.PlannerContext{
 		Dir:      dir,
 		Files:    files,
@@ -184,12 +150,6 @@ func (p *Pipeline) CreatePlan(ctx context.Context, dir string, files []string, m
 			spanStage3.SetAttributes(attribute.String(telemetry.AttrStage3ActionReasonsJSON, string(rJSON)))
 		}
 	}
-	if stgTrace != nil {
-		stgTrace.Stage3.RawPlan = actions
-		if err != nil {
-			stgTrace.Stage3.Err = err.Error()
-		}
-	}
 	if err != nil {
 		spanStage3.RecordError(err)
 		spanStage3.SetStatus(codes.Error, err.Error())
@@ -198,10 +158,6 @@ func (p *Pipeline) CreatePlan(ctx context.Context, dir string, files []string, m
 		rootSpan.RecordError(err)
 		rootSpan.SetStatus(codes.Error, err.Error())
 
-		if stgTrace != nil {
-			stgTrace.Error = fmt.Sprintf("stage3 planning failed for %s: %v", res.Category, err)
-			stgTrace.DurationMs = time.Since(stgTrace.StartTime).Milliseconds()
-		}
 		return model.PlanResponse{}, fmt.Errorf("stage3 planning failed for %s: %w", res.Category, err)
 	}
 	spanStage3.End()
@@ -213,9 +169,6 @@ func (p *Pipeline) CreatePlan(ctx context.Context, dir string, files []string, m
 	if isMediaCategory(res.Category) {
 		if subActions := p.pairSubtitles(ctxStage4, dir, files, plan); len(subActions) > 0 {
 			subtitlesPairedCount = len(subActions)
-			if stgTrace != nil {
-				stgTrace.Stage4.SubtitlesPlanned = subActions
-			}
 			plan = append(plan, subActions...)
 		}
 	}
@@ -235,11 +188,6 @@ func (p *Pipeline) CreatePlan(ctx context.Context, dir string, files []string, m
 	}
 	spanStage4.End()
 
-	if stgTrace != nil {
-		stgTrace.Stage4.SanitizedPlan = finalPlan
-		stgTrace.FinalPlan = finalPlan
-		stgTrace.DurationMs = time.Since(stgTrace.StartTime).Milliseconds()
-	}
 	return model.PlanResponse{
 		Plan:  finalPlan,
 		Error: nil,
