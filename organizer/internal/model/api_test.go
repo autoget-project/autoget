@@ -78,15 +78,6 @@ func TestAPIRequestsAndResponses(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(dataResp), `"reason":"file not found"`)
 
-	// APIReplanWithHintRequest round trip (legacy wire shape).
-	var legacyReplanReq APIReplanWithHintRequest
-	require.NoError(t, json.Unmarshal(
-		[]byte(`{"files":["a.mkv"],"metadata":null,"previous_response":{"plan":[],"error":null},"user_hint":"this is tv"}`),
-		&legacyReplanReq))
-	assert.Equal(t, []string{"a.mkv"}, legacyReplanReq.Files)
-	assert.Equal(t, "this is tv", legacyReplanReq.UserHint)
-	require.NotNil(t, legacyReplanReq.PreviousResponse)
-
 	// APIReplanRequest round trip: the previous result is a dedicated field,
 	// separate from the upstream metadata.
 	var replanReq APIReplanRequest

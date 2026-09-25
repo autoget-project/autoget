@@ -255,13 +255,7 @@ Re-plans an existing (flawed) plan. It re-runs Stage 1 classification (rules + L
 
 ---
 
-### 4. Replan with Hint (legacy): `POST /v1/replan-with-hint`
-
-Retained for wire compatibility: it accepts the historical request shape (`previous_response` instead of `previous_result`) and delegates to the same replan path as `POST /v1/replan`. New integrations should use `POST /v1/replan`.
-
----
-
-### 5. Health Check: `GET /healthz`
+### 4. Health Check: `GET /healthz`
 
 - Response: `200 OK`, body: `ok`.
 

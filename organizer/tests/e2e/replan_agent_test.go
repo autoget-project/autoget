@@ -12,12 +12,12 @@ import (
 	"github.com/autoget-project/autoget/organizer/internal/model"
 )
 
-// TestE2E_ReplanWithHintLifecycle drives /v1/plan -> /v1/replan -> /v1/execute:
-// the new replan endpoint re-runs Stage 1 classification (without trusting the
+// TestE2E_ReplanLifecycle drives /v1/plan -> /v1/replan -> /v1/execute:
+// the replan endpoint re-runs Stage 1 classification (without trusting the
 // stale upstream organizer_category), applies the user hint on top of the
 // previous plan, and executing the replanned result delivers the file into
 // TARGET_DIR and archives the source directory.
-func TestE2E_ReplanWithHintLifecycle(t *testing.T) {
+func TestE2E_ReplanLifecycle(t *testing.T) {
 	runWithLiveProviders(t, func(t *testing.T, s *sandbox) {
 		s.seedDownloadFile(t, "replandl", "movie.mkv", "mkvdata")
 

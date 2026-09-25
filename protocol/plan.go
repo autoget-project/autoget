@@ -78,16 +78,6 @@ type APIReplanRequest struct {
 	UserHint       string                 `json:"user_hint,omitempty"`
 }
 
-// APIReplanWithHintRequest represents the legacy /v1/replan-with-hint request
-// shape (retained for wire compatibility).
-type APIReplanWithHintRequest struct {
-	Dir              string                 `json:"dir"`
-	Files            []string               `json:"files"`
-	Metadata         map[string]interface{} `json:"metadata,omitempty"`
-	PreviousResponse *PlanResponse          `json:"previous_response"`
-	UserHint         string                 `json:"user_hint"`
-}
-
 // StringPtr returns a pointer to the passed string value.
 func StringPtr(s string) *string {
 	return &s

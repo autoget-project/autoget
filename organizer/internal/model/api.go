@@ -47,7 +47,3 @@ type ExecuteResponse = protocol.ExecuteResponse
 // APIReplanRequest represents the REST API request for the unified replan
 // endpoint. Type alias to protocol.APIReplanRequest.
 type APIReplanRequest = protocol.APIReplanRequest
-
-// APIReplanWithHintRequest represents the legacy replan-with-hint request.
-// Type alias to protocol.APIReplanWithHintRequest.
-type APIReplanWithHintRequest = protocol.APIReplanWithHintRequest

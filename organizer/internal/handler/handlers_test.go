@@ -59,7 +59,6 @@ func newTestEnv(t *testing.T, prov *mock.Provider) *env {
 	mux.HandleFunc("POST /v1/plan", NewPlanHandler(pipe, tracer).Handle)
 	mux.HandleFunc("POST /v1/execute", NewExecuteHandler(exec, tracer).Handle)
 	mux.HandleFunc("POST /v1/replan", NewReplanHandler(pipe, tracer).Handle)
-	mux.HandleFunc("POST /v1/replan-with-hint", NewReplanWithHintHandler(pipe, tracer).Handle)
 
 	return &env{
 		mux:         mux,
@@ -408,57 +407,16 @@ func TestReplanHandler_LLMFailure500(t *testing.T) {
 	assert.Contains(t, *resp.Error, "replanner offline")
 }
 
-func TestReplanWithHintHandler_LegacyWireShape(t *testing.T) {
-	t.Parallel()
-
-	prov := mock.NewProvider()
-	prov.AddRule(mock.Rule{
-		PromptPattern: "revises a bango (JAV) file organization plan",
-		Response:      `{"plan":[{"file":"SSIS-001.mp4","action":"move","target":"jav/Actress/SSIS-001.mp4"}]}`,
-	})
-	e := newTestEnv(t, prov)
-
-	prevTarget := "porn/SSIS-001/SSIS-001.mp4"
-	rec := postJSON(t, e, "/v1/replan-with-hint", model.APIReplanWithHintRequest{
-		Files: []string{"SSIS-001.mp4"},
-		PreviousResponse: &model.PlanResponse{Plan: []model.PlanAction{
-			{File: "SSIS-001.mp4", Action: "move", Target: &prevTarget},
-		}},
-		UserHint: "this is a JAV",
-	})
-	require.Equal(t, http.StatusOK, rec.Code)
-
-	var resp model.PlanResponse
-	decodeBody(t, rec, &resp)
-	require.Nil(t, resp.Error)
-	require.Len(t, resp.Plan, 1)
-	require.NotNil(t, resp.Plan[0].Target)
-	assert.Equal(t, "jav/Actress/SSIS-001.mp4", *resp.Plan[0].Target)
-
-	// The legacy endpoint delegates to the same pipeline path: a bango filename
-	// rule-matches Stage 1, and the previous plan reaches the replan prompt.
-	calls := prov.Calls()
-	require.Len(t, calls, 1)
-	assert.Contains(t, calls[0].Prompt, "revises a bango (JAV) file organization plan")
-	assert.Contains(t, calls[0].Prompt, prevTarget)
-}
-
 func TestReplanHandler_InvalidBody400(t *testing.T) {
 	t.Parallel()
 
-	for _, path := range []string{"/v1/replan", "/v1/replan-with-hint"} {
-		t.Run(path, func(t *testing.T) {
-			t.Parallel()
+	e := newTestEnv(t, mock.NewProvider())
 
-			e := newTestEnv(t, mock.NewProvider())
+	req := httptest.NewRequest(http.MethodPost, "/v1/replan", strings.NewReader("{invalid"))
+	rec := httptest.NewRecorder()
+	e.mux.ServeHTTP(rec, req)
 
-			req := httptest.NewRequest(http.MethodPost, path, strings.NewReader("{invalid"))
-			rec := httptest.NewRecorder()
-			e.mux.ServeHTTP(rec, req)
-
-			assert.Equal(t, http.StatusBadRequest, rec.Code)
-		})
-	}
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
 func TestHandlers_TraceHeaders(t *testing.T) {

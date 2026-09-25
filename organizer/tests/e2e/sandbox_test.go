@@ -1,5 +1,5 @@
 // Package e2e hosts the full-scenario end-to-end test suite. It drives the
-// real HTTP surface (/v1/plan, /v1/execute, /v1/replan-with-hint) inside an
+// real HTTP surface (/v1/plan, /v1/execute, /v1/replan) inside an
 // isolated sandbox (t.TempDir) using live LLM providers (configured via
 // .env.e2e) whenever E2E_TEST=1 is set, verifying the real AI reasoning and
 // physical execution of every pipeline stage over the wire.
@@ -177,7 +177,6 @@ func newSandboxWithActorStore(t *testing.T, prov ai.Provider, store *stage2enric
 	mux.HandleFunc("POST /v1/plan", handler.NewPlanHandler(pipe, nil).Handle)
 	mux.HandleFunc("POST /v1/execute", handler.NewExecuteHandler(exec, nil).Handle)
 	mux.HandleFunc("POST /v1/replan", handler.NewReplanHandler(pipe, nil).Handle)
-	mux.HandleFunc("POST /v1/replan-with-hint", handler.NewReplanWithHintHandler(pipe, nil).Handle)
 
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)

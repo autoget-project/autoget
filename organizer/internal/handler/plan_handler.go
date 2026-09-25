@@ -1,5 +1,5 @@
 // Package handler implements the REST route layer (/v1/plan, /v1/execute,
-// /v1/replan-with-hint) of the organizer service.
+// /v1/replan) of the organizer service.
 package handler
 
 import (
