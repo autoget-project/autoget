@@ -115,12 +115,43 @@ func TestTelemetryInit_File(t *testing.T) {
 	require.NoError(t, scanner.Err())
 
 	require.Len(t, records, 1)
+	assert.Equal(t, "organizer", records[0].ServiceName)
 	assert.Equal(t, telemetry.SpanHTTPPlan, records[0].Name)
 	assert.NotEmpty(t, records[0].TraceID)
 	assert.NotEmpty(t, records[0].SpanID)
 	assert.Equal(t, "/test/path", records[0].Attributes[telemetry.AttrOrganizerDir])
 	require.Len(t, records[0].Events, 1)
 	assert.Equal(t, "start_processing", records[0].Events[0].Name)
+}
+
+func TestTelemetryConfig_CustomServiceName(t *testing.T) {
+	tempDir := t.TempDir()
+	traceFile := filepath.Join(tempDir, "custom.jsonl")
+
+	cfg := telemetry.TelemetryConfig{
+		Exporter:    "file",
+		ServiceName: "my-custom-service",
+		FilePath:    traceFile,
+		SampleRatio: 1.0,
+	}
+
+	state, err := telemetry.Init(cfg)
+	require.NoError(t, err)
+	require.NotNil(t, state.Provider)
+
+	tr := telemetry.Tracer("custom")
+	_, span := tr.Start(context.Background(), "test-span")
+	span.End()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	require.NoError(t, telemetry.Flush(ctx))
+	require.NoError(t, telemetry.Shutdown(ctx))
+
+	spans, err := telemetry.ReadTraceSpans(traceFile, "")
+	require.NoError(t, err)
+	require.Len(t, spans, 1)
+	assert.Equal(t, "my-custom-service", spans[0].ServiceName)
 }
 
 func TestTelemetryInit_GCP_MissingProjectID(t *testing.T) {

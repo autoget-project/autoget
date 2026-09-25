@@ -14,6 +14,7 @@ import (
 
 // SpanRecord represents a light-weight structured record of an exported span in JSON Lines format.
 type SpanRecord struct {
+	ServiceName  string                 `json:"service_name,omitempty"`
 	TraceID      string                 `json:"trace_id"`
 	SpanID       string                 `json:"span_id"`
 	ParentSpanID string                 `json:"parent_span_id,omitempty"`
@@ -151,7 +152,18 @@ func (e *FileSpanExporter) convertSpan(span sdktrace.ReadOnlySpan) SpanRecord {
 		Description: span.Status().Description,
 	}
 
+	var serviceName string
+	if res := span.Resource(); res != nil {
+		for _, attr := range res.Attributes() {
+			if string(attr.Key) == "service.name" {
+				serviceName = attr.Value.AsString()
+				break
+			}
+		}
+	}
+
 	return SpanRecord{
+		ServiceName:  serviceName,
 		TraceID:      sCtx.TraceID().String(),
 		SpanID:       sCtx.SpanID().String(),
 		ParentSpanID: parentSpanID,

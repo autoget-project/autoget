@@ -7,12 +7,12 @@ build: build-backend build-organizer build-frontend
 
 # Build Go backend binary
 build-backend:
-    cd backend && go build -o bin/autoget ./cmd/main.go
+    cd backend && CGO_ENABLED=0 go build -o bin/autoget ./cmd/main.go
 
 # Build Go organizer binary and replay CLI
 build-organizer:
-    cd organizer && go build -o bin/organizer ./cmd/server
-    cd organizer && go build -o bin/replay ./cmd/replay
+    cd organizer && CGO_ENABLED=0 go build -o bin/organizer ./cmd/server
+    cd organizer && CGO_ENABLED=0 go build -o bin/replay ./cmd/replay
 
 # Build frontend production bundle
 build-frontend:
@@ -32,11 +32,11 @@ lint-protocol:
 
 # Lint backend code using golangci-lint
 lint-backend:
-    cd backend && golangci-lint run ./...
+    cd backend && CGO_ENABLED=0 golangci-lint run ./...
 
 # Lint organizer code using golangci-lint
 lint-organizer:
-    cd organizer && golangci-lint run
+    cd organizer && CGO_ENABLED=0 golangci-lint run
 
 # Lint frontend code using oxlint
 lint-frontend:
@@ -81,11 +81,11 @@ test-protocol:
 # Run backend tests; LOCAL_TEST guards tests that hit live indexer sites,
 # which are often blocked on CI runners
 test-backend:
-    cd backend && LOCAL_TEST=1 go test -v ./...
+    cd backend && CGO_ENABLED=0 LOCAL_TEST=1 go test -v ./...
 
 # Run organizer tests
 test-organizer:
-    cd organizer && go test -v ./...
+    cd organizer && CGO_ENABLED=0 go test -v ./...
 
 # Run frontend tests
 test-frontend:

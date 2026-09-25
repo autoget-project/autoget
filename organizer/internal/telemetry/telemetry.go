@@ -8,8 +8,10 @@ import (
 
 	gcpexporter "github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 )
@@ -58,6 +60,19 @@ func Init(cfg TelemetryConfig) (*ProviderState, error) {
 	return state, nil
 }
 
+// buildResource constructs an OTel Resource with service.name configured.
+func buildResource(serviceName string) (*resource.Resource, error) {
+	if serviceName == "" {
+		serviceName = defaultTracerName
+	}
+	return resource.Merge(
+		resource.Default(),
+		resource.NewSchemaless(
+			semconv.ServiceNameKey.String(serviceName),
+		),
+	)
+}
+
 // newProviderState builds a ProviderState from TelemetryConfig.
 func newProviderState(cfg TelemetryConfig) (*ProviderState, error) {
 	switch cfg.Exporter {
@@ -69,9 +84,14 @@ func newProviderState(cfg TelemetryConfig) (*ProviderState, error) {
 		}, nil
 
 	case "inmemory":
+		res, err := buildResource(cfg.ServiceName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build resource: %w", err)
+		}
 		exp := tracetest.NewInMemoryExporter()
 		sp := sdktrace.NewSimpleSpanProcessor(exp)
 		tp := sdktrace.NewTracerProvider(
+			sdktrace.WithResource(res),
 			sdktrace.WithSpanProcessor(sp),
 			sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(cfg.SampleRatio))),
 		)
@@ -81,12 +101,17 @@ func newProviderState(cfg TelemetryConfig) (*ProviderState, error) {
 		}, nil
 
 	case "file":
+		res, err := buildResource(cfg.ServiceName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build resource: %w", err)
+		}
 		exp, err := NewFileSpanExporter(cfg.FilePath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create file span exporter: %w", err)
 		}
 		bsp := sdktrace.NewBatchSpanProcessor(exp)
 		tp := sdktrace.NewTracerProvider(
+			sdktrace.WithResource(res),
 			sdktrace.WithSpanProcessor(bsp),
 			sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(cfg.SampleRatio))),
 		)
@@ -99,12 +124,17 @@ func newProviderState(cfg TelemetryConfig) (*ProviderState, error) {
 		if cfg.GCPProjectID == "" {
 			return nil, fmt.Errorf("gcp exporter requires GCP_PROJECT_ID or GOOGLE_CLOUD_PROJECT to be set")
 		}
+		res, err := buildResource(cfg.ServiceName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build resource: %w", err)
+		}
 		exp, err := gcpexporter.New(gcpexporter.WithProjectID(cfg.GCPProjectID))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create GCP trace exporter: %w", err)
 		}
 		bsp := sdktrace.NewBatchSpanProcessor(exp)
 		tp := sdktrace.NewTracerProvider(
+			sdktrace.WithResource(res),
 			sdktrace.WithSpanProcessor(bsp),
 			sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(cfg.SampleRatio))),
 		)
@@ -126,9 +156,11 @@ func NewTestTracerProvider(sampleRatio ...float64) (*sdktrace.TracerProvider, *t
 		ratio = sampleRatio[0]
 	}
 
+	res, _ := buildResource("test-organizer")
 	exp := tracetest.NewInMemoryExporter()
 	sp := sdktrace.NewSimpleSpanProcessor(exp)
 	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithResource(res),
 		sdktrace.WithSpanProcessor(sp),
 		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(ratio))),
 	)

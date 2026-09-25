@@ -9,6 +9,7 @@ import (
 type TelemetryConfig struct {
 	// Exporter specifies the exporter: "none"(default) | "inmemory" | "file" | "gcp"
 	Exporter     string
+	ServiceName  string  // default: "organizer" (or via OTEL_SERVICE_NAME)
 	FilePath     string  // default: ".local/traces.jsonl"
 	GCPProjectID string  // preferred GCP_PROJECT_ID, fallback GOOGLE_CLOUD_PROJECT
 	SampleRatio  float64 // sampling ratio, default 1.0 (sample all)
@@ -19,6 +20,11 @@ func LoadTelemetryConfig() TelemetryConfig {
 	exporter := os.Getenv("OTEL_TRACES_EXPORTER")
 	if exporter == "" {
 		exporter = "none"
+	}
+
+	serviceName := os.Getenv("OTEL_SERVICE_NAME")
+	if serviceName == "" {
+		serviceName = "organizer"
 	}
 
 	filePath := os.Getenv("OTEL_TRACE_FILE")
@@ -40,6 +46,7 @@ func LoadTelemetryConfig() TelemetryConfig {
 
 	return TelemetryConfig{
 		Exporter:     exporter,
+		ServiceName:  serviceName,
 		FilePath:     filePath,
 		GCPProjectID: gcpProjectID,
 		SampleRatio:  sampleRatio,
