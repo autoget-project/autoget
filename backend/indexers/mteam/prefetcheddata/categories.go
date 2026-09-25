@@ -242,8 +242,12 @@ var toOrganizerCategory = map[string][]indexers.OrganizerCategory{
 	"432": {indexers.OrganizerCategoryBangoPorn, indexers.OrganizerCategoryPorn}, // AV(无码)/Blu-Ray Uncensored
 	"436": {indexers.OrganizerCategoryBangoPorn, indexers.OrganizerCategoryPorn}, // AV(网站)/0Day
 	"440": {indexers.OrganizerCategoryBangoPorn, indexers.OrganizerCategoryPorn}, // AV(Gay)/HD
-	"445": {indexers.OrganizerCategoryPhotobook, indexers.OrganizerCategoryPorn}, // IV
-	"425": {indexers.OrganizerCategoryPorn},                                      // IV(写真影集)
+	"445": {
+		indexers.OrganizerCategoryPhotobook,
+		indexers.OrganizerCategoryBangoPorn,
+		indexers.OrganizerCategoryPorn,
+	}, // IV
+	"425": {indexers.OrganizerCategoryBangoPorn, indexers.OrganizerCategoryPorn}, // IV(写真影集)
 	"433": {indexers.OrganizerCategoryPhotobook},                                 // IV(写真图集)
 	"412": {indexers.OrganizerCategoryTVSeries, indexers.OrganizerCategoryMovie}, // H-动漫
 	"413": {indexers.OrganizerCategoryBook},                                      // H-漫画

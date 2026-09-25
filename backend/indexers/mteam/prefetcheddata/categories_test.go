@@ -20,6 +20,39 @@ var (
 	apiKey = os.Getenv("MTEAM_API_KEY")
 )
 
+func TestIVCategoriesMapToBangoPorn(t *testing.T) {
+	// IV(写真影集) is a video collection that may carry a Japanese bango
+	// (dmm_id); it must be treated as ambiguous (bango_porn vs porn) like the
+	// AV categories instead of being forced to "porn". A single-valued
+	// organizer_category would short-circuit Stage 1 and skip the dmm_id rule.
+	tests := []struct {
+		categoryID string
+		want       []indexers.OrganizerCategory
+	}{
+		{
+			categoryID: "425",
+			want:       []indexers.OrganizerCategory{indexers.OrganizerCategoryBangoPorn, indexers.OrganizerCategoryPorn},
+		},
+		{
+			categoryID: "445",
+			want:       []indexers.OrganizerCategory{indexers.OrganizerCategoryPhotobook, indexers.OrganizerCategoryBangoPorn, indexers.OrganizerCategoryPorn},
+		},
+	}
+
+	data, err := Read()
+	require.NoError(t, err)
+
+	for _, tt := range tests {
+		t.Run(tt.categoryID, func(t *testing.T) {
+			assert.Equal(t, tt.want, toOrganizerCategory[tt.categoryID])
+
+			info, ok := data.Categories.Infos[tt.categoryID]
+			require.True(t, ok, "embedded data.json must contain category %s", tt.categoryID)
+			assert.Equal(t, tt.want, info.OrganizerCategory, "embedded data.json out of sync with toOrganizerCategory; re-run cmd/update")
+		})
+	}
+}
+
 func TestToCategoryJSON(t *testing.T) {
 	categories := &listCategories{}
 	err := json.Unmarshal(testToCategoriesInput, categories)
