@@ -2,6 +2,7 @@ package stage1classifier
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -38,12 +39,19 @@ func NewClassifierLLM(provider ai.Provider) *ClassifierLLM {
 
 // Classify runs specialist checkers concurrently and arbitrates results.
 func (c *ClassifierLLM) Classify(ctx context.Context, files []string, metadata map[string]interface{}) (model.ClassifierResult, error) {
-	res, _, err := c.ClassifyWithDetail(ctx, files, metadata)
+	res, _, err := c.classifyWithDetail(ctx, files, metadata, nil)
 	return res, err
 }
 
 // ClassifyWithDetail runs specialist checkers and returns diagnostic details along with the result.
 func (c *ClassifierLLM) ClassifyWithDetail(ctx context.Context, files []string, metadata map[string]interface{}) (model.ClassifierResult, ClassifierDetail, error) {
+	return c.classifyWithDetail(ctx, files, metadata, nil)
+}
+
+// classifyWithDetail is the shared implementation. A non-nil replan is passed
+// to every LLM prompt as clearly labelled suspect context (the previous plan is
+// flawed), never merged into the upstream metadata.
+func (c *ClassifierLLM) classifyWithDetail(ctx context.Context, files []string, metadata map[string]interface{}, replan *model.ReplanContext) (model.ClassifierResult, ClassifierDetail, error) {
 	if c.provider == nil {
 		return model.ClassifierResult{
 			Category: model.CategoryUnknown,
@@ -54,6 +62,11 @@ func (c *ClassifierLLM) ClassifyWithDetail(ctx context.Context, files []string, 
 	// Backward compatibility check for mock provider / legacy single-pass prompt:
 	if c.provider.Name() == "mock" {
 		legacyPrompt := fmt.Sprintf("You are an expert media categorization assistant.\n\nInput:\nfiles: %v\nmetadata: %v", files, metadata)
+		if replan != nil {
+			if b, marshalErr := json.Marshal(replan); marshalErr == nil {
+				legacyPrompt += fmt.Sprintf("\nreplan: %s", string(b))
+			}
+		}
 		var legacyResp ClassifierLLMResponse
 		err := c.provider.GenerateStructured(ctx, legacyPrompt, ClassifierLLMResponse{}, &legacyResp)
 		if err == nil && legacyResp.Category != "" {
@@ -68,7 +81,7 @@ func (c *ClassifierLLM) ClassifyWithDetail(ctx context.Context, files []string, 
 	}
 
 	// Step 0: Single search grounding pass (only if provider supports search, e.g. Gemini)
-	searchCtx := GroundWithSearch(ctx, c.provider, files, metadata)
+	searchCtx := GroundWithSearch(ctx, c.provider, files, metadata, replan)
 	detail := ClassifierDetail{
 		SearchContext: searchCtx,
 	}
@@ -88,7 +101,7 @@ func (c *ClassifierLLM) ClassifyWithDetail(ctx context.Context, files []string, 
 		wg.Add(1)
 		go func(idx int, category model.Category, tpl string) {
 			defer wg.Done()
-			resp, err := runSpecialistChecker(ctx, c.provider, category, tpl, files, metadata, searchCtx)
+			resp, err := runSpecialistChecker(ctx, c.provider, category, tpl, files, metadata, searchCtx, replan)
 			results[idx] = CheckerResult{
 				Category: category,
 				Response: resp,
@@ -156,7 +169,7 @@ func (c *ClassifierLLM) ClassifyWithDetail(ctx context.Context, files []string, 
 
 	// Ambiguous, multiple "yes" conflicts, multiple "maybe", or all "no": call Arbiter
 	detail.ArbiterUsed = true
-	decision, err := DecideArbiter(ctx, c.provider, files, metadata, results, searchCtx)
+	decision, err := DecideArbiter(ctx, c.provider, files, metadata, results, searchCtx, replan)
 	if err != nil {
 		// Fallback: if we had at least one yes, take the first one
 		if len(yesResults) > 0 {
@@ -273,6 +286,20 @@ func releaseDateYear(date string) int {
 		return 0
 	}
 	return y
+}
+
+// ClassifyForReplan re-runs Stage 1 for a replan request. The upstream
+// organizer_category hint is dropped because it may encode the very mistake the
+// user is correcting; authoritative rules (dmm_id, bango naming) still apply.
+// When no rule hits, the LLM reclassifies with the previous (flawed) plan and
+// the user hint attached as explicitly suspect context.
+func ClassifyForReplan(ctx context.Context, provider ai.Provider, files []string, metadata map[string]interface{}, replan model.ReplanContext) (model.ClassifierResult, error) {
+	if res, matched := MatchByRulesForReplan(files, metadata); matched {
+		return res, nil
+	}
+	llm := NewClassifierLLM(provider)
+	res, _, err := llm.classifyWithDetail(ctx, files, WithoutOrganizerCategory(metadata), &replan)
+	return res, err
 }
 
 // ClassifyPipeline executes Rule matcher first, falling back to ClassifierLLM if unmatched.

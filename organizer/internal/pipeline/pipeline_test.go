@@ -436,3 +436,117 @@ func TestCreatePlan_OpenTelemetry_ErrorRecording(t *testing.T) {
 	assert.Equal(t, codes.Error, s3Span.Status.Code)
 	assert.NotEmpty(t, s3Span.Events, "stage 3 span should record error event")
 }
+
+func TestReplan_ReclassifiesAndRunsStage4(t *testing.T) {
+	t.Parallel()
+
+	tp, exp := telemetry.NewTestTracerProvider()
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+	tracer := tp.Tracer("test-replan")
+
+	downloadDir := t.TempDir()
+	subDir := filepath.Join(downloadDir, "replan_dir")
+	require.NoError(t, os.MkdirAll(subDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(subDir, "movie.chs.srt"),
+		[]byte("1\n00:00:01,000 --> 00:00:02,000\n你好世界\n"), 0o644))
+
+	prov := mock.NewProvider()
+	// Stage 1 re-classification: the stale organizer_category is stripped, so
+	// the mock provider's legacy single-pass prompt is used.
+	prov.AddRule(mock.Rule{
+		PromptPattern: "media categorization assistant",
+		Response:      `{"category":"movie","reason":"single feature","entities":{}}`,
+	})
+	prov.AddRule(mock.Rule{
+		PromptPattern: "revises a movie file organization plan",
+		Response: `{"plan":[{"file":"movie.mkv","action":"move",
+			"target":"movie/Chinese/黑客帝国 (1999)/黑客帝国 (1999).mkv"}]}`,
+	})
+	prov.AddRule(mock.Rule{
+		PromptPattern: "subtitle files to match their corresponding video",
+		Response: `{"plan":[{"file":"movie.chs.srt","action":"move",
+			"matched_video":"movie.mkv","language":"Chinese"}]}`,
+	})
+
+	pipe := NewPipeline(prov, stage2enricher.NewEnricher(nil, nil, nil, nil), downloadDir, "tp-test-target", nil, tracer)
+
+	resp, err := pipe.Replan(context.Background(), "replan_dir",
+		[]string{"movie.mkv", "movie.chs.srt"},
+		map[string]interface{}{"title": "错误的名字", "organizer_category": []string{"porn"}},
+		model.ReplanContext{UserHint: "the title is 黑客帝国 and year 1999"},
+	)
+	require.NoError(t, err)
+	require.Nil(t, resp.Error)
+	require.Len(t, resp.Plan, 2)
+
+	byFile := map[string]model.PlanAction{}
+	for _, a := range resp.Plan {
+		byFile[a.File] = a
+	}
+	video := byFile["movie.mkv"]
+	require.NotNil(t, video.Target)
+	assert.Equal(t, "movie/Chinese/黑客帝国 (1999)/黑客帝国 (1999).mkv", *video.Target)
+
+	// Stage 4 pairing must run during a replan too.
+	sub := byFile["movie.chs.srt"]
+	require.NotNil(t, sub.Target, "companion subtitle must be paired")
+	assert.Equal(t, "movie/Chinese/黑客帝国 (1999)/黑客帝国 (1999).简体中文.chi.srt", *sub.Target)
+
+	// Stage 2 must be skipped; the replan pipeline span + 3 stage spans emitted.
+	spans := exp.GetSpans()
+	names := map[string]bool{}
+	for _, s := range spans {
+		names[s.Name] = true
+	}
+	assert.True(t, names[telemetry.SpanPipelineReplan], "replan pipeline span must exist")
+	assert.True(t, names[telemetry.SpanStage1Classify])
+	assert.True(t, names[telemetry.SpanStage2Enrich], "replan must run Stage 2 enrichment like a normal plan")
+	assert.True(t, names[telemetry.SpanStage3Plan])
+	assert.True(t, names[telemetry.SpanStage4PostProcess])
+
+	// The stale organizer_category must never reach any LLM prompt.
+	for _, c := range prov.Calls() {
+		assert.NotContains(t, c.Prompt, "organizer_category",
+			"the stale upstream classification must not be forwarded")
+	}
+}
+
+func TestReplan_BangoUsesCanonicalActressDirFromStage2(t *testing.T) {
+	t.Parallel()
+
+	downloadDir := t.TempDir()
+
+	// Seed the actress store: the canonical library directory is 悠香 while
+	// YUUKA is just an alias. Only Stage 2 can resolve this.
+	actorFile := filepath.Join(t.TempDir(), "actor.json")
+	require.NoError(t, os.WriteFile(actorFile, []byte(`{"悠香":["YUUKA","悠香"]}`), 0o644))
+	store := stage2enricher.NewActorStore(actorFile, "", nil)
+	enricher := stage2enricher.NewEnricher(nil, nil, store, nil)
+
+	prov := mock.NewProvider()
+	prov.AddRule(mock.Rule{
+		PromptPattern: "revises a bango (JAV) file organization plan",
+		Response:      `{"plan":[{"file":"NAAC-076.mp4","action":"move","target":"jav/悠香/NAAC-076.mp4"}]}`,
+	})
+
+	pipe := NewPipeline(prov, enricher, downloadDir, "tp-test-target", nil, nil)
+
+	resp, err := pipe.Replan(context.Background(), "dl",
+		[]string{"NAAC-076.mp4"},
+		map[string]interface{}{
+			"dmm_id": "n_1541naac076tk",
+			"actors": []string{"YUUKA"},
+		},
+		model.ReplanContext{UserHint: "this is a JAV"},
+	)
+	require.NoError(t, err)
+	require.Nil(t, resp.Error)
+	require.Len(t, resp.Plan, 1)
+	require.NotNil(t, resp.Plan[0].Target)
+	assert.Equal(t, "jav/悠香/NAAC-076.mp4", *resp.Plan[0].Target)
+
+	calls := prov.Calls()
+	require.Len(t, calls, 1, "dmm_id short-circuits Stage 1; Stage 2 resolves the actress dir without an LLM call")
+	assert.Contains(t, calls[0].Prompt, `"actor_dir":"悠香"`,
+		"Stage 2 must resolve the canonical actress directory and hand it to the replan prompt")
+}

@@ -58,7 +58,8 @@ func newTestEnv(t *testing.T, prov *mock.Provider) *env {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/plan", NewPlanHandler(pipe, tracer).Handle)
 	mux.HandleFunc("POST /v1/execute", NewExecuteHandler(exec, tracer).Handle)
-	mux.HandleFunc("POST /v1/replan-with-hint", NewReplanHandler(prov, tracer).Handle)
+	mux.HandleFunc("POST /v1/replan", NewReplanHandler(pipe, tracer).Handle)
+	mux.HandleFunc("POST /v1/replan-with-hint", NewReplanWithHintHandler(pipe, tracer).Handle)
 
 	return &env{
 		mux:         mux,
@@ -256,6 +257,10 @@ func TestReplanHandler_TVDomainRouting(t *testing.T) {
 
 	prov := mock.NewProvider()
 	prov.AddRule(mock.Rule{
+		PromptPattern: "media categorization assistant",
+		Response:      `{"category":"tv_series","reason":"episodic naming","entities":{}}`,
+	})
+	prov.AddRule(mock.Rule{
 		PromptPattern: "revises a TV series file organization plan",
 		Response: `{"plan":[
 			{"file":"Show S01E01.mkv","action":"move","target":"tv_series/Others/Show (2020)/Season 02/Show (2020) S02E01.mkv"},
@@ -264,10 +269,10 @@ func TestReplanHandler_TVDomainRouting(t *testing.T) {
 	e := newTestEnv(t, prov)
 
 	prevTarget := "tv_series/Others/Show (2020)/Season 01/Show (2020) S01E01.mkv"
-	rec := postJSON(t, e, "/v1/replan-with-hint", model.APIReplanRequest{
+	rec := postJSON(t, e, "/v1/replan", model.APIReplanRequest{
 		Files:    []string{"Show S01E01.mkv", "Show S01E02.mkv"},
 		Metadata: map[string]interface{}{"title": "Show"},
-		PreviousResponse: &model.PlanResponse{Plan: []model.PlanAction{
+		PreviousResult: &model.PlanResponse{Plan: []model.PlanAction{
 			{File: "Show S01E01.mkv", Action: "move", Target: &prevTarget},
 		}},
 		UserHint: "these are actually season 2 episodes",
@@ -279,11 +284,14 @@ func TestReplanHandler_TVDomainRouting(t *testing.T) {
 	assert.Nil(t, resp.Error)
 	require.Len(t, resp.Plan, 2, "every file must appear exactly once")
 
-	// The domain (TV) replan prompt must be used, with the user hint injected.
+	// Stage 1 re-classifies, then the domain (TV) replan prompt is used with the
+	// user hint and the flawed previous plan attached as suspect context.
 	calls := prov.Calls()
-	require.Len(t, calls, 1, "single replan must issue exactly one LLM call")
-	assert.Contains(t, calls[0].Prompt, "revises a TV series file organization plan")
-	assert.Contains(t, calls[0].Prompt, "these are actually season 2 episodes")
+	require.Len(t, calls, 2, "expect a Stage 1 reclassification call and a replan planning call")
+	assert.Contains(t, calls[0].Prompt, "media categorization assistant")
+	assert.Contains(t, calls[1].Prompt, "revises a TV series file organization plan")
+	assert.Contains(t, calls[1].Prompt, "these are actually season 2 episodes")
+	assert.Contains(t, calls[1].Prompt, prevTarget)
 
 	byFile := map[string]model.PlanAction{}
 	for _, a := range resp.Plan {
@@ -300,98 +308,84 @@ func TestReplanHandler_TVDomainRouting(t *testing.T) {
 	assert.Nil(t, skip.Target)
 }
 
-func TestReplanHandler_EmptyPlanFallsBackToGenericPrompt(t *testing.T) {
+func TestReplanHandler_NonDomainCategoryUsesGenericPrompt(t *testing.T) {
 	t.Parallel()
 
 	prov := mock.NewProvider()
 	prov.AddRule(mock.Rule{
-		PromptPattern: "revises file organization plans based on user feedback",
-		Response: `{"plan":[{"file":"movie.mkv","action":"move",
-			"target":"movie/Others/Movie (2000)/Movie (2000).mkv"}]}`,
+		PromptPattern: "media categorization assistant",
+		Response:      `{"category":"photobook","reason":"image set","entities":{}}`,
 	})
-	e := newTestEnv(t, prov)
-
-	rec := postJSON(t, e, "/v1/replan-with-hint", model.APIReplanRequest{
-		Files:            []string{"movie.mkv"},
-		Metadata:         map[string]interface{}{"title": "Movie"},
-		PreviousResponse: &model.PlanResponse{Plan: []model.PlanAction{}},
-		UserHint:         "the year should be 2000, not 2024",
-	})
-	require.Equal(t, http.StatusOK, rec.Code)
-
-	calls := prov.Calls()
-	require.Len(t, calls, 1)
-	assert.Contains(t, calls[0].Prompt, "revises file organization plans based on user feedback",
-		"empty previous plan must fall back to the generic replan prompt")
-
-	var resp model.PlanResponse
-	decodeBody(t, rec, &resp)
-	assert.Nil(t, resp.Error)
-	require.Len(t, resp.Plan, 1)
-	assert.Equal(t, "move", resp.Plan[0].Action)
-}
-
-func TestReplanHandler_NilPreviousResponseFallsBackToGenericPrompt(t *testing.T) {
-	t.Parallel()
-
-	prov := mock.NewProvider()
-	prov.AddRule(mock.Rule{
-		PromptPattern: "revises file organization plans based on user feedback",
-		Response: `{"plan":[{"file":"movie.mkv","action":"move",
-			"target":"movie/Others/Movie (2000)/Movie (2000).mkv"}]}`,
-	})
-	e := newTestEnv(t, prov)
-
-	rec := postJSON(t, e, "/v1/replan-with-hint", model.APIReplanRequest{
-		Files:            []string{"movie.mkv"},
-		Metadata:         map[string]interface{}{"title": "Movie"},
-		PreviousResponse: nil,
-		UserHint:         "the year should be 2000, not 2024",
-	})
-	require.Equal(t, http.StatusOK, rec.Code)
-
-	calls := prov.Calls()
-	require.Len(t, calls, 1)
-	assert.Contains(t, calls[0].Prompt, "revises file organization plans based on user feedback",
-		"nil previous response must fall back to the generic replan prompt without panic")
-
-	var resp model.PlanResponse
-	decodeBody(t, rec, &resp)
-	assert.Nil(t, resp.Error)
-	require.Len(t, resp.Plan, 1)
-	assert.Equal(t, "move", resp.Plan[0].Action)
-}
-
-func TestReplanHandler_UnknownRootFallsBackToGenericPrompt(t *testing.T) {
-	t.Parallel()
-
-	prov := mock.NewProvider()
 	prov.AddRule(mock.Rule{
 		PromptPattern: "revises file organization plans based on user feedback",
 		Response:      `{"plan":[{"file":"a.mkv","action":"skip"}]}`,
 	})
 	e := newTestEnv(t, prov)
 
-	unknownRoot := "weird_root/a.mkv"
-	rec := postJSON(t, e, "/v1/replan-with-hint", model.APIReplanRequest{
-		Files: []string{"a.mkv"},
-		PreviousResponse: &model.PlanResponse{Plan: []model.PlanAction{
-			{File: "a.mkv", Action: "move", Target: &unknownRoot},
-		}},
+	rec := postJSON(t, e, "/v1/replan", model.APIReplanRequest{
+		Files:    []string{"a.mkv"},
+		Metadata: map[string]interface{}{"title": "Album"},
 		UserHint: "unknown domain",
 	})
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	calls := prov.Calls()
-	require.Len(t, calls, 1)
-	assert.Contains(t, calls[0].Prompt, "revises file organization plans based on user feedback",
-		"uninferable root must fall back to the generic replan prompt")
+	require.Len(t, calls, 2)
+	assert.Contains(t, calls[1].Prompt, "revises file organization plans based on user feedback")
 
 	var resp model.PlanResponse
 	decodeBody(t, rec, &resp)
 	require.Len(t, resp.Plan, 1)
 	assert.Equal(t, "skip", resp.Plan[0].Action)
 	assert.Nil(t, resp.Plan[0].Target)
+}
+
+func TestReplanHandler_RunsStage4SubtitlePairing(t *testing.T) {
+	t.Parallel()
+
+	prov := mock.NewProvider()
+	prov.AddRule(mock.Rule{
+		PromptPattern: "media categorization assistant",
+		Response:      `{"category":"movie","reason":"single feature","entities":{}}`,
+	})
+	prov.AddRule(mock.Rule{
+		PromptPattern: "revises a movie file organization plan",
+		Response: `{"plan":[{"file":"movie.mkv","action":"move",
+			"target":"movie/Others/Movie (2000)/Movie (2000).mkv"}]}`,
+	})
+	prov.AddRule(mock.Rule{
+		PromptPattern: "subtitle files to match their corresponding video",
+		Response: `{"plan":[{"file":"movie.chs.srt","action":"move",
+			"matched_video":"movie.mkv","language":"Chinese"}]}`,
+	})
+	e := newTestEnv(t, prov)
+
+	// Seed the subtitle on disk so Stage 4 can read its preview.
+	subDir := filepath.Join(e.downloadDir, "replan_sub")
+	require.NoError(t, os.MkdirAll(subDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(subDir, "movie.chs.srt"), []byte("1\n00:00:01,000 --> 00:00:02,000\n你好\n"), 0o644))
+
+	rec := postJSON(t, e, "/v1/replan", model.APIReplanRequest{
+		Dir:      "replan_sub",
+		Files:    []string{"movie.mkv", "movie.chs.srt"},
+		Metadata: map[string]interface{}{"title": "Movie"},
+		UserHint: "fix the title",
+	})
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp model.PlanResponse
+	decodeBody(t, rec, &resp)
+	require.Nil(t, resp.Error)
+	require.Len(t, resp.Plan, 2)
+
+	byFile := map[string]model.PlanAction{}
+	for _, a := range resp.Plan {
+		byFile[a.File] = a
+	}
+	sub := byFile["movie.chs.srt"]
+	require.NotNil(t, sub.Target, "Stage 4 must pair the companion subtitle during a replan")
+	assert.Equal(t,
+		"movie/Others/Movie (2000)/Movie (2000).简体中文.chi.srt", *sub.Target)
 }
 
 func TestReplanHandler_LLMFailure500(t *testing.T) {
@@ -401,10 +395,10 @@ func TestReplanHandler_LLMFailure500(t *testing.T) {
 	prov.SetDefaultResponse(nil, errors.New("replanner offline"))
 	e := newTestEnv(t, prov)
 
-	rec := postJSON(t, e, "/v1/replan-with-hint", model.APIReplanRequest{
-		Files:            []string{"a.mkv"},
-		PreviousResponse: &model.PlanResponse{Plan: []model.PlanAction{}},
-		UserHint:         "fix it",
+	rec := postJSON(t, e, "/v1/replan", model.APIReplanRequest{
+		Files:          []string{"a.mkv"},
+		PreviousResult: &model.PlanResponse{Plan: []model.PlanAction{}},
+		UserHint:       "fix it",
 	})
 	require.Equal(t, http.StatusInternalServerError, rec.Code)
 
@@ -414,16 +408,57 @@ func TestReplanHandler_LLMFailure500(t *testing.T) {
 	assert.Contains(t, *resp.Error, "replanner offline")
 }
 
+func TestReplanWithHintHandler_LegacyWireShape(t *testing.T) {
+	t.Parallel()
+
+	prov := mock.NewProvider()
+	prov.AddRule(mock.Rule{
+		PromptPattern: "revises a bango (JAV) file organization plan",
+		Response:      `{"plan":[{"file":"SSIS-001.mp4","action":"move","target":"jav/Actress/SSIS-001.mp4"}]}`,
+	})
+	e := newTestEnv(t, prov)
+
+	prevTarget := "porn/SSIS-001/SSIS-001.mp4"
+	rec := postJSON(t, e, "/v1/replan-with-hint", model.APIReplanWithHintRequest{
+		Files: []string{"SSIS-001.mp4"},
+		PreviousResponse: &model.PlanResponse{Plan: []model.PlanAction{
+			{File: "SSIS-001.mp4", Action: "move", Target: &prevTarget},
+		}},
+		UserHint: "this is a JAV",
+	})
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp model.PlanResponse
+	decodeBody(t, rec, &resp)
+	require.Nil(t, resp.Error)
+	require.Len(t, resp.Plan, 1)
+	require.NotNil(t, resp.Plan[0].Target)
+	assert.Equal(t, "jav/Actress/SSIS-001.mp4", *resp.Plan[0].Target)
+
+	// The legacy endpoint delegates to the same pipeline path: a bango filename
+	// rule-matches Stage 1, and the previous plan reaches the replan prompt.
+	calls := prov.Calls()
+	require.Len(t, calls, 1)
+	assert.Contains(t, calls[0].Prompt, "revises a bango (JAV) file organization plan")
+	assert.Contains(t, calls[0].Prompt, prevTarget)
+}
+
 func TestReplanHandler_InvalidBody400(t *testing.T) {
 	t.Parallel()
 
-	e := newTestEnv(t, mock.NewProvider())
+	for _, path := range []string{"/v1/replan", "/v1/replan-with-hint"} {
+		t.Run(path, func(t *testing.T) {
+			t.Parallel()
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/replan-with-hint", strings.NewReader("{invalid"))
-	rec := httptest.NewRecorder()
-	e.mux.ServeHTTP(rec, req)
+			e := newTestEnv(t, mock.NewProvider())
 
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
+			req := httptest.NewRequest(http.MethodPost, path, strings.NewReader("{invalid"))
+			rec := httptest.NewRecorder()
+			e.mux.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+		})
+	}
 }
 
 func TestHandlers_TraceHeaders(t *testing.T) {
@@ -454,18 +489,22 @@ func TestHandlers_TraceHeaders(t *testing.T) {
 	// Test Replan handler returns X-Trace-Id
 	prov := mock.NewProvider()
 	prov.AddRule(mock.Rule{
+		PromptPattern: "media categorization assistant",
+		Response:      `{"category":"photobook","reason":"image set","entities":{}}`,
+	})
+	prov.AddRule(mock.Rule{
 		PromptPattern: "file organization plans",
 		Response:      `{"plan":[{"file":"a.mkv","action":"skip"}]}`,
 	})
 	eReplan := newTestEnv(t, prov)
-	recReplan := postJSON(t, eReplan, "/v1/replan-with-hint", model.APIReplanRequest{
-		Files:            []string{"a.mkv"},
-		PreviousResponse: &model.PlanResponse{Plan: []model.PlanAction{}},
-		UserHint:         "hint",
+	recReplan := postJSON(t, eReplan, "/v1/replan", model.APIReplanRequest{
+		Files:          []string{"a.mkv"},
+		PreviousResult: &model.PlanResponse{Plan: []model.PlanAction{}},
+		UserHint:       "hint",
 	})
 	assert.Equal(t, http.StatusOK, recReplan.Code)
 	traceIDReplan := recReplan.Header().Get("X-Trace-Id")
-	assert.NotEmpty(t, traceIDReplan, "X-Trace-Id header should be set on /v1/replan-with-hint")
+	assert.NotEmpty(t, traceIDReplan, "X-Trace-Id header should be set on /v1/replan")
 	assert.Len(t, traceIDReplan, 32, "trace ID should be 32 hex chars")
 }
 
@@ -558,3 +597,109 @@ func TestPlanHandler_ErrorSummaryLog(t *testing.T) {
 
 // Compile-time interface guards.
 var _ ai.Provider = (*mock.Provider)(nil)
+
+func TestReplanHandler_ReclassifiesPornToBango(t *testing.T) {
+	t.Parallel()
+
+	prov := mock.NewProvider()
+	prov.AddRule(mock.Rule{
+		PromptPattern: "revises a bango (JAV) file organization plan",
+		Response:      `{"plan":[{"file":"NAAC-076.mp4","action":"move","target":"jav/YUUKA/NAAC-076.mp4"}]}`,
+	})
+	e := newTestEnv(t, prov)
+
+	prevTarget := "porn/NAAC-076/NAAC-076.mp4"
+	rec := postJSON(t, e, "/v1/replan", model.APIReplanRequest{
+		Files: []string{"NAAC-076.mp4"},
+		Metadata: map[string]interface{}{
+			"organizer_category": []string{"porn"},
+			"dmm_id":             "n_1541naac076tk",
+			"actors":             []string{"YUUKA"},
+			"title":              "NAAC-076 【数量限定】Best naked/YUUKA チェキ付き",
+		},
+		PreviousResult: &model.PlanResponse{Plan: []model.PlanAction{
+			{File: "NAAC-076.mp4", Action: "move", Target: &prevTarget},
+		}},
+	})
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp model.PlanResponse
+	decodeBody(t, rec, &resp)
+	require.Nil(t, resp.Error)
+	require.Len(t, resp.Plan, 1)
+	require.NotNil(t, resp.Plan[0].Target)
+	assert.Equal(t, "jav/YUUKA/NAAC-076.mp4", *resp.Plan[0].Target)
+
+	calls := prov.Calls()
+	require.Len(t, calls, 1, "dmm_id reclassification must short-circuit the Stage 1 LLM")
+	assert.Contains(t, calls[0].Prompt, "revises a bango (JAV) file organization plan")
+	assert.Contains(t, calls[0].Prompt, "porn/NAAC-076/NAAC-076.mp4",
+		"the flawed previous plan must be supplied as suspect context")
+	assert.Contains(t, calls[0].Prompt, "n_1541naac076tk")
+	assert.NotContains(t, calls[0].Prompt, "organizer_category",
+		"the stale upstream classification must not be forwarded")
+}
+
+func TestReplanHandler_ReclassifiesViaLLMThenPlans(t *testing.T) {
+	t.Parallel()
+
+	prov := mock.NewProvider()
+	prov.AddRule(mock.Rule{
+		PromptPattern: "media categorization assistant",
+		Response:      `{"category":"movie","reason":"single feature","entities":{}}`,
+	})
+	prov.AddRule(mock.Rule{
+		PromptPattern: "revises a movie file organization plan",
+		Response:      `{"plan":[{"file":"movie.mkv","action":"move","target":"movie/Chinese/正确的电影 (2022)/正确的电影 (2022).mkv"}]}`,
+	})
+	e := newTestEnv(t, prov)
+
+	rec := postJSON(t, e, "/v1/replan", model.APIReplanRequest{
+		Files:          []string{"movie.mkv"},
+		Metadata:       map[string]interface{}{"title": "错误的名字", "year": 2020.0},
+		PreviousResult: nil,
+		UserHint:       "the title is wrong, it should be 正确的电影 and the year is 2022",
+	})
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp model.PlanResponse
+	decodeBody(t, rec, &resp)
+	require.Nil(t, resp.Error)
+	require.Len(t, resp.Plan, 1)
+	require.NotNil(t, resp.Plan[0].Target)
+	assert.Equal(t, "movie/Chinese/正确的电影 (2022)/正确的电影 (2022).mkv", *resp.Plan[0].Target)
+
+	calls := prov.Calls()
+	require.Len(t, calls, 2, "expect a Stage 1 reclassification call and a replan planning call")
+	assert.Contains(t, calls[0].Prompt, "media categorization assistant")
+	assert.Contains(t, calls[0].Prompt, "the year is 2022", "user hint must reach the reclassification")
+	assert.Contains(t, calls[1].Prompt, "revises a movie file organization plan")
+	assert.Contains(t, calls[1].Prompt, "the year is 2022", "user hint must reach the planner")
+}
+
+func TestReplanHandler_MissingPreviousResultIsSafe(t *testing.T) {
+	t.Parallel()
+
+	prov := mock.NewProvider()
+	prov.AddRule(mock.Rule{
+		PromptPattern: "revises a bango (JAV) file organization plan",
+		Response:      `{"plan":[{"file":"SSIS-001.mp4","action":"move","target":"jav/Actress/SSIS-001.mp4"}]}`,
+	})
+	e := newTestEnv(t, prov)
+
+	rec := postJSON(t, e, "/v1/replan", model.APIReplanRequest{
+		Files:          []string{"SSIS-001.mp4"},
+		PreviousResult: nil,
+		UserHint:       "fix it",
+	})
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp model.PlanResponse
+	decodeBody(t, rec, &resp)
+	require.Nil(t, resp.Error)
+	require.Len(t, resp.Plan, 1)
+
+	calls := prov.Calls()
+	require.Len(t, calls, 1)
+	assert.Contains(t, calls[0].Prompt, "revises a bango (JAV) file organization plan")
+}

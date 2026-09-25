@@ -33,3 +33,13 @@ type SubtitleMatchItem struct {
 	Filename       string `json:"filename"`
 	ContentPreview string `json:"content_preview"` // First 30 lines preview
 }
+
+// ReplanContext carries the previous plan and the user's correction hint for a
+// replan. It is deliberately kept separate from the upstream metadata so the
+// planner never mistakes the flawed previous result for authoritative input:
+// a user only requests a replan because something was wrong.
+// A nil *ReplanContext means normal (first-time) planning.
+type ReplanContext struct {
+	PreviousPlan []PlanAction `json:"previous_plan,omitempty"`
+	UserHint     string       `json:"user_hint,omitempty"`
+}

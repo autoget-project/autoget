@@ -13,7 +13,7 @@ AutoGet Organizer is the core post-processing service in the automated media pip
   4. **Stage 4 Post-Process & Safety**: Semantic subtitle-to-video pairing (language detection, ISO-639 codes, and naming synchronization), junk file skipping (`.nfo`, `.torrent`, `.url`), and pure-Go physical path traversal sanitization (blocking any `../` escapes).
 - **Multi-Provider LLM Support**: Native support for Google Gemini and xAI Grok using strict Structured Outputs without free-form text parsing.
 - **Physical Safety & Atomic Execution**: Aggregated error handling (individual failures do not abort legal operations) and automatic source directory isolation (`archive/`).
-- **Human-in-the-Loop Replanning (`/v1/replan-with-hint`)**: Allows users to provide natural language hints to adjust existing plans without repeating expensive metadata queries.
+- **Human-in-the-Loop Replanning (`/v1/replan`)**: Allows users to correct an existing plan. Unlike the initial plan, the previous (flawed) result is supplied in a dedicated field and Stage 1 is re-run so a wrong category/domain can be fixed, while Stage 2 enrichment (authoritative metadata, canonical JAV actress directory) and Stage 4 (subtitle pairing + sanitization) still run.
 
 ---
 
@@ -213,34 +213,33 @@ Executes the actions in a previously approved plan. Moves files atomically and a
 
 ---
 
-### 3. Replan with Hint: `POST /v1/replan-with-hint`
+### 3. Replan: `POST /v1/replan`
 
-Refines an existing plan using user feedback or corrections without re-running classification or external metadata lookups.
+Re-plans an existing (flawed) plan. It re-runs Stage 1 classification (rules + LLM, cheap) and Stage 2 metadata enrichment so a wrong category/domain is corrected with authoritative facts (TMDB/MetaTube, and the canonical JAV actress directory from the actress store), then finalizes through Stage 4 (companion subtitle pairing + physical security sanitization). The previous result is carried in a dedicated `previous_result` field and treated as suspect context — it is never merged into `metadata`.
+
+- The upstream `organizer_category` hint is dropped: a replan exists because the previous classification was wrong, so the coarse hint must not be trusted again.
+- Authoritative rules (a `dmm_id`, a standard bango filename) still apply.
+- When no rule hits, the LLM re-classifies from the files and metadata, with the previous plan and the user hint attached as explicitly suspect context.
+- Stage 2 then resolves authoritative facts, and re-planning routes to a domain prompt matching the **new** category with the user hint and the flawed previous plan. For JAV, the actress directory is a Go/ActorStore decision (`actor_dir` in the payload), not an LLM transliteration, so a replan lands in the same folder a normal plan would.
+- `user_hint` is optional: a plain replan (no hint) still reclassifies and re-plans instead of reproducing the same result.
 
 #### Request Body
 ```json
 {
-  "files": [
-    "Sample.Show.S01E01.mkv",
-    "Sample.Show.S01E02.mkv"
-  ],
-  "metadata": {},
-  "previous_response": {
+  "dir": "6b19f6ef7871e7773262bb9bbb7fa2315d049569",
+  "files": ["NAAC-076.mp4"],
+  "metadata": {
+    "dmm_id": "n_1541naac076tk",
+    "actors": ["YUUKA"],
+    "title": "NAAC-076 【数量限定】Best naked/YUUKA チェキ付き"
+  },
+  "previous_result": {
     "plan": [
-      {
-        "file": "Sample.Show.S01E01.mkv",
-        "action": "move",
-        "target": "tv_series/English/Wrong Title (2020)/Season 01/Wrong Title (2020) S01E01.mkv"
-      },
-      {
-        "file": "Sample.Show.S01E02.mkv",
-        "action": "move",
-        "target": "tv_series/English/Wrong Title (2020)/Season 01/Wrong Title (2020) S01E02.mkv"
-      }
+      { "file": "NAAC-076.mp4", "action": "move", "target": "porn/NAAC-076/NAAC-076.mp4" }
     ],
     "error": null
   },
-  "user_hint": "The show title is actually Correct Title and release year is 2022"
+  "user_hint": "this is a JAV, not porn"
 }
 ```
 
@@ -248,16 +247,7 @@ Refines an existing plan using user feedback or corrections without re-running c
 ```json
 {
   "plan": [
-    {
-      "file": "Sample.Show.S01E01.mkv",
-      "action": "move",
-      "target": "tv_series/English/Correct Title (2022)/Season 01/Correct Title (2022) S01E01.mkv"
-    },
-    {
-      "file": "Sample.Show.S01E02.mkv",
-      "action": "move",
-      "target": "tv_series/English/Correct Title (2022)/Season 01/Correct Title (2022) S01E02.mkv"
-    }
+    { "file": "NAAC-076.mp4", "action": "move", "target": "jav/YUUKA/NAAC-076.mp4" }
   ],
   "error": null
 }
@@ -265,7 +255,13 @@ Refines an existing plan using user feedback or corrections without re-running c
 
 ---
 
-### 4. Health Check: `GET /healthz`
+### 4. Replan with Hint (legacy): `POST /v1/replan-with-hint`
+
+Retained for wire compatibility: it accepts the historical request shape (`previous_response` instead of `previous_result`) and delegates to the same replan path as `POST /v1/replan`. New integrations should use `POST /v1/replan`.
+
+---
+
+### 5. Health Check: `GET /healthz`
 
 - Response: `200 OK`, body: `ok`.
 

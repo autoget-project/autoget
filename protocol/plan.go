@@ -65,8 +65,23 @@ type ExecuteResponse struct {
 	FailedMove []PlanFailed `json:"failed_move"`
 }
 
-// APIReplanRequest represents the REST API request to replan with user hint.
+// APIReplanRequest represents the unified replan request. The previous result
+// is a dedicated field, deliberately NOT merged into Metadata: it is known to
+// be flawed (that is why the user is replanning) and must never be mistaken for
+// authoritative upstream metadata. Dir is the download sub-directory, used by
+// Stage 4 to pair companion subtitles.
 type APIReplanRequest struct {
+	Dir            string                 `json:"dir"`
+	Files          []string               `json:"files"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	PreviousResult *PlanResponse          `json:"previous_result"`
+	UserHint       string                 `json:"user_hint,omitempty"`
+}
+
+// APIReplanWithHintRequest represents the legacy /v1/replan-with-hint request
+// shape (retained for wire compatibility).
+type APIReplanWithHintRequest struct {
+	Dir              string                 `json:"dir"`
 	Files            []string               `json:"files"`
 	Metadata         map[string]interface{} `json:"metadata,omitempty"`
 	PreviousResponse *PlanResponse          `json:"previous_response"`

@@ -83,6 +83,53 @@ func TestMatchByRules_OrganizerCategory(t *testing.T) {
 	}
 }
 
+func TestMatchByRules_IVPhotoCollectionWithDmmIDGoesBango(t *testing.T) {
+	t.Parallel()
+
+	// Regression: MTeam IV(写真影集) used to map to a single
+	// organizer_category "porn", which short-circuited Stage 1 and skipped the
+	// dmm_id rule, sending JAV releases like NAAC-076 to the porn planner. Now
+	// the mapping is ambiguous {bango_porn, porn}, so the authoritative dmm_id
+	// wins.
+	res, matched := MatchByRules([]string{"NAAC-076.mp4"}, map[string]interface{}{
+		"organizer_category": []string{"bango_porn", "porn"},
+		"dmm_id":             "n_1541naac076tk",
+	})
+	require.True(t, matched)
+	assert.Equal(t, model.CategoryBangoPorn, res.Category)
+}
+
+func TestMatchByRulesForReplan_SkipsOrganizerCategory(t *testing.T) {
+	t.Parallel()
+
+	// The upstream organizer_category is the coarse hint that may encode the
+	// very mistake being corrected; a replan must not trust it.
+	files := []string{"whatever.mp4"}
+	metadata := map[string]interface{}{"organizer_category": []string{"porn"}}
+
+	if _, matched := MatchByRules(files, metadata); !matched {
+		t.Fatal("sanity: MatchByRules must trust a single organizer_category")
+	}
+
+	_, matched := MatchByRulesForReplan(files, metadata)
+	assert.False(t, matched, "replan must ignore organizer_category")
+}
+
+func TestMatchByRulesForReplan_KeepsAuthoritativeSignals(t *testing.T) {
+	t.Parallel()
+
+	// A dmm_id is an authoritative Japanese adult identifier and must still
+	// win during a replan (it is exactly what rescues IV releases like
+	// NAAC-076 that the coarse organizer_category mislabels as porn).
+	res, matched := MatchByRulesForReplan([]string{"NAAC-076.mp4"}, map[string]interface{}{
+		"organizer_category": []string{"porn"},
+		"dmm_id":             "n_1541naac076tk",
+	})
+	require.True(t, matched)
+	assert.Equal(t, model.CategoryBangoPorn, res.Category)
+	assert.Equal(t, "n_1541naac076tk", res.Entities["dmm_id"])
+}
+
 func TestMatchByRules_DmmID(t *testing.T) {
 	t.Parallel()
 

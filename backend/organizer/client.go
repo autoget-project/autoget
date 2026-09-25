@@ -139,9 +139,12 @@ func (c *Client) Execute(req *ExecuteRequest) (bool, *ExecuteResponse, error) {
 	return false, &execResp, nil
 }
 
-// ReplanWithHint sends a request to the /v1/replan-with-hint endpoint to get a revised organization plan.
-func (c *Client) ReplanWithHint(req *ReplanRequest) (*PlanResponse, error) {
-	replanURL := c.baseURL.JoinPath("/v1/replan-with-hint")
+// Replan sends a request to the /v1/replan endpoint to get a revised
+// organization plan. The previous result is carried in a dedicated field and
+// treated as flawed, so the organizer re-runs Stage 1 classification instead
+// of blindly preserving it.
+func (c *Client) Replan(req *ReplanRequest) (*PlanResponse, error) {
+	replanURL := c.baseURL.JoinPath("/v1/replan")
 
 	reqBody, err := json.Marshal(req)
 	if err != nil {

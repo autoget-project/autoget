@@ -78,11 +78,23 @@ func TestAPIRequestsAndResponses(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(dataResp), `"reason":"file not found"`)
 
-	// APIReplanRequest round trip.
-	var replanReq APIReplanRequest
+	// APIReplanWithHintRequest round trip (legacy wire shape).
+	var legacyReplanReq APIReplanWithHintRequest
 	require.NoError(t, json.Unmarshal(
 		[]byte(`{"files":["a.mkv"],"metadata":null,"previous_response":{"plan":[],"error":null},"user_hint":"this is tv"}`),
+		&legacyReplanReq))
+	assert.Equal(t, []string{"a.mkv"}, legacyReplanReq.Files)
+	assert.Equal(t, "this is tv", legacyReplanReq.UserHint)
+	require.NotNil(t, legacyReplanReq.PreviousResponse)
+
+	// APIReplanRequest round trip: the previous result is a dedicated field,
+	// separate from the upstream metadata.
+	var replanReq APIReplanRequest
+	require.NoError(t, json.Unmarshal(
+		[]byte(`{"files":["a.mkv"],"metadata":{"title":"x"},"previous_result":{"plan":[],"error":null},"user_hint":"this is tv"}`),
 		&replanReq))
 	assert.Equal(t, []string{"a.mkv"}, replanReq.Files)
 	assert.Equal(t, "this is tv", replanReq.UserHint)
+	require.NotNil(t, replanReq.PreviousResult)
+	assert.NotContains(t, replanReq.Metadata, "previous_result")
 }

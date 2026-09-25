@@ -341,3 +341,58 @@ func TestMergeSearchFacts_KeepsGuessesWhenGrounderSilent(t *testing.T) {
 	assert.NotContains(t, base, "studio")
 	assert.NotContains(t, base, "release_date")
 }
+
+func TestClassifyForReplan_DmmIDBeatsOrganizerCategory(t *testing.T) {
+	t.Parallel()
+
+	// NAAC-076 is an IV release the upstream indexer maps to a single
+	// organizer_category "porn"; the dmm_id proves it is bango_porn. A replan
+	// must not let the stale coarse hint win, and the authoritative rule must
+	// short-circuit without spending an LLM call.
+	mockProv := mock.NewProvider()
+
+	res, err := ClassifyForReplan(context.Background(), mockProv,
+		[]string{"NAAC-076.mp4"},
+		map[string]interface{}{
+			"organizer_category": []string{"porn"},
+			"dmm_id":             "n_1541naac076tk",
+		},
+		model.ReplanContext{UserHint: "this is a JAV"},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, model.CategoryBangoPorn, res.Category)
+	assert.Empty(t, mockProv.Calls(), "authoritative rule must not call the LLM")
+}
+
+func TestClassifyForReplan_FeedsPreviousPlanAsSuspectContext(t *testing.T) {
+	t.Parallel()
+
+	mockProv := mock.NewProvider()
+	mockProv.AddRule(mock.Rule{
+		PromptPattern: "the title is actually Correct Title",
+		Response: ClassifierLLMResponse{
+			Category: model.CategoryMovie,
+			Reason:   "user corrected the title",
+		},
+	})
+
+	prevTarget := "porn/Wrong Title/Wrong Title.mp4"
+	res, err := ClassifyForReplan(context.Background(), mockProv,
+		[]string{"movie.mkv"},
+		map[string]interface{}{"organizer_category": []string{"porn"}},
+		model.ReplanContext{
+			PreviousPlan: []model.PlanAction{{File: "movie.mkv", Action: model.ActionMove, Target: &prevTarget}},
+			UserHint:     "the title is actually Correct Title",
+		},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, model.CategoryMovie, res.Category)
+
+	calls := mockProv.Calls()
+	require.Len(t, calls, 1)
+	assert.Contains(t, calls[0].Prompt, "the title is actually Correct Title")
+	assert.Contains(t, calls[0].Prompt, "porn/Wrong Title/Wrong Title.mp4",
+		"the previous plan must be supplied as dedicated suspect context")
+	assert.NotContains(t, calls[0].Prompt, `"organizer_category"`,
+		"the stale upstream hint must not be forwarded as authoritative metadata")
+}

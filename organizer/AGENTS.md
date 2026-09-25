@@ -6,7 +6,7 @@ AutoGet Organizer is the post-processing core service in an automated media pipe
 
 ## Architecture: 4-Stage Pipeline
 
-1. **Stage 1 Classifier** (`internal/pipeline/stage1_classifier/`) — determines the media `Category`. This is the ONLY stage allowed to do lightweight pattern matching (pure ebook/audio extensions, standard bango IDs like `^[A-Z]{3,5}-\d{3,4}$`, valid `dmm_id`). Dirty/ambiguous/mixed inputs must fall through to the LLM classifier.
+1. **Stage 1 Classifier** (`internal/pipeline/stage1_classifier/`) — determines the media `Category`. This is the ONLY stage allowed to do lightweight pattern matching (pure ebook/audio extensions, standard bango IDs like `^[A-Z]{3,5}-\d{3,4}$`, valid `dmm_id`). Dirty/ambiguous/mixed inputs must fall through to the LLM classifier. During a replan, the coarse upstream `organizer_category` rule is deliberately ignored (it may encode the very mistake being corrected) while authoritative rules still apply.
 2. **Stage 2 Metadata Enricher** (`internal/pipeline/stage2_enricher/`) — fills in authoritative metadata via the local metadata clients (`internal/metadata/`: TMDB, Metatube) and the local `actor.json` actress alias store (guarded by a Go file lock `flock`).
 3. **Stage 3 LLM Domain Planners** (`internal/pipeline/stage3_planner/`) — per-category planners (TV/Movie/Bango LLM, Simple local planner for book/music/photobook).
 4. **Stage 4 Post-Process** (`internal/pipeline/stage4_postprocess/`) — LLM semantic subtitle-to-video pairing and pure-Go physical path safety validation.
@@ -18,7 +18,7 @@ AutoGet Organizer is the post-processing core service in an automated media pipe
 - **Code is only responsible for**: flow orchestration, external metadata tool calls, and physical I/O safety validation.
 - **All LLM calls use strict Structured Outputs (JSON Schema)** via the unified `ai.Provider` interface (`GenerateStructured`), with `temperature: 0.1`. Providers: Gemini and Grok. Never parse free-form LLM text.
 - **Physical safety is non-negotiable**: every output `target` must pass `filepath.Clean` and stay inside `TARGET_DIR` (block `../` traversal). Mark `.nfo`, `.url`, torrent files as `skip`.
-- **API compatibility is 100% mandatory** — upstream AutoGet must not change: `POST /v1/plan`, `POST /v1/execute`, `POST /v1/replan-with-hint` (see `internal/model/api.go` and `internal/handler/`).
+- **API compatibility is 100% mandatory** — upstream AutoGet must not change: `POST /v1/plan`, `POST /v1/execute`, `POST /v1/replan` (unified replan; the previous result is a dedicated suspect field), `POST /v1/replan-with-hint` (legacy wire shape, delegates to the same replan path). `/v1/replan` re-runs Stage 1 (skipping the stale `organizer_category` hint), Stage 2 (authoritative facts incl. the canonical JAV actress directory) and Stage 4 (subtitle pairing), so a wrong category/domain is corrected without diverging from a normal plan's output.
 
 ## Naming Conventions (emit in planner targets)
 

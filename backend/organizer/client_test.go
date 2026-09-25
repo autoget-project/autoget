@@ -226,7 +226,7 @@ func TestClient_Execute(t *testing.T) {
 	})
 }
 
-func TestClient_ReplanWithHint(t *testing.T) {
+func TestClient_Replan(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		expectedPlan := []PlanAction{
 			{File: "/path/to/file1.txt", Action: ActionMove, Target: protocol.StringPtr("/new/path/file1.txt")},
@@ -241,7 +241,7 @@ func TestClient_ReplanWithHint(t *testing.T) {
 
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodPost, r.Method)
-			assert.Equal(t, "/v1/replan-with-hint", r.URL.Path)
+			assert.Equal(t, "/v1/replan", r.URL.Path)
 			assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
 			var req ReplanRequest
@@ -249,7 +249,7 @@ func TestClient_ReplanWithHint(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, []string{"file1.txt", "file2.txt"}, req.Files)
 			assert.Equal(t, "move files to documents folder", req.UserHint)
-			assert.Equal(t, previousResponse, req.PreviousResponse)
+			assert.Equal(t, previousResponse, req.PreviousResult)
 			assert.Equal(t, map[string]interface{}{"key": "value"}, req.Metadata)
 
 			w.WriteHeader(http.StatusOK)
@@ -261,13 +261,13 @@ func TestClient_ReplanWithHint(t *testing.T) {
 		require.NoError(t, err)
 
 		req := &ReplanRequest{
-			Files:            []string{"file1.txt", "file2.txt"},
-			Metadata:         map[string]interface{}{"key": "value"},
-			PreviousResponse: previousResponse,
-			UserHint:         "move files to documents folder",
+			Files:          []string{"file1.txt", "file2.txt"},
+			Metadata:       map[string]interface{}{"key": "value"},
+			PreviousResult: previousResponse,
+			UserHint:       "move files to documents folder",
 		}
 
-		resp, err := client.ReplanWithHint(req)
+		resp, err := client.Replan(req)
 		require.NoError(t, err)
 		require.NotNil(t, resp)
 		assert.Nil(t, resp.Error)
@@ -289,7 +289,7 @@ func TestClient_ReplanWithHint(t *testing.T) {
 			UserHint: "test hint",
 		}
 
-		resp, err := client.ReplanWithHint(req)
+		resp, err := client.Replan(req)
 		require.NoError(t, err)
 		require.NotNil(t, resp)
 		require.NotNil(t, resp.Error)
@@ -306,7 +306,7 @@ func TestClient_ReplanWithHint(t *testing.T) {
 		client, err := NewClient(server.URL, nil)
 		require.NoError(t, err)
 
-		resp, err := client.ReplanWithHint(&ReplanRequest{})
+		resp, err := client.Replan(&ReplanRequest{})
 		require.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Contains(t, err.Error(), "replan request failed with status 500: internal server error")
@@ -319,7 +319,7 @@ func TestClient_ReplanWithHint(t *testing.T) {
 		client, err := NewClient(server.URL, nil)
 		require.NoError(t, err)
 
-		resp, err := client.ReplanWithHint(&ReplanRequest{})
+		resp, err := client.Replan(&ReplanRequest{})
 		require.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Contains(t, err.Error(), "failed to send replan request")
@@ -335,7 +335,7 @@ func TestClient_ReplanWithHint(t *testing.T) {
 		client, err := NewClient(server.URL, nil)
 		require.NoError(t, err)
 
-		resp, err := client.ReplanWithHint(&ReplanRequest{})
+		resp, err := client.Replan(&ReplanRequest{})
 		require.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Contains(t, err.Error(), "failed to decode replan response")

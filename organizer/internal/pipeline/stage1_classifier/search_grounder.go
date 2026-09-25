@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/autoget-project/autoget/organizer/internal/ai"
+	"github.com/autoget-project/autoget/organizer/internal/model"
 )
 
 // SearchContext carries the grounder's answers to a fixed set of questions
@@ -58,7 +59,9 @@ Return your answer strictly matching the required JSON schema.`
 
 // GroundWithSearch runs a single search query across the files if the provider supports SearchProvider.
 // If provider does not support search or search fails, it returns an empty SearchContext gracefully without failing.
-func GroundWithSearch(ctx context.Context, provider ai.Provider, files []string, metadata map[string]interface{}) SearchContext {
+// A non-nil replan is attached as a dedicated "replan" field, separate from
+// the upstream metadata, so the grounder knows the previous plan is suspect.
+func GroundWithSearch(ctx context.Context, provider ai.Provider, files []string, metadata map[string]interface{}, replan *model.ReplanContext) SearchContext {
 	sp, ok := provider.(ai.SearchProvider)
 	if !ok {
 		return SearchContext{}
@@ -67,6 +70,9 @@ func GroundWithSearch(ctx context.Context, provider ai.Provider, files []string,
 	payload := map[string]interface{}{
 		"files":    files,
 		"metadata": metadata,
+	}
+	if replan != nil {
+		payload["replan"] = replan
 	}
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {

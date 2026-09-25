@@ -83,7 +83,8 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/plan", handler.NewPlanHandler(pipe, tracer).Handle)
 	mux.HandleFunc("POST /v1/execute", handler.NewExecuteHandler(exec, tracer).Handle)
-	mux.HandleFunc("POST /v1/replan-with-hint", handler.NewReplanHandler(provider, tracer).Handle)
+	mux.HandleFunc("POST /v1/replan", handler.NewReplanHandler(pipe, tracer).Handle)
+	mux.HandleFunc("POST /v1/replan-with-hint", handler.NewReplanWithHintHandler(pipe, tracer).Handle)
 	upload.RegisterRoutes(mux, uploadHandler)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)

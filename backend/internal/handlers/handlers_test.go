@@ -790,12 +790,14 @@ func TestService_handleRePlan_Success(t *testing.T) {
 
 	mockOrganizerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, "/v1/plan", r.URL.Path)
+		assert.Equal(t, "/v1/replan", r.URL.Path)
 
-		var req organizer.PlanRequest
+		var req organizer.ReplanRequest
 		err := json.NewDecoder(r.Body).Decode(&req)
 		require.NoError(t, err)
 		assert.Equal(t, "test-hash", req.Dir)
+		assert.Nil(t, req.PreviousResult, "no previous plan yet")
+		assert.Empty(t, req.UserHint, "plain replan carries no hint")
 		assert.Contains(t, req.Files, "file1.txt")
 		assert.Contains(t, req.Files, "file2.txt")
 
@@ -881,7 +883,7 @@ func TestService_handleRePlan_OrganizerError(t *testing.T) {
 func TestService_handleRePlan_WithUserHint_Success(t *testing.T) {
 	serv, router, _, testDB := testSetup(t)
 
-	// Mock organizer server for ReplanWithHint
+	// Mock organizer server for Replan
 	expectedPlan := []organizer.PlanAction{
 		{File: "file1.txt", Action: organizer.ActionMove, Target: protocol.StringPtr("/organized/file1.txt")},
 		{File: "file2.txt", Action: organizer.ActionSkip},
@@ -889,7 +891,7 @@ func TestService_handleRePlan_WithUserHint_Success(t *testing.T) {
 
 	mockOrganizerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, "/v1/replan-with-hint", r.URL.Path)
+		assert.Equal(t, "/v1/replan", r.URL.Path)
 
 		var req organizer.ReplanRequest
 		err := json.NewDecoder(r.Body).Decode(&req)
@@ -897,7 +899,7 @@ func TestService_handleRePlan_WithUserHint_Success(t *testing.T) {
 		assert.Equal(t, "move file1.txt to movies folder", req.UserHint)
 		assert.Contains(t, req.Files, "file1.txt")
 		assert.Contains(t, req.Files, "file2.txt")
-		assert.NotNil(t, req.PreviousResponse)
+		assert.NotNil(t, req.PreviousResult)
 
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(organizer.PlanResponse{Plan: expectedPlan})
@@ -952,10 +954,10 @@ func TestService_handleRePlan_WithUserHint_Success(t *testing.T) {
 func TestService_handleRePlan_WithUserHint_Error(t *testing.T) {
 	serv, router, _, testDB := testSetup(t)
 
-	// Mock organizer server that returns an error for ReplanWithHint
+	// Mock organizer server that returns an error for Replan
 	mockOrganizerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, "/v1/replan-with-hint", r.URL.Path)
+		assert.Equal(t, "/v1/replan", r.URL.Path)
 
 		var req organizer.ReplanRequest
 		err := json.NewDecoder(r.Body).Decode(&req)
@@ -1001,22 +1003,22 @@ func TestService_handleRePlan_WithUserHint_Error(t *testing.T) {
 	assert.Equal(t, db.CreatePlanFailed, updatedStatus.OrganizeState)
 }
 
-func TestService_handleRePlan_EmptyUserHint_UsesRegularPlan(t *testing.T) {
+func TestService_handleRePlan_EmptyUserHint_UsesReplan(t *testing.T) {
 	serv, router, _, testDB := testSetup(t)
 
-	// Mock organizer server for regular Plan endpoint
+	// Mock organizer server for the unified replan endpoint
 	expectedPlan := []organizer.PlanAction{
 		{File: "file1.txt", Action: organizer.ActionMove, Target: protocol.StringPtr("/organized/file1.txt")},
 	}
 
 	mockOrganizerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, "/v1/plan", r.URL.Path)
+		assert.Equal(t, "/v1/replan", r.URL.Path)
 
-		var req organizer.PlanRequest
+		var req organizer.ReplanRequest
 		err := json.NewDecoder(r.Body).Decode(&req)
 		require.NoError(t, err)
-		assert.Equal(t, "test-hash", req.Dir)
+		assert.Empty(t, req.UserHint)
 		assert.Contains(t, req.Files, "file1.txt")
 
 		w.WriteHeader(http.StatusOK)

@@ -474,25 +474,16 @@ func (s *Service) handleRePlan(c *gin.Context, downloadStatus *db.DownloadStatus
 	// Get user_hint from query parameter (optional)
 	userHint := c.Query("user_hint")
 
-	var resp *organizer.PlanResponse
-	var err error
-
-	if userHint != "" {
-		// Use ReplanWithHint when user_hint is provided
-		resp, err = s.organizerClient.ReplanWithHint(&organizer.ReplanRequest{
-			Files:            downloadStatus.FileList,
-			Metadata:         downloadStatus.Metadata,
-			PreviousResponse: downloadStatus.OrganizePlans,
-			UserHint:         userHint,
-		})
-	} else {
-		// Use regular Plan when user_hint is empty (keep current logic)
-		resp, err = s.organizerClient.Plan(&organizer.PlanRequest{
-			Dir:      downloadStatus.ID,
-			Files:    downloadStatus.FileList,
-			Metadata: downloadStatus.Metadata,
-		})
-	}
+	// Both hint and no-hint replans go through the unified replan endpoint: the
+	// previous result is passed in a dedicated field and treated as flawed, so
+	// the organizer re-classifies instead of reproducing the same wrong plan.
+	resp, err := s.organizerClient.Replan(&organizer.ReplanRequest{
+		Dir:            downloadStatus.ID,
+		Files:          downloadStatus.FileList,
+		Metadata:       downloadStatus.Metadata,
+		PreviousResult: downloadStatus.OrganizePlans,
+		UserHint:       userHint,
+	})
 
 	if err != nil {
 		// Update the state to CreatePlanFailed when re-planning fails

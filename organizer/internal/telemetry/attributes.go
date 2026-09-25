@@ -6,6 +6,7 @@ const (
 	SpanHTTPReplan         = "organizer.http.replan"
 	SpanHTTPExecute        = "organizer.http.execute"
 	SpanPipelineCreatePlan = "organizer.pipeline.CreatePlan"
+	SpanPipelineReplan     = "organizer.pipeline.Replan"
 	SpanStage1Classify     = "organizer.stage1.classify"
 	SpanStage2Enrich       = "organizer.stage2.enrich"
 	SpanStage3Plan         = "organizer.stage3.plan"

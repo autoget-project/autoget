@@ -176,7 +176,8 @@ func newSandboxWithActorStore(t *testing.T, prov ai.Provider, store *stage2enric
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/plan", handler.NewPlanHandler(pipe, nil).Handle)
 	mux.HandleFunc("POST /v1/execute", handler.NewExecuteHandler(exec, nil).Handle)
-	mux.HandleFunc("POST /v1/replan-with-hint", handler.NewReplanHandler(prov, nil).Handle)
+	mux.HandleFunc("POST /v1/replan", handler.NewReplanHandler(pipe, nil).Handle)
+	mux.HandleFunc("POST /v1/replan-with-hint", handler.NewReplanWithHintHandler(pipe, nil).Handle)
 
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)

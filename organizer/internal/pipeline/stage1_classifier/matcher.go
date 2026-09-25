@@ -49,8 +49,42 @@ var (
 // MatchByRules performs Stage 1 rule-based classification according to M8 ordering.
 // Returns (result, matched) where matched is true if high-confidence rule was hit.
 func MatchByRules(files []string, metadata map[string]interface{}) (model.ClassifierResult, bool) {
+	return matchByRules(files, metadata, true)
+}
+
+// MatchByRulesForReplan is MatchByRules without the upstream organizer_category
+// rule. A replan happens because the user believes the previous classification
+// was wrong, and organizer_category is exactly the coarse upstream hint that
+// may encode that mistake; trusting it would force the same wrong category.
+// Authoritative rules (dmm_id, bango naming, extensions) still apply.
+func MatchByRulesForReplan(files []string, metadata map[string]interface{}) (model.ClassifierResult, bool) {
+	return matchByRules(files, metadata, false)
+}
+
+// WithoutOrganizerCategory returns metadata without the organizer_category
+// hint. Replan callers use it so a stale upstream classification never biases
+// either the re-classification or the re-plan; the previous (flawed) plan is
+// carried separately instead.
+func WithoutOrganizerCategory(metadata map[string]interface{}) map[string]interface{} {
+	if metadata == nil {
+		return nil
+	}
+	if _, ok := metadata["organizer_category"]; !ok {
+		return metadata
+	}
+	out := make(map[string]interface{}, len(metadata))
+	for k, v := range metadata {
+		if k == "organizer_category" {
+			continue
+		}
+		out[k] = v
+	}
+	return out
+}
+
+func matchByRules(files []string, metadata map[string]interface{}, allowOrganizerCategory bool) (model.ClassifierResult, bool) {
 	// 1. organizer_category fault-tolerant parsing (M8a)
-	if metadata != nil {
+	if allowOrganizerCategory && metadata != nil {
 		if rawVal, ok := metadata["organizer_category"]; ok && rawVal != nil {
 			// Multi-valued organizer_category means the upstream source
 			// itself is unsure (e.g. ["bango_porn","porn"]): it is not a

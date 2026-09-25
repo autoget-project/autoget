@@ -43,10 +43,13 @@ type ArbiterInputPayload struct {
 	Metadata      map[string]interface{}   `json:"metadata"`
 	SearchContext *SearchContext           `json:"search_context,omitempty"`
 	Specialists   []ArbiterInputSpecialist `json:"specialists"`
+	// Replan is the previous (flawed) plan plus the user hint, supplied as a
+	// dedicated suspect context. It is never merged into Metadata.
+	Replan *model.ReplanContext `json:"replan,omitempty"`
 }
 
 // DecideArbiter invokes the arbiter LLM to resolve multiple or conflicting checker findings.
-func DecideArbiter(ctx context.Context, provider ai.Provider, files []string, metadata map[string]interface{}, results []CheckerResult, searchCtx SearchContext) (ArbiterDecision, error) {
+func DecideArbiter(ctx context.Context, provider ai.Provider, files []string, metadata map[string]interface{}, results []CheckerResult, searchCtx SearchContext, replan *model.ReplanContext) (ArbiterDecision, error) {
 	if provider == nil {
 		return ArbiterDecision{Category: model.CategoryUnknown}, fmt.Errorf("ai provider is nil")
 	}
@@ -71,6 +74,7 @@ func DecideArbiter(ctx context.Context, provider ai.Provider, files []string, me
 	if searchCtx.HasInfo() {
 		payload.SearchContext = &searchCtx
 	}
+	payload.Replan = replan
 
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {

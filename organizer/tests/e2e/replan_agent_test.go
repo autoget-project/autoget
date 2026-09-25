@@ -12,10 +12,11 @@ import (
 	"github.com/autoget-project/autoget/organizer/internal/model"
 )
 
-// TestE2E_ReplanWithHintLifecycle drives /v1/plan -> /v1/replan-with-hint ->
-// /v1/execute: the user hint is applied on top of the previous plan without
-// re-running Stage 1/2, and executing the replanned result delivers the file
-// into TARGET_DIR and archives the source directory.
+// TestE2E_ReplanWithHintLifecycle drives /v1/plan -> /v1/replan -> /v1/execute:
+// the new replan endpoint re-runs Stage 1 classification (without trusting the
+// stale upstream organizer_category), applies the user hint on top of the
+// previous plan, and executing the replanned result delivers the file into
+// TARGET_DIR and archives the source directory.
 func TestE2E_ReplanWithHintLifecycle(t *testing.T) {
 	runWithLiveProviders(t, func(t *testing.T, s *sandbox) {
 		s.seedDownloadFile(t, "replandl", "movie.mkv", "mkvdata")
@@ -32,12 +33,13 @@ func TestE2E_ReplanWithHintLifecycle(t *testing.T) {
 		require.Nil(t, initial.Error)
 		require.Len(t, initial.Plan, 1)
 
-		// Replan with a user hint: Stage 1/2 are never re-run.
-		code, body = s.postJSON(t, "/v1/replan-with-hint", model.APIReplanRequest{
-			Files:            []string{"movie.mkv"},
-			Metadata:         map[string]interface{}{"organizer_category": "movie", "title": "Wrong Name", "year": 2020},
-			PreviousResponse: &initial,
-			UserHint:         "the movie name is wrong, it should be The Correct Name",
+		// Replan with a user hint through the unified endpoint.
+		code, body = s.postJSON(t, "/v1/replan", model.APIReplanRequest{
+			Dir:            "replandl",
+			Files:          []string{"movie.mkv"},
+			Metadata:       map[string]interface{}{"organizer_category": "movie", "title": "Wrong Name", "year": 2020},
+			PreviousResult: &initial,
+			UserHint:       "the movie name is wrong, it should be The Correct Name",
 		})
 		require.Equal(t, http.StatusOK, code, body)
 		var replanned model.PlanResponse
