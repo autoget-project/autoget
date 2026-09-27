@@ -147,7 +147,12 @@ func (e *Enricher) enrichMovieWithDetail(ctx context.Context, files []string, me
 			enriched.Title = titleCandidate
 		}
 		if enriched.Year == 0 {
-			enriched.Year = extractYear(files, metadata)
+			enriched.Year = extractYear(files, metadata, entities)
+		}
+		if enriched.Language == model.LanguageOthers {
+			if l := inferLanguage(metadata, entities); l != model.LanguageOthers {
+				enriched.Language = l
+			}
 		}
 	}
 
@@ -202,7 +207,12 @@ func (e *Enricher) enrichTVSeriesWithDetail(ctx context.Context, files []string,
 			enriched.Title = titleCandidate
 		}
 		if enriched.Year == 0 {
-			enriched.Year = extractYear(files, metadata)
+			enriched.Year = extractYear(files, metadata, entities)
+		}
+		if enriched.Language == model.LanguageOthers {
+			if l := inferLanguage(metadata, entities); l != model.LanguageOthers {
+				enriched.Language = l
+			}
 		}
 	}
 
@@ -456,13 +466,29 @@ func bangoFromFiles(files []string) string {
 	return ""
 }
 
-func extractYear(files []string, metadata map[string]interface{}) int {
+func extractYear(files []string, metadata, entities map[string]interface{}) int {
+	if entities != nil {
+		if y, ok := entities["year"].(int); ok && y > 0 {
+			return y
+		}
+		if y, ok := entities["year"].(float64); ok && y > 0 {
+			return int(y)
+		}
+	}
 	if metadata != nil {
 		if y, ok := metadata["year"].(int); ok && y > 0 {
 			return y
 		}
 		if y, ok := metadata["year"].(float64); ok && y > 0 {
 			return int(y)
+		}
+		if desc, ok := metadata["description"].(string); ok {
+			matches := yearRegex.FindAllString(desc, -1)
+			for _, m := range matches {
+				if y, err := strconv.Atoi(m); err == nil && y >= 1950 && y <= 2035 {
+					return y
+				}
+			}
 		}
 	}
 	for _, f := range files {
@@ -474,6 +500,29 @@ func extractYear(files []string, metadata map[string]interface{}) int {
 		}
 	}
 	return 0
+}
+
+func inferLanguage(metadata, entities map[string]interface{}) model.Language {
+	if entities != nil {
+		if l, ok := entities["language"].(string); ok && l != "" {
+			if lang := model.ISO639ToLanguage(l); lang != model.LanguageOthers {
+				return lang
+			}
+		}
+	}
+	if metadata != nil {
+		if l, ok := metadata["language"].(string); ok && l != "" {
+			if lang := model.ISO639ToLanguage(l); lang != model.LanguageOthers {
+				return lang
+			}
+		}
+		if desc, ok := metadata["description"].(string); ok {
+			if strings.Contains(desc, "中国大陆") || strings.Contains(desc, "华语") || strings.Contains(desc, "国产") || strings.Contains(desc, "香港") || strings.Contains(desc, "台湾") {
+				return model.LanguageChinese
+			}
+		}
+	}
+	return model.LanguageOthers
 }
 
 func detectIsAnim(files []string, metadata map[string]interface{}, title string) bool {

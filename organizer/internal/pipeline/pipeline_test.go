@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
 	"github.com/autoget-project/autoget/organizer/internal/ai/mock"
+	"github.com/autoget-project/autoget/organizer/internal/metadata"
 	"github.com/autoget-project/autoget/organizer/internal/model"
 	stage1classifier "github.com/autoget-project/autoget/organizer/internal/pipeline/stage1_classifier"
 	stage2enricher "github.com/autoget-project/autoget/organizer/internal/pipeline/stage2_enricher"
@@ -549,4 +550,76 @@ func TestReplan_BangoUsesCanonicalActressDirFromStage2(t *testing.T) {
 	require.Len(t, calls, 1, "dmm_id short-circuits Stage 1; Stage 2 resolves the actress dir without an LLM call")
 	assert.Contains(t, calls[0].Prompt, `"actor_dir":"悠香"`,
 		"Stage 2 must resolve the canonical actress directory and hand it to the replan prompt")
+}
+
+type testTMDBSource struct{}
+
+func (m *testTMDBSource) SearchMovies(ctx context.Context, title string) ([]metadata.Movie, error) {
+	return nil, nil
+}
+
+func (m *testTMDBSource) SearchTVShows(ctx context.Context, title string) ([]metadata.TVShow, error) {
+	if title == "A Prophet" || title == "我不是大师" {
+		return []metadata.TVShow{
+			{
+				Name:             "A Prophet",
+				OriginalName:     "我不是大师",
+				FirstAirDate:     "2026-01-01",
+				OriginalLanguage: "zh",
+			},
+		}, nil
+	}
+	return nil, nil
+}
+
+func (m *testTMDBSource) FindByIMDbID(ctx context.Context, imdbID string) (metadata.FindResult, error) {
+	return metadata.FindResult{}, nil
+}
+
+func TestCreatePlan_TVSeriesWithDirtyTitleAndOrganizerCategory(t *testing.T) {
+	t.Parallel()
+
+	downloadDir := t.TempDir()
+
+	prov := mock.NewProvider()
+	// Stage 1: TV specialist checker extracts clean title and year
+	prov.AddRule(mock.Rule{
+		PromptPattern: "episodic TV series",
+		Response:      `{"confidence":"yes","reason":"Chinese drama series","entities":{"clean_title":"A Prophet","year":2026}}`,
+	})
+	// Stage 3: TV planner uses enriched metadata to plan files
+	prov.AddRule(mock.Rule{
+		PromptPattern: "organizes TV series downloads into Jellyfin",
+		Response:      `{"plan":[{"file":"A.Prophet.S01.1080p.TX.WEB-DL.AAC2.0.H.264-MWeb/A.Prophet.S01E09.1080p.TX.WEB-DL.AAC2.0.H.264-MWeb.mkv","action":"move","target":"tv_series/Chinese/A Prophet (2026)/Season 01/A Prophet (2026) S01E09.mkv"}]}`,
+	})
+
+	tmdb := &testTMDBSource{}
+	enricher := stage2enricher.NewEnricher(tmdb, nil, nil, nil)
+	pipe := NewPipeline(prov, enricher, downloadDir, "tp-test-target", nil, nil)
+
+	file := "A.Prophet.S01.1080p.TX.WEB-DL.AAC2.0.H.264-MWeb/A.Prophet.S01E09.1080p.TX.WEB-DL.AAC2.0.H.264-MWeb.mkv"
+	resp, err := pipe.CreatePlan(context.Background(), "f32573266003c8b521cc992c58e64b3e846363ee",
+		[]string{file},
+		map[string]interface{}{
+			"category":           "影剧/综艺/HD",
+			"description":        "我不是大师 | 2026 | 第1季第9集 | 1080p SDR | 中国大陆 | 剧情 悬疑 | 杨磊 | 李现 李一桐",
+			"organizer_category": []string{"tv_series"},
+			"title":              "A Prophet S01E09 1080p TX WEB-DL AAC2.0 H.264-MWeb",
+		},
+	)
+
+	require.NoError(t, err)
+	require.Nil(t, resp.Error)
+	require.Len(t, resp.Plan, 1)
+	require.NotNil(t, resp.Plan[0].Target)
+	assert.Equal(t, "tv_series/Chinese/A Prophet (2026)/Season 01/A Prophet (2026) S01E09.mkv", *resp.Plan[0].Target)
+
+	// Verify that the TV series planner was called with enriched metadata
+	calls := prov.Calls()
+	require.NotEmpty(t, calls)
+	lastCall := calls[len(calls)-1]
+	assert.Contains(t, lastCall.Prompt, "organizes TV series downloads into Jellyfin")
+	assert.Contains(t, lastCall.Prompt, `"language":"Chinese"`)
+	assert.Contains(t, lastCall.Prompt, `"name":"A Prophet"`)
+	assert.Contains(t, lastCall.Prompt, `"year":2026`)
 }

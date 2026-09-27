@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/autoget-project/autoget/organizer/internal/ai"
@@ -244,6 +245,24 @@ func selectCandidates(files []string, metadata map[string]interface{}) []model.C
 			model.CategoryAudioBook,
 			model.CategoryMusic,
 			model.CategoryPhotobook,
+		}
+	}
+
+	// If upstream provided organizer_category, focus candidates on the requested categories
+	// that are compatible with the identified file types.
+	if metadata != nil {
+		if rawVal, ok := metadata["organizer_category"]; ok && rawVal != nil {
+			if cats := parseOrganizerCategories(rawVal); len(cats) > 0 {
+				var filtered []model.Category
+				for _, c := range cats {
+					if slices.Contains(candidates, c) {
+						filtered = append(filtered, c)
+					}
+				}
+				if len(filtered) > 0 {
+					return filtered
+				}
+			}
 		}
 	}
 

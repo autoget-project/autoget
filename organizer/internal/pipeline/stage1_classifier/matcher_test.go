@@ -83,6 +83,76 @@ func TestMatchByRules_OrganizerCategory(t *testing.T) {
 	}
 }
 
+func TestMatchByRules_OrganizerCategory_TVAndMovieRequireAuthoritativeID(t *testing.T) {
+	t.Parallel()
+
+	// tv_series and movie without imdb_id or clean_title must fall through to LLM
+	// so fansub noise is stripped and clean_title/year are properly extracted for TMDB.
+	t.Run("tv_series without imdb_id falls through to LLM", func(t *testing.T) {
+		t.Parallel()
+		files := []string{"A.Prophet.S01E09.1080p.TX.WEB-DL.mkv"}
+		meta := map[string]interface{}{
+			"organizer_category": []string{"tv_series"},
+			"title":              "A Prophet S01E09 1080p TX WEB-DL",
+		}
+		res, matched := MatchByRules(files, meta)
+		assert.False(t, matched, "tv_series without authoritative ID must fall through to LLM")
+		assert.Empty(t, res.Category)
+	})
+
+	t.Run("tv_series with imdb_id matches statically", func(t *testing.T) {
+		t.Parallel()
+		files := []string{"A.Prophet.S01E09.1080p.TX.WEB-DL.mkv"}
+		meta := map[string]interface{}{
+			"organizer_category": []string{"tv_series"},
+			"title":              "A Prophet S01E09 1080p TX WEB-DL",
+			"imdb_id":            "tt1234567",
+		}
+		res, matched := MatchByRules(files, meta)
+		require.True(t, matched)
+		assert.Equal(t, model.CategoryTVSeries, res.Category)
+		assert.Equal(t, "tt1234567", res.Entities["imdb_id"])
+	})
+
+	t.Run("tv_series with clean_title matches statically", func(t *testing.T) {
+		t.Parallel()
+		files := []string{"A.Prophet.S01E09.1080p.TX.WEB-DL.mkv"}
+		meta := map[string]interface{}{
+			"organizer_category": []string{"tv_series"},
+			"clean_title":        "A Prophet",
+		}
+		res, matched := MatchByRules(files, meta)
+		require.True(t, matched)
+		assert.Equal(t, model.CategoryTVSeries, res.Category)
+		assert.Equal(t, "A Prophet", res.Entities["clean_title"])
+	})
+
+	t.Run("movie without imdb_id falls through to LLM", func(t *testing.T) {
+		t.Parallel()
+		files := []string{"[HDSky] Inception.2010.1080p.mkv"}
+		meta := map[string]interface{}{
+			"organizer_category": []string{"movie"},
+			"title":              "[HDSky] Inception 2010 1080p",
+		}
+		res, matched := MatchByRules(files, meta)
+		assert.False(t, matched, "movie without authoritative ID must fall through to LLM")
+		assert.Empty(t, res.Category)
+	})
+
+	t.Run("movie with imdb_id matches statically", func(t *testing.T) {
+		t.Parallel()
+		files := []string{"[HDSky] Inception.2010.1080p.mkv"}
+		meta := map[string]interface{}{
+			"organizer_category": []string{"movie"},
+			"imdb_id":            "tt1375666",
+		}
+		res, matched := MatchByRules(files, meta)
+		require.True(t, matched)
+		assert.Equal(t, model.CategoryMovie, res.Category)
+		assert.Equal(t, "tt1375666", res.Entities["imdb_id"])
+	})
+}
+
 func TestMatchByRules_IVPhotoCollectionWithDmmIDGoesBango(t *testing.T) {
 	t.Parallel()
 

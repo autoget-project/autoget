@@ -90,10 +90,27 @@ func matchByRules(files []string, metadata map[string]interface{}, allowOrganize
 			// itself is unsure (e.g. ["bango_porn","porn"]): it is not a
 			// high-confidence signal, so degrade to the LLM classifier.
 			if cats := parseOrganizerCategories(rawVal); len(cats) == 1 {
-				return model.ClassifierResult{
-					Category: cats[0],
-					NeedLLM:  false,
-				}, true
+				cat := cats[0]
+				// If cat is a video domain requiring metadata enrichment (movie, tv_series),
+				// it requires an authoritative identifier (imdb_id or clean_title) to short-circuit.
+				// Otherwise, torrent titles are typically dirty with fansub noise, so it must
+				// fall through to the LLM classifier for semantic entity extraction.
+				if (cat == model.CategoryTVSeries || cat == model.CategoryMovie) && !hasAuthoritativeMediaID(metadata) {
+					// Fall through to LLM entity extraction.
+				} else {
+					entities := map[string]interface{}{}
+					if id, ok := metadata["imdb_id"].(string); ok && strings.TrimSpace(id) != "" {
+						entities["imdb_id"] = strings.TrimSpace(id)
+					}
+					if ct, ok := metadata["clean_title"].(string); ok && strings.TrimSpace(ct) != "" {
+						entities["clean_title"] = strings.TrimSpace(ct)
+					}
+					return model.ClassifierResult{
+						Category: cat,
+						NeedLLM:  false,
+						Entities: entities,
+					}, true
+				}
 			}
 		}
 	}
@@ -237,4 +254,17 @@ func toString(val any) string {
 		return s
 	}
 	return ""
+}
+
+func hasAuthoritativeMediaID(metadata map[string]interface{}) bool {
+	if metadata == nil {
+		return false
+	}
+	if id, ok := metadata["imdb_id"].(string); ok && strings.TrimSpace(id) != "" {
+		return true
+	}
+	if ct, ok := metadata["clean_title"].(string); ok && strings.TrimSpace(ct) != "" {
+		return true
+	}
+	return false
 }
