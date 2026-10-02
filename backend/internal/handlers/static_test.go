@@ -31,13 +31,13 @@ func TestServeStaticServesShellAndAssets(t *testing.T) {
 
 	cases := []struct {
 		path, want  string
-		wantNoCache bool
+		wantCaching string
 	}{
-		{"/theme-init.js", "theme", true},
-		{"/icon.svg", "svg", false},
-		{"/assets/app.js", "app", false},
-		{"/", "shell", true},
-		{"/indexers/mteam", "shell", true}, // deep links fall through to the shell
+		{"/theme-init.js", "theme", "no-cache"},
+		{"/icon.svg", "svg", "no-cache"},
+		{"/assets/app.js", "app", "public, max-age=31536000, immutable"},
+		{"/", "shell", "no-cache"},
+		{"/indexers/mteam", "shell", "no-cache"}, // deep links fall through to the shell
 	}
 	for _, tc := range cases {
 		t.Run(tc.path, func(t *testing.T) {
@@ -48,11 +48,28 @@ func TestServeStaticServesShellAndAssets(t *testing.T) {
 			assert.Equal(t, http.StatusOK, w.Code)
 			assert.Contains(t, w.Body.String(), tc.want)
 			assert.NotEmpty(t, w.Header().Get("Content-Security-Policy"))
-			if tc.wantNoCache {
-				assert.Equal(t, "no-cache", w.Header().Get("Cache-Control"))
-			}
+			assert.Equal(t, tc.wantCaching, w.Header().Get("Cache-Control"))
 		})
 	}
+}
+
+// An unmatched API path must not be answered with the HTML shell.
+func TestServeStaticUnknownAPIIs404JSON(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "index.html"), "<html>shell</html>")
+
+	r := gin.New()
+	serveStatic(r, root)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/typo", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Header().Get("Content-Type"), "application/json")
+	assert.NotContains(t, w.Body.String(), "shell")
 }
 
 func writeFile(t *testing.T, path, content string) {

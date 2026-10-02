@@ -25,6 +25,11 @@ import (
 const (
 	stateLifetime    = 10 * time.Minute
 	maxPendingStates = 1000
+	// maxRedirectLength bounds the attacker-supplied post-login target that is
+	// stored in the pending-state map. The count cap alone would not bound
+	// memory: one state could otherwise carry a redirect as large as the
+	// request URL allows (up to the 1 MB default header limit).
+	maxRedirectLength = 2048
 	// discoveryRetryInterval throttles retries while the provider is down, so
 	// an outage does not turn every request into a discovery call.
 	discoveryRetryInterval = 30 * time.Second
@@ -345,15 +350,26 @@ func (s *Service) addState(state, redirect string) {
 		}
 	}
 	// guard against unbounded growth from automated login attempts
-	if len(s.states) >= maxPendingStates {
-		for k := range s.states {
-			delete(s.states, k)
-			if len(s.states) < maxPendingStates {
-				break
-			}
-		}
+	for len(s.states) >= maxPendingStates {
+		s.deleteOldestStateLocked()
 	}
 	s.states[state] = stateEntry{redirect: redirect, exp: now.Add(stateLifetime)}
+}
+
+// deleteOldestStateLocked removes the pending state closest to expiry, which is
+// the one created first. Evicting by age rather than at map-iteration random
+// keeps a freshly created state (a user mid-login) from being dropped instead.
+// The caller must hold statesMu.
+func (s *Service) deleteOldestStateLocked() {
+	var oldestKey string
+	var oldestExp time.Time
+	found := false
+	for k, e := range s.states {
+		if !found || e.exp.Before(oldestExp) {
+			oldestKey, oldestExp, found = k, e.exp, true
+		}
+	}
+	delete(s.states, oldestKey)
 }
 
 // checkState consumes the state value, returning the redirect target and
@@ -375,9 +391,9 @@ func bearerToken(r *http.Request) string {
 	return ""
 }
 
-// sanitizeRedirect only allows same-origin relative paths.
+// sanitizeRedirect only allows same-origin relative paths of a bounded length.
 func sanitizeRedirect(v string) string {
-	if v == "" || v[0] != '/' || (len(v) > 1 && v[1] == '/') {
+	if v == "" || len(v) > maxRedirectLength || v[0] != '/' || (len(v) > 1 && v[1] == '/') {
 		return "/"
 	}
 	return v

@@ -261,6 +261,55 @@ func TestAddStateCapacityEviction(t *testing.T) {
 	assert.LessOrEqual(t, count, maxPendingStates)
 }
 
+// The count cap is only meaningful if the per-entry payload is also bounded:
+// otherwise one state can carry a 1 MB redirect and the map holds ~1 GiB.
+func TestAddStateRedirectSizeIsBounded(t *testing.T) {
+	s := testService(t)
+
+	// sanitizeRedirect is the only gate on the stored value.
+	assert.Equal(t, "/", sanitizeRedirect("/"+strings.Repeat("A", 1<<20)))
+
+	big := "/" + strings.Repeat("A", 1<<20)
+	for i := 0; i < maxPendingStates; i++ {
+		s.svc.addState(fmt.Sprintf("state-%d", i), sanitizeRedirect(big))
+	}
+
+	s.svc.statesMu.Lock()
+	count, bytes := len(s.svc.states), 0
+	for _, e := range s.svc.states {
+		bytes += len(e.redirect)
+	}
+	s.svc.statesMu.Unlock()
+
+	assert.LessOrEqual(t, count, maxPendingStates)
+	assert.Less(t, bytes, maxPendingStates*maxRedirectLength, "retained redirect bytes must stay bounded")
+}
+
+// Under pressure the oldest state is dropped, so a user who just started a
+// login is not the one evicted.
+func TestAddStateEvictsOldestFirst(t *testing.T) {
+	s := testService(t)
+	base := time.Now()
+
+	s.svc.statesMu.Lock()
+	for i := 0; i < maxPendingStates; i++ {
+		s.svc.states[fmt.Sprintf("state-%d", i)] = stateEntry{
+			redirect: "/",
+			exp:      base.Add(time.Duration(i) * time.Second), // state-0 is oldest
+		}
+	}
+	s.svc.statesMu.Unlock()
+
+	s.svc.addState("newest", "/new")
+
+	_, ok := s.svc.checkState("state-0")
+	assert.False(t, ok, "the oldest state must be evicted")
+	_, ok = s.svc.checkState("state-1")
+	assert.True(t, ok, "a newer state must survive")
+	_, ok = s.svc.checkState("newest")
+	assert.True(t, ok, "the state being created must survive")
+}
+
 func TestCallbackSuccess(t *testing.T) {
 	s := testServiceWithTokenEndpoint(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -429,6 +478,10 @@ func TestSanitizeRedirect(t *testing.T) {
 	assert.Equal(t, "/", sanitizeRedirect(""))
 	assert.Equal(t, "/", sanitizeRedirect("https://evil.example.com"))
 	assert.Equal(t, "/", sanitizeRedirect("//evil.example.com"))
+	assert.Equal(t, "/search?q=foo", sanitizeRedirect("/search?q=foo"))
+
+	// Oversized paths fall back rather than being stored.
+	assert.Equal(t, "/", sanitizeRedirect("/"+strings.Repeat("A", maxRedirectLength)))
 	assert.Equal(t, "/search?q=foo", sanitizeRedirect("/search?q=foo"))
 }
 
