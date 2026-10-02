@@ -1,10 +1,84 @@
+const AUTH_STORAGE_KEY = "autoget_auth";
+
+interface StoredTokens {
+  access_token: string;
+  refresh_token: string;
+  id_token: string;
+}
+
+function getTokens(): StoredTokens | null {
+  try {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as StoredTokens) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setTokens(tokens: StoredTokens): void {
+  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(tokens));
+}
+
+export function logout(): void {
+  localStorage.removeItem(AUTH_STORAGE_KEY);
+  window.location.href = "/";
+}
+
+let refreshing: Promise<boolean> | null = null;
+
+// refreshTokens exchanges the stored refresh token for new tokens via the
+// backend (which holds the client secret). Returns true on success.
+async function refreshTokens(): Promise<boolean> {
+  const tokens = getTokens();
+  if (!tokens?.refresh_token) {
+    return false;
+  }
+  try {
+    const response = await fetch("/auth/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: tokens.refresh_token }),
+    });
+    if (!response.ok) {
+      return false;
+    }
+    setTokens(await response.json());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function redirectToLogin(): void {
+  const current = new URL(window.location.href);
+  window.location.href = `/auth/login?redirect=${encodeURIComponent(current.pathname + current.search)}`;
+}
+
 async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const response = await fetch(input, init);
+  const applyAuth = (init?: RequestInit): RequestInit => {
+    const tokens = getTokens();
+    if (!tokens?.access_token) {
+      return init ?? {};
+    }
+    const headers = new Headers(init?.headers);
+    headers.set("Authorization", `Bearer ${tokens.access_token}`);
+    return { ...init, headers };
+  };
+
+  let response = await fetch(input, applyAuth(init));
   if (response.status === 401) {
-    console.log("apiFetch: 401 received, redirecting to refresh session via SSO...");
-    const url = new URL(window.location.href);
-    url.searchParams.set("_auth_refresh", Date.now().toString());
-    window.location.href = url.toString();
+    // tokens may be expired: try one refresh, then retry once
+    refreshing ??= refreshTokens().finally(() => {
+      refreshing = null;
+    });
+    if (await refreshing) {
+      response = await fetch(input, applyAuth(init));
+    }
+  }
+  if (response.status === 401) {
+    // no valid/renewable tokens; go through the OAuth login flow,
+    // returning to the current page afterwards
+    redirectToLogin();
     // Return an unresolved promise so downstream code doesn't throw or trigger error toasts during navigation
     return new Promise(() => {});
   }

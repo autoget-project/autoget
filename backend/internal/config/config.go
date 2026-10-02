@@ -9,6 +9,7 @@ import (
 	dlconfig "github.com/autoget-project/autoget/backend/downloaders/config"
 	"github.com/autoget-project/autoget/backend/indexers/mteam"
 	"github.com/autoget-project/autoget/backend/indexers/nyaa"
+	"github.com/autoget-project/autoget/backend/internal/auth"
 	"github.com/autoget-project/autoget/backend/internal/notify/telegram"
 )
 
@@ -19,6 +20,8 @@ type Config struct {
 	OrganizerService string `yaml:"organizer_service"`
 
 	Telegram *telegram.Config `yaml:"telegram"`
+
+	Auth *auth.Config `yaml:"auth"`
 
 	MTeam   *mteam.Config `yaml:"mteam"`
 	Nyaa    *nyaa.Config  `yaml:"nyaa"`
@@ -57,6 +60,11 @@ func ReadConfig(path string) (*Config, error) {
 }
 
 func (c *Config) validate() error {
+	if c.Auth != nil {
+		if err := c.Auth.Validate(); err != nil {
+			return err
+		}
+	}
 	if c.PgDSN == "" {
 		return fmt.Errorf("postgres DSN is required")
 	}

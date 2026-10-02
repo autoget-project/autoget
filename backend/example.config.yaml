@@ -1,5 +1,15 @@
 port: 8888
 pg_dsn: user=pg password=your_password dbname=your_db host=db_ip port=5432 sslmode=disable
+
+# Optional OAuth/OIDC login; omit this section to disable auth entirely.
+# issuer must support OIDC discovery (.well-known/openid-configuration).
+# The callback URL to register with the provider is:
+#   {redirect_base_url}/auth/callback
+auth:
+  issuer: https://auth.example.com/oauth2
+  client_id: your_client_id
+  client_secret: your_client_secret
+  redirect_base_url: https://autoget.example.com
 telegram:
   token: bot_token
   chat_id: your_chat_id

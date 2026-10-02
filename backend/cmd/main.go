@@ -18,6 +18,7 @@ import (
 	"github.com/autoget-project/autoget/backend/indexers/mteam"
 	"github.com/autoget-project/autoget/backend/indexers/nyaa"
 	"github.com/autoget-project/autoget/backend/indexers/sukebei"
+	"github.com/autoget-project/autoget/backend/internal/auth"
 	"github.com/autoget-project/autoget/backend/internal/config"
 	"github.com/autoget-project/autoget/backend/internal/db"
 	"github.com/autoget-project/autoget/backend/internal/handlers"
@@ -88,8 +89,15 @@ func main() {
 
 	service := handlers.NewService(cfg, db, indexerMap, downloaderMap, oc)
 
+	authSvc, err := auth.New(context.Background(), cfg.Auth)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to create auth service")
+	}
+
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
+	authSvc.SetupRouter(r)
+	r.Use(authSvc.Middleware())
 	rg := r.Group("/api/v1")
 	handlers.ServeStatic(r)
 	service.SetupRouter(rg)
