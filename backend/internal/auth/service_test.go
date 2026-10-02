@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -247,6 +248,17 @@ func TestCallbackInvalidState(t *testing.T) {
 	req.AddCookie(&http.Cookie{Name: stateCookieName, Value: "bogus"})
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestAddStateCapacityEviction(t *testing.T) {
+	s := testService(t)
+	for i := 0; i < maxPendingStates+50; i++ {
+		s.svc.addState(fmt.Sprintf("state-%d", i), "/")
+	}
+	s.svc.statesMu.Lock()
+	count := len(s.svc.states)
+	s.svc.statesMu.Unlock()
+	assert.LessOrEqual(t, count, maxPendingStates)
 }
 
 func TestCallbackSuccess(t *testing.T) {

@@ -23,7 +23,8 @@ import (
 )
 
 const (
-	stateLifetime = 10 * time.Minute
+	stateLifetime    = 10 * time.Minute
+	maxPendingStates = 1000
 	// discoveryRetryInterval throttles retries while the provider is down, so
 	// an outage does not turn every request into a discovery call.
 	discoveryRetryInterval = 30 * time.Second
@@ -336,13 +337,23 @@ func newTokenResponse(tok *oauth2.Token) tokenResponse {
 func (s *Service) addState(state, redirect string) {
 	s.statesMu.Lock()
 	defer s.statesMu.Unlock()
-	// opportunistic cleanup
+	now := time.Now()
+	// opportunistic cleanup of expired states
 	for k, e := range s.states {
-		if time.Now().After(e.exp) {
+		if now.After(e.exp) {
 			delete(s.states, k)
 		}
 	}
-	s.states[state] = stateEntry{redirect: redirect, exp: time.Now().Add(stateLifetime)}
+	// guard against unbounded growth from automated login attempts
+	if len(s.states) >= maxPendingStates {
+		for k := range s.states {
+			delete(s.states, k)
+			if len(s.states) < maxPendingStates {
+				break
+			}
+		}
+	}
+	s.states[state] = stateEntry{redirect: redirect, exp: now.Add(stateLifetime)}
 }
 
 // checkState consumes the state value, returning the redirect target and
