@@ -15,7 +15,8 @@ type Config struct {
 	// {RedirectBaseURL}/auth/callback.
 	RedirectBaseURL string `yaml:"redirect_base_url"`
 	// RequiredRole, when non-empty, requires the JWT "roles" claim (a space-separated
-	// list of roles) to contain this role. Omit or leave empty to skip role validation.
+	// list of roles) to contain this role. Surrounding whitespace is ignored. Omit or
+	// leave empty to skip role validation.
 	RequiredRole string `yaml:"required_role"`
 }
 

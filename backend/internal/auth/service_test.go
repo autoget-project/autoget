@@ -251,6 +251,32 @@ func TestMiddlewareRequiredRole(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+s.tokenWithPayload(baseClaims("autoget")))
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
+
+	// A required_role with surrounding whitespace still matches the trimmed role
+	s.svc.cfg.RequiredRole = "  autoget  "
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/indexers", nil)
+	req.Header.Set("Authorization", "Bearer "+s.tokenWithPayload(baseClaims("autoget")))
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// An unset (or blank) required role disables role validation entirely, even
+// for tokens that carry no roles claim.
+func TestMiddlewareRequiredRoleDisabled(t *testing.T) {
+	for _, role := range []string{"", "   "} {
+		s := testService(t)
+		s.svc.cfg.RequiredRole = role
+
+		router := gin.New()
+		router.Group("/api/v1", s.Middleware()).GET("/indexers", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/indexers", nil)
+		req.Header.Set("Authorization", "Bearer "+s.token())
+		router.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+	}
 }
 
 func TestHasRole(t *testing.T) {

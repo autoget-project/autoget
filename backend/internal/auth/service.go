@@ -186,14 +186,18 @@ func (s *Service) verifyAccessToken(ctx context.Context, raw string) (bool, erro
 	if err != nil {
 		return false, nil
 	}
-	if s.cfg != nil && s.cfg.RequiredRole != "" {
+	// A token that is valid but lacks the required role is rejected the same
+	// way as a missing or invalid token (401) so the client has a single
+	// recovery path: clear the session and log in again.
+	requiredRole := strings.TrimSpace(s.cfg.RequiredRole)
+	if requiredRole != "" {
 		var claims struct {
 			Roles string `json:"roles"`
 		}
 		if err := idToken.Claims(&claims); err != nil {
 			return false, nil
 		}
-		if !hasRole(claims.Roles, s.cfg.RequiredRole) {
+		if !hasRole(claims.Roles, requiredRole) {
 			return false, nil
 		}
 	}
