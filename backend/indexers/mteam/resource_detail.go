@@ -83,7 +83,7 @@ func (m *MTeam) Detail(id string, fileList bool) (*indexers.ResourceDetail, *err
 			DBs:         resp.Data.extractDBInfo(),
 			Images:      images,
 			Free:        resp.Data.Status.Discount == "FREE",
-			DetailsURL:  webBaseURL + "/detail/" + resp.Data.ID,
+			DetailsURL:  detailsURL(m.config.getWebBaseURL(), resp.Data.ID),
 		},
 		Mediainfo:   resp.Data.Mediainfo,
 		Description: resp.Data.Descr,

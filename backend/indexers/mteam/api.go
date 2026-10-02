@@ -1,6 +1,7 @@
 package mteam
 
 import (
+	"net/url"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -19,9 +20,9 @@ var (
 )
 
 const (
-	name           = "m-team"
-	defaultBaseURL = "https://api.m-team.cc"
-	webBaseURL     = "https://kp.m-team.cc"
+	name              = "m-team"
+	defaultBaseURL    = "https://api.m-team.cc"
+	defaultWebBaseURL = "https://kp.m-team.cc"
 
 	categoryAdult   = "adult"
 	categoryNormal  = "normal"
@@ -32,6 +33,7 @@ const (
 
 type Config struct {
 	BaseURL           string `yaml:"base_url"`
+	WebBaseURL        string `yaml:"web_base_url"`
 	APIKey            string `yaml:"api_key"`
 	ExcludeGayContent bool   `yaml:"exclude_gay_content"`
 	RSS               string `yaml:"rss"`
@@ -44,6 +46,27 @@ func (c *Config) getBaseURL() string {
 		return defaultBaseURL
 	}
 	return c.BaseURL
+}
+
+// getWebBaseURL returns the human-facing site used for detail page links, as
+// opposed to the API host returned by getBaseURL. It is configurable so a
+// private mirror is not linked back to the public site.
+func (c *Config) getWebBaseURL() string {
+	if c.WebBaseURL == "" {
+		return defaultWebBaseURL
+	}
+	return c.WebBaseURL
+}
+
+// detailsURL builds the human-facing torrent detail page URL, or "" when the
+// id cannot be joined onto the given web base URL.
+func detailsURL(webBaseURL, id string) string {
+	u, err := url.JoinPath(webBaseURL, "detail", id)
+	if err != nil {
+		logger.Warn().Err(err).Str("id", id).Msg("failed to build details URL")
+		return ""
+	}
+	return u
 }
 
 type MTeamType int

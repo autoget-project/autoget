@@ -26,6 +26,27 @@ func TestCategories(t *testing.T) {
 	assert.Equal(t, "Anime - English", got[3].Name)
 }
 
+func TestViewURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		baseURL  string
+		id       string
+		expected string
+	}{
+		{name: "default base URL", id: "1980585", expected: "https://nyaa.si/view/1980585"},
+		{name: "custom base URL with trailing slash", baseURL: "https://mirror.example.com/", id: "42", expected: "https://mirror.example.com/view/42"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := NewClient(&Config{BaseURL: tt.baseURL}, "", nil, nil)
+			got, err := c.viewURL(tt.id)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
 func TestDetail(t *testing.T) {
 	if os.Getenv("LOCAL_TEST") == "" {
 		t.Skip("LOCAL_TEST not set; skipping live network test")

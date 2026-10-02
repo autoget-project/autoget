@@ -18,6 +18,18 @@ var (
 	apiKey = os.Getenv("MTEAM_API_KEY")
 )
 
+func TestGetWebBaseURL(t *testing.T) {
+	assert.Equal(t, defaultWebBaseURL, (&Config{}).getWebBaseURL())
+	assert.Equal(t, defaultWebBaseURL, (&Config{WebBaseURL: ""}).getWebBaseURL())
+	assert.Equal(t, "https://mirror.example.com", (&Config{WebBaseURL: "https://mirror.example.com"}).getWebBaseURL())
+}
+
+func TestDetailsURL(t *testing.T) {
+	assert.Equal(t, "https://kp.m-team.cc/detail/123", detailsURL(defaultWebBaseURL, "123"))
+	// A trailing slash on a custom mirror must not produce a double slash.
+	assert.Equal(t, "https://mirror.example.com/detail/123", detailsURL("https://mirror.example.com/", "123"))
+}
+
 func TestCategories(t *testing.T) {
 	if apiKey == "" {
 		t.Skip("MTEAM_API_KEY not set")

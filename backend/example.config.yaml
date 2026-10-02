@@ -17,6 +17,7 @@ telegram:
 organizer_service: http://organizer_service
 mteam:
   api_key: your_key
+  # web_base_url: https://kp.m-team.cc # optional: site used for resource detail links (defaults to the public site)
   downloader: transmission
 nyaa:
   downloader: transmission_vpn

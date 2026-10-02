@@ -169,7 +169,10 @@ func (c *Client) List(req *indexers.ListRequest) (*indexers.ListResult, *errors.
 		idLink, exists := titleLink.Attr("href")
 		if exists {
 			item.ID = strings.TrimPrefix(idLink, "/view/")
-			if detailURL, err := url.JoinPath(c.getBaseURL(), "view", item.ID); err == nil {
+			detailURL, err := c.viewURL(item.ID)
+			if err != nil {
+				logger.Warn().Err(err).Str("id", item.ID).Msg("failed to build details URL")
+			} else {
 				item.DetailsURL = detailURL
 			}
 		}
@@ -244,9 +247,14 @@ func (c *Client) List(req *indexers.ListRequest) (*indexers.ListResult, *errors.
 	return listResult, nil
 }
 
+// viewURL builds the absolute URL of a torrent's human-facing detail page.
+func (c *Client) viewURL(id string) (string, error) {
+	return url.JoinPath(c.getBaseURL(), "view", id)
+}
+
 // Detail of a resource.
 func (c *Client) Detail(id string, fileList bool) (*indexers.ResourceDetail, *errors.HTTPStatusError) {
-	url, err := url.JoinPath(c.getBaseURL(), "view", id)
+	url, err := c.viewURL(id)
 	if err != nil {
 		return nil, errors.NewHTTPStatusError(http.StatusInternalServerError, fmt.Sprintf("failed to join path: %v", err))
 	}

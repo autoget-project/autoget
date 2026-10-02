@@ -322,7 +322,7 @@ func (m *MTeam) List(listReq *indexers.ListRequest) (*indexers.ListResult, *erro
 			Images:      images,
 			Free:        isFree,
 			Labels:      item.LabelsNew,
-			DetailsURL:  webBaseURL + "/detail/" + item.ID,
+			DetailsURL:  detailsURL(m.config.getWebBaseURL(), item.ID),
 		})
 	}
 
