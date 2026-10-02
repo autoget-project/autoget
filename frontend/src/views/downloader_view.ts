@@ -15,6 +15,7 @@ import {
   type DownloaderState,
 } from "../utils/api.ts";
 import { formatBytes } from "../utils/format.ts";
+import { safeExternalUrl } from "../utils/url.ts";
 
 @customElement("downloader-view")
 export class DownloaderView extends LitElement {
@@ -447,10 +448,55 @@ export class DownloaderView extends LitElement {
         <div class="card-body p-4 sm:p-6">
           <div class="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
             <div class="flex-1 min-w-0">
-              <h3 class="card-title text-base sm:text-lg break-words">${item.ResTitle}</h3>
+              <h3 class="card-title text-base sm:text-lg break-words">
+                ${(() => {
+                  const detailsUrl = safeExternalUrl(item.detailsUrl);
+                  if (detailsUrl) {
+                    return html`
+                      <a
+                        href="${detailsUrl}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="hover:underline inline-flex items-center gap-1.5"
+                        title="Open in indexer"
+                      >
+                        <span>${item.ResTitle}</span>
+                        <span
+                          class="icon-[ph--arrow-square-out-bold] shrink-0 text-base-content/60"
+                          style="width: 1em; height: 1em;"
+                        ></span>
+                      </a>
+                    `;
+                  }
+                  return item.ResTitle;
+                })()}
+              </h3>
               ${item.ResTitle2 ? html`<p class="text-sm text-base-content/70 mt-1 break-words">${item.ResTitle2}</p>` : ""}
               <div class="flex flex-wrap gap-1.5 sm:gap-2 mt-2">
-                ${item.ResIndexer ? html`<span class="badge badge-sm sm:badge-md badge-neutral">${item.ResIndexer}</span>` : ""}
+                ${(() => {
+                  if (!item.ResIndexer) return "";
+                  const detailsUrl = safeExternalUrl(item.detailsUrl);
+                  if (detailsUrl) {
+                    return html`
+                      <a
+                        href="${detailsUrl}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="badge badge-sm sm:badge-md badge-neutral hover:badge-primary transition-colors cursor-pointer inline-flex items-center gap-1"
+                        title="Open on ${item.ResIndexer}"
+                      >
+                        <span>${item.ResIndexer}</span>
+                        <span
+                          class="icon-[ph--arrow-square-out-bold]"
+                          style="width: 0.85em; height: 0.85em;"
+                        ></span>
+                      </a>
+                    `;
+                  }
+                  return html`<span class="badge badge-sm sm:badge-md badge-neutral"
+                    >${item.ResIndexer}</span
+                  >`;
+                })()}
                 ${item.Category ? html`<span class="badge badge-sm sm:badge-md badge-outline">${item.Category}</span>` : ""}
                 ${
                   item.Size

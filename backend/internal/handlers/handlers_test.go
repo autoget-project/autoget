@@ -205,8 +205,9 @@ func TestService_indexerResourceDetail(t *testing.T) {
 
 		m.mockDetailResult = &indexers.ResourceDetail{
 			ListResourceItem: indexers.ListResourceItem{
-				ID:    "res-detail-1",
-				Title: "Detailed Resource 1",
+				ID:         "res-detail-1",
+				Title:      "Detailed Resource 1",
+				DetailsURL: "https://example.com/view/res-detail-1",
 			},
 			Description: "This is a detailed description.",
 		}
@@ -223,6 +224,7 @@ func TestService_indexerResourceDetail(t *testing.T) {
 
 		assert.Equal(t, "res-detail-1", detailResult.ID)
 		assert.Equal(t, "Detailed Resource 1", detailResult.Title)
+		assert.Equal(t, "https://example.com/view/res-detail-1", detailResult.DetailsURL)
 	})
 
 	t.Run("error", func(t *testing.T) {
@@ -285,7 +287,7 @@ func TestService_indexerListResources(t *testing.T) {
 				Total:      1,
 			},
 			Resources: []indexers.ListResourceItem{
-				{ID: "res1", Title: "Resource 1"},
+				{ID: "res1", Title: "Resource 1", DetailsURL: "https://example.com/view/res1"},
 			},
 		}
 
@@ -302,6 +304,7 @@ func TestService_indexerListResources(t *testing.T) {
 		assert.Equal(t, uint32(1), listResult.Pagination.Total)
 		assert.Len(t, listResult.Resources, 1)
 		assert.Equal(t, "res1", listResult.Resources[0].ID)
+		assert.Equal(t, "https://example.com/view/res1", listResult.Resources[0].DetailsURL)
 	})
 
 	t.Run("error", func(t *testing.T) {

@@ -182,6 +182,7 @@ export interface Resource {
   images: string[];
   free: boolean;
   labels: string[];
+  detailsUrl?: string;
 }
 
 export interface Pagination {
@@ -248,6 +249,7 @@ export interface DownloadItem {
   ResTitle: string;
   ResTitle2: string;
   Category: string;
+  detailsUrl?: string;
   FileList: string[];
   Metadata: {
     actors: string[];

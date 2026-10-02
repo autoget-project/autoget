@@ -173,6 +173,7 @@ func (s *Service) indexerDownload(c *gin.Context) {
 		ResTitle2:  detail.Title2,
 		ResIndexer: indexerName,
 		Category:   detail.Category,
+		DetailsURL: detail.DetailsURL,
 		FileList:   files,
 		Metadata:   detail.Metadata,
 	}

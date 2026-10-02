@@ -169,6 +169,9 @@ func (c *Client) List(req *indexers.ListRequest) (*indexers.ListResult, *errors.
 		idLink, exists := titleLink.Attr("href")
 		if exists {
 			item.ID = strings.TrimPrefix(idLink, "/view/")
+			if detailURL, err := url.JoinPath(c.getBaseURL(), "view", item.ID); err == nil {
+				item.DetailsURL = detailURL
+			}
 		}
 
 		// Column 4: Size
@@ -270,7 +273,8 @@ func (c *Client) Detail(id string, fileList bool) (*indexers.ResourceDetail, *er
 
 	detail := &indexers.ResourceDetail{
 		ListResourceItem: indexers.ListResourceItem{
-			ID: id,
+			ID:         id,
+			DetailsURL: url,
 		},
 	}
 

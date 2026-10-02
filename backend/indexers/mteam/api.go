@@ -21,6 +21,7 @@ var (
 const (
 	name           = "m-team"
 	defaultBaseURL = "https://api.m-team.cc"
+	webBaseURL     = "https://kp.m-team.cc"
 
 	categoryAdult   = "adult"
 	categoryNormal  = "normal"

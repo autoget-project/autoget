@@ -113,6 +113,7 @@ type ListResourceItem struct {
 	Images      []string  `json:"images,omitempty"`
 	Free        bool      `json:"free,omitempty"`
 	Labels      []string  `json:"labels,omitempty"`
+	DetailsURL  string    `json:"detailsUrl,omitempty"`
 }
 
 type File struct {
