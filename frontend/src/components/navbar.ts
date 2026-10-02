@@ -1,7 +1,13 @@
 import { LitElement, html, unsafeCSS } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { fetchIndexers, fetchDownloaders, type DownloaderInfo } from "../utils/api";
+import {
+  fetchIndexers,
+  fetchDownloaders,
+  isAuthenticated,
+  logout,
+  type DownloaderInfo,
+} from "../utils/api";
 import "./theme_controller.ts";
 import globalStyles from "/src/index.css?inline";
 
@@ -98,6 +104,18 @@ export class AppNavbar extends LitElement {
     const isDownloaderPage = this.downloaders.some((d) => d.name === this.activePage);
     const isSearchPage = this.activePage === "search";
     const summaryBadgeColor = this.getSummaryBadgeColor();
+    const authenticated = isAuthenticated();
+
+    const logoutButton = authenticated
+      ? html`<button
+          class="btn btn-ghost btn-sm btn-square"
+          title="Log out"
+          aria-label="Log out"
+          @click=${logout}
+        >
+          <span class="icon-[mdi--logout] w-5 h-5"></span>
+        </button>`
+      : "";
 
     // Mobile label / icon for Indexers dropdown:
     // - On an indexer page: show the active indexer's name
@@ -203,6 +221,7 @@ export class AppNavbar extends LitElement {
               >Search</a
             >
             <theme-controller></theme-controller>
+            ${logoutButton}
           </div>
 
           <!-- Mobile navigation controls (Downloaders dropdown, Search icon, Theme) -->
@@ -275,6 +294,9 @@ export class AppNavbar extends LitElement {
 
             <!-- Theme controller -->
             <theme-controller></theme-controller>
+
+            <!-- Log out (only when a session is stored) -->
+            ${logoutButton}
           </div>
         </div>
       </div>

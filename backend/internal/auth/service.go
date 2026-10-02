@@ -3,7 +3,10 @@ package auth
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -18,17 +21,39 @@ import (
 	"golang.org/x/oauth2"
 )
 
+const (
+	stateLifetime = 10 * time.Minute
+	// discoveryRetryInterval throttles retries while the provider is down, so
+	// an outage does not turn every request into a discovery call.
+	discoveryRetryInterval = 30 * time.Second
+	stateCookieName        = "autoget_auth_state"
+)
+
 // Service provides the optional OAuth/OIDC login flow and bearer-token
-// verification. A nil *Service disables auth entirely: middleware passes
-// through and no routes are registered. It is stateless: tokens live in
-// the browser's localStorage and are verified against the provider JWKS.
+// verification. A nil *Service disables auth entirely: the middleware passes
+// through and no routes are registered. It is stateless: tokens live in the
+// browser's localStorage and are verified against the provider JWKS.
 type Service struct {
-	oauth      *oauth2.Config
-	verifier   *oidc.IDTokenVerifier
+	cfg        *Config
 	httpClient *http.Client
+	// cookieSecure mirrors whether redirect_base_url is served over HTTPS.
+	cookieSecure bool
+
+	// The provider is discovered lazily so the app still starts when the
+	// provider is temporarily unreachable.
+	providerMu    sync.Mutex
+	provider      *provider
+	providerErr   error
+	providerErrAt time.Time
 
 	statesMu sync.Mutex
 	states   map[string]stateEntry
+}
+
+// provider bundles what OIDC discovery yields.
+type provider struct {
+	oauth    *oauth2.Config
+	verifier *oidc.IDTokenVerifier
 }
 
 type stateEntry struct {
@@ -36,10 +61,10 @@ type stateEntry struct {
 	exp      time.Time
 }
 
-const stateLifetime = 10 * time.Minute
-
-// New creates the auth service using OIDC discovery from the issuer.
-// The returned service is nil-safe.
+// New creates the auth service. Discovery is attempted eagerly so
+// misconfiguration surfaces at startup, but a provider that is down only logs
+// a warning; the service retries on first use. The returned service is
+// nil-safe.
 func New(ctx context.Context, cfg *Config) (*Service, error) {
 	if cfg == nil {
 		return nil, nil
@@ -48,27 +73,59 @@ func New(ctx context.Context, cfg *Config) (*Service, error) {
 		return nil, err
 	}
 
-	httpClient := &http.Client{Timeout: 10 * time.Second}
-	ctx = oidc.ClientContext(ctx, httpClient)
-
-	provider, err := oidc.NewProvider(ctx, cfg.Issuer)
-	if err != nil {
-		return nil, fmt.Errorf("discover provider: %w", err)
+	base, _ := url.Parse(cfg.RedirectBaseURL)
+	s := &Service{
+		cfg:          cfg,
+		httpClient:   &http.Client{Timeout: 10 * time.Second},
+		cookieSecure: base.Scheme == "https",
+		states:       map[string]stateEntry{},
 	}
 
-	log.Info().Str("issuer", cfg.Issuer).Msg("auth enabled")
-	return &Service{
+	if _, err := s.ensureProvider(ctx); err != nil {
+		log.Warn().Err(err).Str("issuer", cfg.Issuer).
+			Msg("auth provider discovery failed at startup; will retry on first use")
+	} else {
+		log.Info().Str("issuer", cfg.Issuer).Msg("auth enabled")
+	}
+	return s, nil
+}
+
+// ensureProvider discovers the OIDC provider once and caches the result.
+func (s *Service) ensureProvider(ctx context.Context) (*provider, error) {
+	s.providerMu.Lock()
+	defer s.providerMu.Unlock()
+
+	if s.provider != nil {
+		return s.provider, nil
+	}
+	if s.providerErr != nil && time.Since(s.providerErrAt) < discoveryRetryInterval {
+		return nil, s.providerErr
+	}
+
+	discoveryCtx := oidc.ClientContext(ctx, s.httpClient)
+	p, err := oidc.NewProvider(discoveryCtx, s.cfg.Issuer)
+	if err != nil {
+		s.providerErr = fmt.Errorf("discover provider: %w", err)
+		s.providerErrAt = time.Now()
+		return nil, s.providerErr
+	}
+
+	s.provider = &provider{
 		oauth: &oauth2.Config{
-			ClientID:     cfg.ClientID,
-			ClientSecret: cfg.ClientSecret,
-			Endpoint:     provider.Endpoint(),
-			RedirectURL:  cfg.RedirectBaseURL + "/auth/callback",
+			ClientID:     s.cfg.ClientID,
+			ClientSecret: s.cfg.ClientSecret,
+			Endpoint:     p.Endpoint(),
+			RedirectURL:  strings.TrimRight(s.cfg.RedirectBaseURL, "/") + "/auth/callback",
 			Scopes:       []string{"openid", "profile", "offline_access"},
 		},
-		verifier:   provider.Verifier(&oidc.Config{ClientID: cfg.ClientID}),
-		httpClient: httpClient,
-		states:     map[string]stateEntry{},
-	}, nil
+		// The provider's access token is a signed JWT whose audience is the
+		// client id (see caddypaw authn), so the ID token verifier validates it
+		// unchanged. An access token without aud=client_id would need a
+		// different verifier.
+		verifier: p.Verifier(&oidc.Config{ClientID: s.cfg.ClientID}),
+	}
+	s.providerErr = nil
+	return s.provider, nil
 }
 
 // SetupRouter registers the auth routes. It is a no-op when auth is disabled.
@@ -81,10 +138,10 @@ func (s *Service) SetupRouter(router *gin.Engine) {
 	router.POST("/auth/refresh", s.refresh)
 }
 
-// Middleware protects the app when auth is enabled. API requests carrying a
-// valid Bearer access token pass; everything else gets 401. Page navigations
-// are redirected to the login route so a fresh visit starts the OAuth flow.
-// It is a pass-through when auth is disabled.
+// Middleware guards the API and is a pass-through when auth is disabled. A
+// request carrying a valid Bearer token passes; a missing or invalid token
+// gets 401, and an unreachable provider gets 503 so clients keep their session
+// instead of being pushed through the login flow.
 func (s *Service) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if s == nil {
@@ -93,34 +150,58 @@ func (s *Service) Middleware() gin.HandlerFunc {
 		}
 
 		token := bearerToken(c.Request)
-		if token != "" && s.verifyAccessToken(c.Request.Context(), token) {
-			c.Next()
+		if token == "" {
+			c.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}
 
-		if wantsHTML(c.Request) {
-			// preserve the original page for post-login redirect
-			original := c.Request.URL.RequestURI()
-			c.Abort()
-			c.Redirect(http.StatusFound, "/auth/login?redirect="+url.QueryEscape(original))
+		ok, err := s.verifyAccessToken(c.Request.Context(), token)
+		if err != nil {
+			log.Error().Err(err).Msg("access token verification failed")
+			c.AbortWithStatus(http.StatusServiceUnavailable)
 			return
 		}
-		c.AbortWithStatus(http.StatusUnauthorized)
+		if !ok {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+		c.Next()
 	}
 }
 
-// verifyAccessToken accepts the provider's signed access token or ID token.
-func (s *Service) verifyAccessToken(ctx context.Context, raw string) bool {
-	if _, err := s.verifier.Verify(ctx, raw); err == nil {
-		return true
+func (s *Service) verifyAccessToken(ctx context.Context, raw string) (bool, error) {
+	p, err := s.ensureProvider(ctx)
+	if err != nil {
+		return false, err
 	}
-	return false
+	if _, err := p.verifier.Verify(ctx, raw); err != nil {
+		return false, nil
+	}
+	return true, nil
 }
 
 func (s *Service) login(c *gin.Context) {
-	redirect := sanitizeRedirect(c.Query("redirect"))
-	state := s.addState(redirect)
-	c.Redirect(http.StatusFound, s.oauth.AuthCodeURL(state))
+	p, err := s.ensureProvider(c.Request.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("auth provider unavailable")
+		c.String(http.StatusServiceUnavailable, "auth provider unavailable")
+		return
+	}
+
+	state, err := randomToken()
+	if err != nil {
+		log.Error().Err(err).Msg("generate state failed")
+		c.String(http.StatusInternalServerError, "login failed")
+		return
+	}
+	s.addState(state, sanitizeRedirect(c.Query("redirect")))
+
+	// Bind the state to this browser: a callback URL captured by an attacker
+	// cannot then be replayed against another user's session (login CSRF).
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie(stateCookieName, state, int(stateLifetime.Seconds()), "/auth", "", s.cookieSecure, true)
+
+	c.Redirect(http.StatusFound, p.oauth.AuthCodeURL(state))
 }
 
 var callbackTpl = template.Must(template.New("callback").Parse(`<!DOCTYPE html>
@@ -128,16 +209,15 @@ var callbackTpl = template.Must(template.New("callback").Parse(`<!DOCTYPE html>
 <head><meta charset="utf-8"><title>Logging in…</title></head>
 <body>
 <p>Logging in…</p>
-<div id="redirect" data-redirect="{{.Redirect}}"></div>
-<script type="application/json" id="tokens">{{.Tokens}}</script>
+<div id="tokens" data-redirect="{{.Redirect}}" data-tokens="{{.Tokens}}"></div>
 <script>
 (function () {
-  var redirect = document.getElementById("redirect").dataset.redirect || "/";
+  var el = document.getElementById("tokens");
   try {
-    var tokens = JSON.parse(document.getElementById("tokens").textContent);
+    var tokens = JSON.parse(el.dataset.tokens);
     localStorage.setItem("autoget_auth", JSON.stringify(tokens));
   } catch (e) { /* fall through */ }
-  window.location.replace(redirect);
+  window.location.replace(el.dataset.redirect || "/");
 })();
 </script>
 </body>
@@ -145,7 +225,7 @@ var callbackTpl = template.Must(template.New("callback").Parse(`<!DOCTYPE html>
 
 type callbackPage struct {
 	Redirect string
-	Tokens   template.JS
+	Tokens   string
 }
 
 func (s *Service) callback(c *gin.Context) {
@@ -153,44 +233,49 @@ func (s *Service) callback(c *gin.Context) {
 		c.String(http.StatusBadGateway, "auth error: %s", errDesc)
 		return
 	}
-	redirect, ok := s.checkState(c.Query("state"))
+
+	state := c.Query("state")
+	cookie, err := c.Cookie(stateCookieName)
+	if err != nil || cookie == "" || subtle.ConstantTimeCompare([]byte(cookie), []byte(state)) != 1 {
+		c.String(http.StatusBadRequest, "invalid state")
+		return
+	}
+	redirect, ok := s.checkState(state)
 	if !ok {
 		c.String(http.StatusBadRequest, "invalid state")
 		return
 	}
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie(stateCookieName, "", -1, "/auth", "", s.cookieSecure, true)
 
-	ctx := c.Request.Context()
-	tok, err := s.oauth.Exchange(ctx, c.Query("code"))
+	p, err := s.ensureProvider(c.Request.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("auth provider unavailable")
+		c.String(http.StatusServiceUnavailable, "auth provider unavailable")
+		return
+	}
+
+	tok, err := p.oauth.Exchange(c.Request.Context(), c.Query("code"))
 	if err != nil {
 		log.Error().Err(err).Msg("code exchange failed")
 		c.String(http.StatusBadGateway, "code exchange failed")
 		return
 	}
 
-	idToken, _ := tok.Extra("id_token").(string)
-
-	tokens := tokenResponse{
-		AccessToken:  tok.AccessToken,
-		RefreshToken: tok.RefreshToken,
-		IDToken:      idToken,
-		ExpiresIn:    tok.Expiry.Unix(),
-		TokenType:    tok.TokenType,
+	data, err := json.Marshal(newTokenResponse(tok))
+	if err != nil {
+		log.Error().Err(err).Msg("marshal tokens failed")
+		c.String(http.StatusInternalServerError, "login failed")
+		return
 	}
 
-	// redirect target traveled through the OAuth state, not the query;
-	// inject it into the page as a data attribute
-	data, _ := json.Marshal(tokens)
-	page := callbackPage{
-		Redirect: redirect,
-		Tokens:   template.JS(data),
-	}
-	if err := callbackTpl.Execute(c.Writer, page); err != nil {
+	if err := callbackTpl.Execute(c.Writer, callbackPage{Redirect: redirect, Tokens: string(data)}); err != nil {
 		log.Error().Err(err).Msg("render callback page failed")
 	}
 }
 
-// refresh exchanges a refresh token for new tokens, keeping the
-// client_secret server-side.
+// refresh exchanges a refresh token for new tokens, keeping the client_secret
+// server-side.
 func (s *Service) refresh(c *gin.Context) {
 	var body struct {
 		RefreshToken string `json:"refresh_token"`
@@ -201,29 +286,53 @@ func (s *Service) refresh(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	ts := s.oauth.TokenSource(ctx, &oauth2.Token{RefreshToken: body.RefreshToken})
-	tok, err := ts.Token()
+	p, err := s.ensureProvider(ctx)
 	if err != nil {
-		log.Debug().Err(err).Msg("token refresh failed")
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "refresh failed"})
+		log.Error().Err(err).Msg("auth provider unavailable")
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "auth unavailable"})
 		return
 	}
 
-	idToken := ""
-	if id, ok := tok.Extra("id_token").(string); ok {
-		idToken = id
+	tok, err := p.oauth.TokenSource(ctx, &oauth2.Token{RefreshToken: body.RefreshToken}).Token()
+	if err != nil {
+		var retrieveErr *oauth2.RetrieveError
+		if errors.As(err, &retrieveErr) && retrieveErr.ErrorCode == "invalid_grant" {
+			// The grant is gone (expired, revoked or already used); the user
+			// must authenticate again.
+			log.Debug().Err(err).Msg("refresh token rejected")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "refresh failed"})
+			return
+		}
+		// Provider outage or misconfiguration: keep the client's session and
+		// let it retry instead of forcing a re-login.
+		log.Warn().Err(err).Msg("token refresh failed")
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "auth unavailable"})
+		return
 	}
-	c.JSON(http.StatusOK, tokenResponse{
+
+	c.JSON(http.StatusOK, newTokenResponse(tok))
+}
+
+// newTokenResponse maps an oauth2 token to the wire format, converting the
+// absolute expiry to a lifetime in seconds (RFC 6749 §5.1).
+func newTokenResponse(tok *oauth2.Token) tokenResponse {
+	var expiresIn int64
+	if !tok.Expiry.IsZero() {
+		if remaining := int64(time.Until(tok.Expiry).Seconds()); remaining > 0 {
+			expiresIn = remaining
+		}
+	}
+	idToken, _ := tok.Extra("id_token").(string)
+	return tokenResponse{
 		AccessToken:  tok.AccessToken,
 		RefreshToken: tok.RefreshToken,
 		IDToken:      idToken,
-		ExpiresIn:    tok.Expiry.Unix(),
+		ExpiresIn:    expiresIn,
 		TokenType:    tok.TokenType,
-	})
+	}
 }
 
-func (s *Service) addState(redirect string) string {
-	v := randomToken()
+func (s *Service) addState(state, redirect string) {
 	s.statesMu.Lock()
 	defer s.statesMu.Unlock()
 	// opportunistic cleanup
@@ -232,8 +341,7 @@ func (s *Service) addState(redirect string) string {
 			delete(s.states, k)
 		}
 	}
-	s.states[v] = stateEntry{redirect: redirect, exp: time.Now().Add(stateLifetime)}
-	return v
+	s.states[state] = stateEntry{redirect: redirect, exp: time.Now().Add(stateLifetime)}
 }
 
 // checkState consumes the state value, returning the redirect target and
@@ -255,10 +363,6 @@ func bearerToken(r *http.Request) string {
 	return ""
 }
 
-func wantsHTML(r *http.Request) bool {
-	return strings.Contains(r.Header.Get("Accept"), "text/html")
-}
-
 // sanitizeRedirect only allows same-origin relative paths.
 func sanitizeRedirect(v string) string {
 	if v == "" || v[0] != '/' || (len(v) > 1 && v[1] == '/') {
@@ -268,16 +372,10 @@ func sanitizeRedirect(v string) string {
 }
 
 // randomToken returns a 128-bit random hex string.
-func randomToken() string {
+func randomToken() (string, error) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
-		panic(err)
+		return "", err
 	}
-	const hexDigits = "0123456789abcdef"
-	out := make([]byte, len(b)*2)
-	for i, v := range b {
-		out[i*2] = hexDigits[v>>4]
-		out[i*2+1] = hexDigits[v&0x0f]
-	}
-	return string(out)
+	return hex.EncodeToString(b), nil
 }

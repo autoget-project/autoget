@@ -26,6 +26,15 @@ import (
 	"github.com/autoget-project/autoget/backend/organizer"
 )
 
+// setupRouter wires the routes onto the engine. Only the API is guarded by
+// auth; the SPA shell and its assets must stay public because document
+// requests never carry the Bearer token held in localStorage.
+func setupRouter(r *gin.Engine, authSvc *auth.Service, setupAPI func(*gin.RouterGroup)) {
+	authSvc.SetupRouter(r)
+	handlers.ServeStatic(r)
+	setupAPI(r.Group("/api/v1", authSvc.Middleware()))
+}
+
 func main() {
 	configPath := flag.String("c", os.Getenv("CONFIG_PATH"), "path to the configuration file")
 	flag.Parse()
@@ -96,11 +105,7 @@ func main() {
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
-	authSvc.SetupRouter(r)
-	r.Use(authSvc.Middleware())
-	rg := r.Group("/api/v1")
-	handlers.ServeStatic(r)
-	service.SetupRouter(rg)
+	setupRouter(r, authSvc, service.SetupRouter)
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,

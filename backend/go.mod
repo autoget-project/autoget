@@ -7,6 +7,7 @@ require (
 	github.com/anacrolix/torrent v1.61.0
 	github.com/autoget-project/autoget/organizer v0.0.0
 	github.com/autoget-project/autoget/protocol v0.0.0
+	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-telegram/bot v1.25.0
@@ -18,6 +19,7 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/rs/zerolog v1.35.1
 	github.com/stretchr/testify v1.12.1
+	golang.org/x/oauth2 v0.37.0
 	gorm.io/driver/postgres v1.6.2
 	gorm.io/gorm v1.31.2
 )
@@ -31,7 +33,6 @@ require (
 	github.com/bytedance/sonic v1.15.3 // indirect
 	github.com/bytedance/sonic/loader v0.5.2 // indirect
 	github.com/cloudwego/base64x v0.1.7 // indirect
-	github.com/coreos/go-oidc/v3 v3.21.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.15 // indirect
 	github.com/gin-contrib/sse v1.1.1 // indirect
@@ -76,7 +77,6 @@ require (
 	golang.org/x/crypto v0.56.0 // indirect
 	golang.org/x/exp v0.0.0-20260824195058-e88cd73687aa // indirect
 	golang.org/x/net v0.58.0 // indirect
-	golang.org/x/oauth2 v0.37.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.41.0 // indirect

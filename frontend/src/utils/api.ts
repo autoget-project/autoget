@@ -1,9 +1,12 @@
 const AUTH_STORAGE_KEY = "autoget_auth";
+const REFRESH_LOCK = "autoget_auth_refresh";
 
 interface StoredTokens {
   access_token: string;
   refresh_token: string;
   id_token: string;
+  expires_in: number;
+  token_type: string;
 }
 
 function getTokens(): StoredTokens | null {
@@ -19,34 +22,78 @@ function setTokens(tokens: StoredTokens): void {
   localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(tokens));
 }
 
+// isAuthenticated reports whether a session is stored locally. It is only true
+// when auth is enabled and the user has logged in.
+export function isAuthenticated(): boolean {
+  return getTokens() !== null;
+}
+
 export function logout(): void {
   localStorage.removeItem(AUTH_STORAGE_KEY);
+  // Reloading drops back to the login flow via the 401 handling below.
   window.location.href = "/";
 }
 
-let refreshing: Promise<boolean> | null = null;
+type RefreshResult = "ok" | "expired" | "unavailable";
 
 // refreshTokens exchanges the stored refresh token for new tokens via the
-// backend (which holds the client secret). Returns true on success.
-async function refreshTokens(): Promise<boolean> {
+// backend (which holds the client secret).
+async function refreshTokens(): Promise<RefreshResult> {
   const tokens = getTokens();
   if (!tokens?.refresh_token) {
-    return false;
+    return "expired";
   }
+
+  let response: Response;
   try {
-    const response = await fetch("/auth/refresh", {
+    response = await fetch("/auth/refresh", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: tokens.refresh_token }),
     });
-    if (!response.ok) {
-      return false;
-    }
-    setTokens(await response.json());
-    return true;
   } catch {
-    return false;
+    // Network failure: the tokens may still be valid, so keep the session.
+    return "unavailable";
   }
+
+  if (response.ok) {
+    setTokens((await response.json()) as StoredTokens);
+    return "ok";
+  }
+  if (response.status === 400 || response.status === 401) {
+    // The refresh token is gone; the user has to log in again.
+    return "expired";
+  }
+  // Provider outage (5xx/429): do not log the user out.
+  return "unavailable";
+}
+
+let refreshing: Promise<RefreshResult> | null = null;
+
+// refreshOnce deduplicates refreshes across every tab. Rotation invalidates the
+// previous refresh token, so two tabs refreshing in parallel would make the
+// second attempt look like a replay attack and log the user out.
+function refreshOnce(): Promise<RefreshResult> {
+  const used = getTokens()?.refresh_token;
+
+  const run = async (): Promise<RefreshResult> => {
+    // Another tab may have refreshed while we waited for the lock.
+    const current = getTokens()?.refresh_token;
+    if (used && current && current !== used) {
+      return "ok";
+    }
+    return refreshTokens();
+  };
+
+  const locks = (navigator as Navigator & { locks?: LockManager }).locks;
+  if (locks) {
+    return locks.request(REFRESH_LOCK, run);
+  }
+
+  refreshing ??= run().finally(() => {
+    refreshing = null;
+  });
+  return refreshing;
 }
 
 function redirectToLogin(): void {
@@ -54,7 +101,7 @@ function redirectToLogin(): void {
   window.location.href = `/auth/login?redirect=${encodeURIComponent(current.pathname + current.search)}`;
 }
 
-async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const applyAuth = (init?: RequestInit): RequestInit => {
     const tokens = getTokens();
     if (!tokens?.access_token) {
@@ -67,20 +114,18 @@ async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<R
 
   let response = await fetch(input, applyAuth(init));
   if (response.status === 401) {
-    // tokens may be expired: try one refresh, then retry once
-    refreshing ??= refreshTokens().finally(() => {
-      refreshing = null;
-    });
-    if (await refreshing) {
+    // Tokens may be expired: try one refresh, then retry once.
+    const result = await refreshOnce();
+    if (result === "ok") {
       response = await fetch(input, applyAuth(init));
+    } else if (result === "expired") {
+      // No valid, renewable session; start the OAuth login flow, returning to
+      // the current page afterwards.
+      redirectToLogin();
+      // Return an unresolved promise so downstream code doesn't throw or trigger error toasts during navigation
+      return new Promise(() => {});
     }
-  }
-  if (response.status === 401) {
-    // no valid/renewable tokens; go through the OAuth login flow,
-    // returning to the current page afterwards
-    redirectToLogin();
-    // Return an unresolved promise so downstream code doesn't throw or trigger error toasts during navigation
-    return new Promise(() => {});
+    // "unavailable": keep the session and surface the response to the caller.
   }
   return response;
 }

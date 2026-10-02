@@ -83,7 +83,27 @@ AutoGet Backend provides a centralized system for:
 
 ### Configuare
 
-See `example.config.yaml`.
+See `example.config.yaml`. The `auth` section is optional: when present, the
+web UI requires an OAuth/OIDC login, and when omitted auth is disabled.
+
+#### OAuth/OIDC login (`auth`)
+
+```yaml
+auth:
+  issuer: https://auth.example.com/oauth2
+  client_id: your_client_id
+  client_secret: your_client_secret
+  redirect_base_url: https://autoget.example.com
+```
+
+- `issuer` must support OIDC discovery (`/.well-known/openid-configuration`).
+- Register `{redirect_base_url}/auth/callback` as an allowed redirect URI with
+  the provider.
+- `redirect_base_url` is the externally reachable base URL of this app. In the
+  local dev setup it is `http://127.0.0.1:8880` (the Caddy entrypoint), and
+  Caddy must forward `/auth/*` to the backend.
+- The backend only stores the client secret and a short-lived CSRF state; tokens
+  live in the browser.
 
 ## API Documentation
 

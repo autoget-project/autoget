@@ -18,8 +18,8 @@ type Config struct {
 
 // Validate checks the auth config fields.
 func (c *Config) Validate() error {
-	if c.Issuer == "" {
-		return fmt.Errorf("auth issuer is required")
+	if err := requireAbsoluteURL("auth issuer", c.Issuer); err != nil {
+		return err
 	}
 	if c.ClientID == "" {
 		return fmt.Errorf("auth client_id is required")
@@ -27,11 +27,21 @@ func (c *Config) Validate() error {
 	if c.ClientSecret == "" {
 		return fmt.Errorf("auth client_secret is required")
 	}
-	if c.RedirectBaseURL == "" {
-		return fmt.Errorf("auth redirect_base_url is required")
+	if err := requireAbsoluteURL("auth redirect_base_url", c.RedirectBaseURL); err != nil {
+		return err
 	}
-	if _, err := url.Parse(c.RedirectBaseURL); err != nil {
-		return fmt.Errorf("invalid auth redirect_base_url: %w", err)
+	return nil
+}
+
+// requireAbsoluteURL rejects values that would silently produce a broken
+// endpoint, such as a bare host name or a relative path.
+func requireAbsoluteURL(name, value string) error {
+	if value == "" {
+		return fmt.Errorf("%s is required", name)
+	}
+	u, err := url.Parse(value)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return fmt.Errorf("%s must be an absolute URL like https://host, got %q", name, value)
 	}
 	return nil
 }
@@ -41,6 +51,7 @@ type tokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	IDToken      string `json:"id_token"`
-	ExpiresIn    int64  `json:"expires_in"`
-	TokenType    string `json:"token_type"`
+	// ExpiresIn is the access token lifetime in seconds (RFC 6749 §5.1).
+	ExpiresIn int64  `json:"expires_in"`
+	TokenType string `json:"token_type"`
 }
