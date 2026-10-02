@@ -10,6 +10,7 @@ auth:
   client_id: your_client_id
   client_secret: your_client_secret
   redirect_base_url: https://autoget.example.com
+  # required_role: autoget # optional: if set, JWT roles claim (space-separated) must contain this role
 telegram:
   token: bot_token
   chat_id: your_chat_id

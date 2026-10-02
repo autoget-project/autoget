@@ -182,10 +182,31 @@ func (s *Service) verifyAccessToken(ctx context.Context, raw string) (bool, erro
 	if err != nil {
 		return false, err
 	}
-	if _, err := p.verifier.Verify(ctx, raw); err != nil {
+	idToken, err := p.verifier.Verify(ctx, raw)
+	if err != nil {
 		return false, nil
 	}
+	if s.cfg != nil && s.cfg.RequiredRole != "" {
+		var claims struct {
+			Roles string `json:"roles"`
+		}
+		if err := idToken.Claims(&claims); err != nil {
+			return false, nil
+		}
+		if !hasRole(claims.Roles, s.cfg.RequiredRole) {
+			return false, nil
+		}
+	}
 	return true, nil
+}
+
+func hasRole(roles, required string) bool {
+	for _, r := range strings.Fields(roles) {
+		if r == required {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) login(c *gin.Context) {

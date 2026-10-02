@@ -94,9 +94,12 @@ auth:
   client_id: your_client_id
   client_secret: your_client_secret
   redirect_base_url: https://autoget.example.com
+  # required_role: autoget # optional
 ```
 
 - `issuer` must support OIDC discovery (`/.well-known/openid-configuration`).
+- `required_role`: optional. If set, API requests must carry a JWT whose `roles` claim
+  (space-separated string) contains this role. Omit to skip role validation.
 - Register `{redirect_base_url}/auth/callback` as an allowed redirect URI with
   the provider.
 - `redirect_base_url` is the externally reachable base URL of this app. In the

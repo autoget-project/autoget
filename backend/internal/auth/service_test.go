@@ -55,8 +55,9 @@ func (s *staticKeySet) VerifySignature(_ context.Context, token string) ([]byte,
 
 // testHarness wraps the service with a token signer for tests.
 type testHarness struct {
-	svc   *Service
-	token func() string
+	svc              *Service
+	token            func() string
+	tokenWithPayload func(payload map[string]any) string
 }
 
 func (h *testHarness) Middleware() gin.HandlerFunc { return h.svc.Middleware() }
@@ -71,21 +72,25 @@ func testService(t *testing.T) *testHarness {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 
+	signPayload := func(payload map[string]any) string {
+		hdr, _ := json.Marshal(map[string]string{"alg": "RS256", "typ": "JWT"})
+		payloadBytes, _ := json.Marshal(payload)
+		signingInput := base64.RawURLEncoding.EncodeToString(hdr) + "." + base64.RawURLEncoding.EncodeToString(payloadBytes)
+		hashed := sha256.Sum256([]byte(signingInput))
+		sig, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, hashed[:])
+		require.NoError(t, err)
+		return signingInput + "." + base64.RawURLEncoding.EncodeToString(sig)
+	}
+
 	signedToken := func() string {
 		now := time.Now()
-		hdr, _ := json.Marshal(map[string]string{"alg": "RS256", "typ": "JWT"})
-		payload, _ := json.Marshal(map[string]any{
+		return signPayload(map[string]any{
 			"iss": "https://provider.example.com",
 			"aud": "test-client",
 			"sub": "user1",
 			"iat": now.Unix(),
 			"exp": now.Add(time.Hour).Unix(),
 		})
-		signingInput := base64.RawURLEncoding.EncodeToString(hdr) + "." + base64.RawURLEncoding.EncodeToString(payload)
-		hashed := sha256.Sum256([]byte(signingInput))
-		sig, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, hashed[:])
-		require.NoError(t, err)
-		return signingInput + "." + base64.RawURLEncoding.EncodeToString(sig)
 	}
 
 	s := &Service{
@@ -112,7 +117,7 @@ func testService(t *testing.T) *testHarness {
 		},
 		states: map[string]stateEntry{},
 	}
-	return &testHarness{svc: s, token: signedToken}
+	return &testHarness{svc: s, token: signedToken, tokenWithPayload: signPayload}
 }
 
 // tokenEndpoint returns a service whose refresh calls hit the given handler.
@@ -188,6 +193,73 @@ func TestMiddlewareGarbageToken(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer not-a-jwt")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestMiddlewareRequiredRole(t *testing.T) {
+	s := testService(t)
+	s.svc.cfg.RequiredRole = "autoget"
+
+	router := gin.New()
+	router.Group("/api/v1", s.Middleware()).GET("/indexers", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	now := time.Now()
+	baseClaims := func(roles any) map[string]any {
+		m := map[string]any{
+			"iss": "https://provider.example.com",
+			"aud": "test-client",
+			"sub": "user1",
+			"iat": now.Unix(),
+			"exp": now.Add(time.Hour).Unix(),
+		}
+		if roles != nil {
+			m["roles"] = roles
+		}
+		return m
+	}
+
+	// Token without roles claim -> 401
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/indexers", nil)
+	req.Header.Set("Authorization", "Bearer "+s.tokenWithPayload(baseClaims(nil)))
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+	// Token with wrong role -> 401
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/indexers", nil)
+	req.Header.Set("Authorization", "Bearer "+s.tokenWithPayload(baseClaims("admin editor")))
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+	// Token with substring matching but not exact role -> 401
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/indexers", nil)
+	req.Header.Set("Authorization", "Bearer "+s.tokenWithPayload(baseClaims("autoget-admin notautoget")))
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+	// Token with exact role among space-separated roles -> 200
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/indexers", nil)
+	req.Header.Set("Authorization", "Bearer "+s.tokenWithPayload(baseClaims("admin autoget editor")))
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Token with only required role -> 200
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/indexers", nil)
+	req.Header.Set("Authorization", "Bearer "+s.tokenWithPayload(baseClaims("autoget")))
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestHasRole(t *testing.T) {
+	assert.True(t, hasRole("admin autoget user", "autoget"))
+	assert.True(t, hasRole("autoget", "autoget"))
+	assert.True(t, hasRole("  autoget   user  ", "autoget"))
+	assert.False(t, hasRole("admin user", "autoget"))
+	assert.False(t, hasRole("autoget-admin", "autoget"))
+	assert.False(t, hasRole("", "autoget"))
 }
 
 // A provider that cannot be discovered must not push clients into the login
