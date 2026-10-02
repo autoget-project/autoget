@@ -249,7 +249,7 @@ export interface DownloadItem {
   ResTitle: string;
   ResTitle2: string;
   Category: string;
-  detailsUrl?: string;
+  DetailsURL?: string;
   FileList: string[];
   Metadata: {
     actors: string[];

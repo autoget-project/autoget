@@ -450,7 +450,7 @@ export class DownloaderView extends LitElement {
             <div class="flex-1 min-w-0">
               <h3 class="card-title text-base sm:text-lg break-words">
                 ${(() => {
-                  const detailsUrl = safeExternalUrl(item.detailsUrl);
+                  const detailsUrl = safeExternalUrl(item.DetailsURL);
                   if (detailsUrl) {
                     return html`
                       <a
@@ -475,7 +475,7 @@ export class DownloaderView extends LitElement {
               <div class="flex flex-wrap gap-1.5 sm:gap-2 mt-2">
                 ${(() => {
                   if (!item.ResIndexer) return "";
-                  const detailsUrl = safeExternalUrl(item.detailsUrl);
+                  const detailsUrl = safeExternalUrl(item.DetailsURL);
                   if (detailsUrl) {
                     return html`
                       <a

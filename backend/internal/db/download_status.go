@@ -60,7 +60,7 @@ type DownloadStatus struct {
 	ResTitle   string
 	ResTitle2  string
 	Category   string
-	DetailsURL string                 `json:"detailsUrl,omitempty"`
+	DetailsURL string
 	FileList   []string               `gorm:"serializer:json"`
 	Metadata   map[string]interface{} `gorm:"serializer:json"`
 
