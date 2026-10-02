@@ -4,6 +4,7 @@ import { DateTime } from "luxon";
 
 import { fetchIndexerResources, type Resource, type ResourcesResponse } from "../utils/api";
 import { formatBytes, formatCreatedDate } from "../utils/format";
+import { externalLink } from "../utils/links";
 import { safeExternalUrl } from "../utils/url";
 import globalStyles from "/src/index.css?inline";
 import "./download_button.js";
@@ -169,27 +170,20 @@ export class ResourceList extends LitElement {
           <h3
             class="text-base-content font-medium line-clamp-4 text-balance break-all border-b border-base-300"
           >
-            ${(() => {
-              const detailsUrl = safeExternalUrl(resource.detailsUrl);
-              if (detailsUrl) {
-                return html`
-                  <a
-                    href="${detailsUrl}"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="hover:underline inline-flex items-center gap-1.5"
-                    title="Open on indexer"
-                  >
-                    <span>${resource.title || "Untitled Resource"}</span>
-                    <span
-                      class="icon-[ph--arrow-square-out-bold] shrink-0 text-base-content/60"
-                      style="width: 1em; height: 1em;"
-                    ></span>
-                  </a>
-                `;
-              }
-              return resource.title || "Untitled Resource";
-            })()}
+            ${
+              externalLink({
+                url: resource.detailsUrl,
+                class: "hover:underline inline-flex items-center gap-1.5",
+                title: "Open on indexer",
+                label: `Open ${resource.title || "Untitled Resource"} on the indexer`,
+                content: html`<span>${resource.title || "Untitled Resource"}</span>
+                  <span
+                    class="icon-[ph--arrow-square-out-bold] shrink-0 text-base-content/60"
+                    style="width: 1em; height: 1em;"
+                  ></span>`,
+              }) ??
+              (resource.title || "Untitled Resource")
+            }
           </h3>
           ${
             resource.title2
@@ -278,27 +272,19 @@ export class ResourceList extends LitElement {
               : ""
           }
           <div class="flex flex-row basis-full justify-between items-center mt-1">
-            ${(() => {
-              const detailsUrl = safeExternalUrl(resource.detailsUrl);
-              if (detailsUrl) {
-                return html`
-                  <a
-                    href="${detailsUrl}"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="btn btn-xs btn-ghost gap-1 text-base-content/70 hover:text-base-content"
-                    title="Open on indexer"
-                  >
-                    <span
-                      class="icon-[ph--arrow-square-out-bold]"
-                      style="width: 1.1em; height: 1.1em;"
-                    ></span>
-                    <span>Details</span>
-                  </a>
-                `;
-              }
-              return html`<div></div>`;
-            })()}
+            ${
+              externalLink({
+                url: resource.detailsUrl,
+                class: "btn btn-xs btn-ghost gap-1 text-base-content/70 hover:text-base-content",
+                title: "Open on indexer",
+                label: `Open details for ${resource.title || "Untitled Resource"} on the indexer`,
+                content: html`<span
+                    class="icon-[ph--arrow-square-out-bold]"
+                    style="width: 1.1em; height: 1.1em;"
+                  ></span>
+                  <span>Details</span>`,
+              }) ?? html`<div></div>`
+            }
             <download-button
               indexerId="${this.indexerId}"
               resourceId="${resource.id}"
