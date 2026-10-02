@@ -4,6 +4,7 @@ import { DateTime } from "luxon";
 
 import { fetchIndexerResources, type Resource, type ResourcesResponse } from "../utils/api";
 import { formatBytes, formatCreatedDate } from "../utils/format";
+import { safeExternalUrl } from "../utils/url";
 import globalStyles from "/src/index.css?inline";
 import "./download_button.js";
 
@@ -225,28 +226,33 @@ export class ResourceList extends LitElement {
             resource.dbs && resource.dbs.length > 0
               ? html` <div class="flex flex-wrap gap-3 mt-1 mb-1 pb-1 border-b border-base-300">
                   ${resource.dbs.map((db: { db: string; link: string; rating: string }) => {
-                    if (db.db === "douban" || db.db === "imdb") {
-                      return html`
-                        <a
-                          href="${db.link}"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          class="inline-flex items-center gap-2 transition-colors cursor-pointer"
-                          title="Open ${db.db.toUpperCase()} page in new tab"
-                        >
-                          <span
-                            class="${
-                              db.db === "douban"
-                                ? "icon-[simple-icons--douban] text-green-600"
-                                : "icon-[fa--imdb]"
-                            }"
-                            style="width: 1.2em; height: 1.2em;"
-                          ></span>
-                          ${db.rating ? html`<span class="text-xs">(${db.rating} ⭐)</span>` : ""}
-                        </a>
-                      `;
+                    if (db.db !== "douban" && db.db !== "imdb") {
+                      return "";
                     }
-                    return "";
+                    // db.link is indexer-supplied; never trust its scheme.
+                    const link = safeExternalUrl(db.link);
+                    if (!link) {
+                      return "";
+                    }
+                    return html`
+                      <a
+                        href="${link}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="inline-flex items-center gap-2 transition-colors cursor-pointer"
+                        title="Open ${db.db.toUpperCase()} page in new tab"
+                      >
+                        <span
+                          class="${
+                            db.db === "douban"
+                              ? "icon-[simple-icons--douban] text-green-600"
+                              : "icon-[fa--imdb]"
+                          }"
+                          style="width: 1.2em; height: 1.2em;"
+                        ></span>
+                        ${db.rating ? html`<span class="text-xs">(${db.rating} ⭐)</span>` : ""}
+                      </a>
+                    `;
                   })}
                 </div>`
               : ""

@@ -30,6 +30,7 @@ import (
 // auth; the SPA shell and its assets must stay public because document
 // requests never carry the Bearer token held in localStorage.
 func setupRouter(r *gin.Engine, authSvc *auth.Service, setupAPI func(*gin.RouterGroup)) {
+	r.Use(handlers.SecurityHeaders())
 	authSvc.SetupRouter(r)
 	handlers.ServeStatic(r)
 	setupAPI(r.Group("/api/v1", authSvc.Middleware()))

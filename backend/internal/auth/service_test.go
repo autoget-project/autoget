@@ -276,6 +276,29 @@ func TestCallbackSuccess(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
+func TestCallbackPageHasNoInlineScript(t *testing.T) {
+	var buf strings.Builder
+	require.NoError(t, callbackTpl.Execute(&buf, callbackPage{Redirect: "/", Tokens: `{}`}))
+
+	page := buf.String()
+	assert.NotContains(t, page, "<script>", "the CSP forbids inline scripts")
+	assert.Contains(t, page, `<script src="/auth/callback.js"></script>`)
+}
+
+func TestCallbackScriptIsServed(t *testing.T) {
+	s := testService(t)
+	router := gin.New()
+	s.SetupRouter(router)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/auth/callback.js", nil)
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Header().Get("Content-Type"), "javascript")
+	assert.Contains(t, w.Body.String(), "autoget_auth")
+}
+
 func TestRefreshSuccessRotating(t *testing.T) {
 	s := testServiceWithTokenEndpoint(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
+	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -135,6 +136,7 @@ func (s *Service) SetupRouter(router *gin.Engine) {
 	}
 	router.GET("/auth/login", s.login)
 	router.GET("/auth/callback", s.callback)
+	router.GET("/auth/callback.js", s.callbackScript)
 	router.POST("/auth/refresh", s.refresh)
 }
 
@@ -210,22 +212,20 @@ var callbackTpl = template.Must(template.New("callback").Parse(`<!DOCTYPE html>
 <body>
 <p>Logging in…</p>
 <div id="tokens" data-redirect="{{.Redirect}}" data-tokens="{{.Tokens}}"></div>
-<script>
-(function () {
-  var el = document.getElementById("tokens");
-  try {
-    var tokens = JSON.parse(el.dataset.tokens);
-    localStorage.setItem("autoget_auth", JSON.stringify(tokens));
-  } catch (e) { /* fall through */ }
-  window.location.replace(el.dataset.redirect || "/");
-})();
-</script>
+<script src="/auth/callback.js"></script>
 </body>
 </html>`))
+
+//go:embed callback.js
+var callbackScriptJS string
 
 type callbackPage struct {
 	Redirect string
 	Tokens   string
+}
+
+func (s *Service) callbackScript(c *gin.Context) {
+	c.Data(http.StatusOK, "text/javascript; charset=utf-8", []byte(callbackScriptJS))
 }
 
 func (s *Service) callback(c *gin.Context) {

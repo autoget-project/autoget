@@ -39,6 +39,7 @@ func TestSetupRouterProtectsOnlyAPI(t *testing.T) {
 	req.Header.Set("Accept", "text/html")
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.NotEmpty(t, w.Header().Get("Content-Security-Policy"))
 
 	// The API requires a token.
 	w = httptest.NewRecorder()
