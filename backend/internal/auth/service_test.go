@@ -295,6 +295,7 @@ func TestCallbackScriptIsServed(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "no-cache", w.Header().Get("Cache-Control"))
 	assert.Contains(t, w.Header().Get("Content-Type"), "javascript")
 	assert.Contains(t, w.Body.String(), "autoget_auth")
 }

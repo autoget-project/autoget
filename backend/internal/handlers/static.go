@@ -30,11 +30,15 @@ func serveStatic(router *gin.Engine, root string) {
 	// serve icon.svg
 	router.StaticFile("/icon.svg", root+"/icon.svg")
 
-	// serve the theme bootstrap (kept external for the CSP)
-	router.StaticFile("/theme-init.js", root+"/theme-init.js")
+	// serve the theme bootstrap (kept external for the CSP, not hashed so must not be cached long)
+	router.GET("/theme-init.js", func(c *gin.Context) {
+		c.Header("Cache-Control", "no-cache")
+		c.File(root + "/theme-init.js")
+	})
 
 	// serve index.html
 	router.NoRoute(func(c *gin.Context) {
+		c.Header("Cache-Control", "no-cache")
 		c.File(root + "/index.html")
 	})
 }

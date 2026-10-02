@@ -29,12 +29,15 @@ func TestServeStaticServesShellAndAssets(t *testing.T) {
 	r.Use(SecurityHeaders())
 	serveStatic(r, root)
 
-	cases := []struct{ path, want string }{
-		{"/theme-init.js", "theme"},
-		{"/icon.svg", "svg"},
-		{"/assets/app.js", "app"},
-		{"/", "shell"},
-		{"/indexers/mteam", "shell"}, // deep links fall through to the shell
+	cases := []struct {
+		path, want  string
+		wantNoCache bool
+	}{
+		{"/theme-init.js", "theme", true},
+		{"/icon.svg", "svg", false},
+		{"/assets/app.js", "app", false},
+		{"/", "shell", true},
+		{"/indexers/mteam", "shell", true}, // deep links fall through to the shell
 	}
 	for _, tc := range cases {
 		t.Run(tc.path, func(t *testing.T) {
@@ -45,6 +48,9 @@ func TestServeStaticServesShellAndAssets(t *testing.T) {
 			assert.Equal(t, http.StatusOK, w.Code)
 			assert.Contains(t, w.Body.String(), tc.want)
 			assert.NotEmpty(t, w.Header().Get("Content-Security-Policy"))
+			if tc.wantNoCache {
+				assert.Equal(t, "no-cache", w.Header().Get("Cache-Control"))
+			}
 		})
 	}
 }

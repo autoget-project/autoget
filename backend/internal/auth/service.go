@@ -225,6 +225,7 @@ type callbackPage struct {
 }
 
 func (s *Service) callbackScript(c *gin.Context) {
+	c.Header("Cache-Control", "no-cache")
 	c.Data(http.StatusOK, "text/javascript; charset=utf-8", []byte(callbackScriptJS))
 }
 
