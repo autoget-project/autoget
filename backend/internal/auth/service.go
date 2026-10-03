@@ -143,13 +143,31 @@ func (s *Service) SetupRouter(router *gin.Engine) {
 	router.GET("/auth/login", s.login)
 	router.GET("/auth/callback", s.callback)
 	router.GET("/auth/callback.js", s.callbackScript)
+	router.GET("/auth/denied", s.denied)
+	router.GET("/auth/denied.js", s.deniedScript)
 	router.POST("/auth/refresh", s.refresh)
 }
 
+// tokenStatus is the outcome of verifying a bearer token.
+type tokenStatus int
+
+const (
+	// tokenValid: the token is authentic and satisfies the role requirement.
+	tokenValid tokenStatus = iota
+	// tokenInvalid: the token is missing, malformed or expired. The client
+	// recovers by logging in again.
+	tokenInvalid
+	// tokenForbidden: the token is authentic but does not carry the required
+	// role. Logging in again cannot help, so the client must not be pushed back
+	// through the login flow.
+	tokenForbidden
+)
+
 // Middleware guards the API and is a pass-through when auth is disabled. A
 // request carrying a valid Bearer token passes; a missing or invalid token
-// gets 401, and an unreachable provider gets 503 so clients keep their session
-// instead of being pushed through the login flow.
+// gets 401, a valid token without the required role gets 403, and an
+// unreachable provider gets 503 so clients keep their session instead of being
+// pushed through the login flow.
 func (s *Service) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if s == nil {
@@ -163,45 +181,56 @@ func (s *Service) Middleware() gin.HandlerFunc {
 			return
 		}
 
-		ok, err := s.verifyAccessToken(c.Request.Context(), token)
+		status, err := s.verifyAccessToken(c.Request.Context(), token)
 		if err != nil {
 			log.Error().Err(err).Msg("access token verification failed")
 			c.AbortWithStatus(http.StatusServiceUnavailable)
 			return
 		}
-		if !ok {
+		switch status {
+		case tokenValid:
+			c.Next()
+		case tokenForbidden:
+			c.AbortWithStatus(http.StatusForbidden)
+		default:
 			c.AbortWithStatus(http.StatusUnauthorized)
-			return
 		}
-		c.Next()
 	}
 }
 
-func (s *Service) verifyAccessToken(ctx context.Context, raw string) (bool, error) {
+func (s *Service) verifyAccessToken(ctx context.Context, raw string) (tokenStatus, error) {
 	p, err := s.ensureProvider(ctx)
 	if err != nil {
-		return false, err
+		return tokenInvalid, err
 	}
 	idToken, err := p.verifier.Verify(ctx, raw)
 	if err != nil {
-		return false, nil
+		return tokenInvalid, nil
 	}
-	// A token that is valid but lacks the required role is rejected the same
-	// way as a missing or invalid token (401) so the client has a single
-	// recovery path: clear the session and log in again.
-	requiredRole := strings.TrimSpace(s.cfg.RequiredRole)
-	if requiredRole != "" {
-		var claims struct {
-			Roles string `json:"roles"`
-		}
-		if err := idToken.Claims(&claims); err != nil {
-			return false, nil
-		}
-		if !hasRole(claims.Roles, requiredRole) {
-			return false, nil
-		}
+
+	requiredRole := s.requiredRole()
+	if requiredRole == "" {
+		return tokenValid, nil
 	}
-	return true, nil
+
+	var claims struct {
+		Roles string `json:"roles"`
+	}
+	if err := idToken.Claims(&claims); err != nil {
+		// The roles claim is absent or not the expected space-separated string;
+		// either way the token does not carry the required role.
+		return tokenForbidden, nil
+	}
+	if !hasRole(claims.Roles, requiredRole) {
+		return tokenForbidden, nil
+	}
+	return tokenValid, nil
+}
+
+// requiredRole returns the configured role, ignoring surrounding whitespace so
+// a stray space in the config cannot lock every user out.
+func (s *Service) requiredRole() string {
+	return strings.TrimSpace(s.cfg.RequiredRole)
 }
 
 func hasRole(roles, required string) bool {
@@ -260,6 +289,48 @@ func (s *Service) callbackScript(c *gin.Context) {
 	c.Data(http.StatusOK, "text/javascript; charset=utf-8", []byte(callbackScriptJS))
 }
 
+var deniedTpl = template.Must(template.New("denied").Parse(`<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Access denied</title></head>
+<body>
+<h1>Access denied</h1>
+<p>Your account is missing the required role "{{.Role}}".</p>
+<p>Ask an administrator to grant it, then log in again.</p>
+<script src="/auth/denied.js"></script>
+</body>
+</html>`))
+
+//go:embed denied.js
+var deniedScriptJS string
+
+// renderDenied shows the access-denied page. It is served instead of the SPA so
+// an unprivileged session never reaches the app, which would otherwise fail
+// every API call.
+func (s *Service) renderDenied(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	c.Status(http.StatusForbidden)
+	if err := deniedTpl.Execute(c.Writer, struct{ Role string }{Role: s.requiredRole()}); err != nil {
+		log.Error().Err(err).Msg("render denied page failed")
+	}
+}
+
+// denied is the landing page the frontend falls back to, for example when a
+// token that once passed the role check is later rejected with 403.
+func (s *Service) denied(c *gin.Context) {
+	if s.requiredRole() == "" {
+		// Without a role requirement this page is unreachable through normal
+		// use, so send the visitor home instead of showing a misleading denial.
+		c.Redirect(http.StatusFound, "/")
+		return
+	}
+	s.renderDenied(c)
+}
+
+func (s *Service) deniedScript(c *gin.Context) {
+	c.Header("Cache-Control", "no-cache")
+	c.Data(http.StatusOK, "text/javascript; charset=utf-8", []byte(deniedScriptJS))
+}
+
 func (s *Service) callback(c *gin.Context) {
 	if errDesc := c.Query("error"); errDesc != "" {
 		c.String(http.StatusBadGateway, "auth error: %s", errDesc)
@@ -292,6 +363,23 @@ func (s *Service) callback(c *gin.Context) {
 		log.Error().Err(err).Msg("code exchange failed")
 		c.String(http.StatusBadGateway, "code exchange failed")
 		return
+	}
+
+	// Refuse the session up front when the roles claim is missing: storing the
+	// tokens anyway would only make every API call fail and bounce the browser
+	// through the login flow again.
+	if s.requiredRole() != "" {
+		status, err := s.verifyAccessToken(c.Request.Context(), tok.AccessToken)
+		if err != nil {
+			log.Error().Err(err).Msg("access token verification failed")
+			c.String(http.StatusServiceUnavailable, "auth provider unavailable")
+			return
+		}
+		if status == tokenForbidden {
+			log.Warn().Str("required_role", s.requiredRole()).Msg("login denied: role missing")
+			s.renderDenied(c)
+			return
+		}
 	}
 
 	data, err := json.Marshal(newTokenResponse(tok))

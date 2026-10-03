@@ -217,26 +217,26 @@ func TestMiddlewareRequiredRole(t *testing.T) {
 		return m
 	}
 
-	// Token without roles claim -> 401
+	// Token without roles claim -> 403 (authenticated but not authorized)
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/indexers", nil)
 	req.Header.Set("Authorization", "Bearer "+s.tokenWithPayload(baseClaims(nil)))
 	router.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Equal(t, http.StatusForbidden, w.Code)
 
-	// Token with wrong role -> 401
+	// Token with wrong role -> 403
 	w = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/indexers", nil)
 	req.Header.Set("Authorization", "Bearer "+s.tokenWithPayload(baseClaims("admin editor")))
 	router.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Equal(t, http.StatusForbidden, w.Code)
 
-	// Token with substring matching but not exact role -> 401
+	// Token with substring matching but not exact role -> 403
 	w = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/indexers", nil)
 	req.Header.Set("Authorization", "Bearer "+s.tokenWithPayload(baseClaims("autoget-admin notautoget")))
 	router.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Equal(t, http.StatusForbidden, w.Code)
 
 	// Token with exact role among space-separated roles -> 200
 	w = httptest.NewRecorder()
@@ -433,6 +433,124 @@ func TestCallbackSuccess(t *testing.T) {
 	req.AddCookie(&http.Cookie{Name: stateCookieName, Value: "state-1"})
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// callbackTokenService wires the test verifier to a stub token endpoint that
+// returns a token signed by the same test key, so the callback's own verifier
+// runs against it.
+func callbackTokenService(t *testing.T, claims map[string]any) *testHarness {
+	t.Helper()
+	s := testService(t)
+	accessToken := s.tokenWithPayload(claims)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		body, _ := json.Marshal(map[string]any{
+			"access_token":  accessToken,
+			"refresh_token": "rt",
+			"token_type":    "Bearer",
+			"expires_in":    3600,
+		})
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(srv.Close)
+	s.svc.provider.oauth.Endpoint.TokenURL = srv.URL
+	return s
+}
+
+func testClaims(roles string) map[string]any {
+	now := time.Now()
+	return map[string]any{
+		"iss":   "https://provider.example.com",
+		"aud":   "test-client",
+		"sub":   "user1",
+		"iat":   now.Unix(),
+		"exp":   now.Add(time.Hour).Unix(),
+		"roles": roles,
+	}
+}
+
+// A user who authenticates but lacks the required role must be denied at the
+// callback, before any token is handed to the client. Otherwise every API call
+// fails and the browser is bounced through the login flow again.
+func TestCallbackDeniesMissingRole(t *testing.T) {
+	s := callbackTokenService(t, testClaims("admin editor"))
+	s.svc.cfg.RequiredRole = "autoget"
+	s.svc.addState("state-role", "/")
+
+	router := gin.New()
+	s.SetupRouter(router)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/auth/callback?state=state-role&code=abc", nil)
+	req.AddCookie(&http.Cookie{Name: stateCookieName, Value: "state-role"})
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.Contains(t, w.Body.String(), "autoget", "the denied page names the missing role")
+	assert.NotContains(t, w.Body.String(), "data-tokens", "no session is handed to the client")
+}
+
+func TestCallbackAllowsRequiredRole(t *testing.T) {
+	s := callbackTokenService(t, testClaims("admin autoget"))
+	s.svc.cfg.RequiredRole = "autoget"
+	s.svc.addState("state-role", "/")
+
+	router := gin.New()
+	s.SetupRouter(router)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/auth/callback?state=state-role&code=abc", nil)
+	req.AddCookie(&http.Cookie{Name: stateCookieName, Value: "state-role"})
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "data-tokens")
+}
+
+func TestDeniedPageNamesRoleAndHasNoInlineScript(t *testing.T) {
+	s := testService(t)
+	s.svc.cfg.RequiredRole = "autoget"
+	router := gin.New()
+	s.SetupRouter(router)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/auth/denied", nil)
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusForbidden, w.Code)
+	assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
+	assert.Contains(t, w.Body.String(), "autoget")
+	assert.NotContains(t, w.Body.String(), "<script>", "the CSP forbids inline scripts")
+	assert.Contains(t, w.Body.String(), `<script src="/auth/denied.js"></script>`)
+}
+
+// Without a role requirement the landing page is unreachable through normal
+// use, so it must not show a denial for a role that is not configured.
+func TestDeniedRedirectsHomeWithoutRoleRequirement(t *testing.T) {
+	s := testService(t)
+	router := gin.New()
+	s.SetupRouter(router)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/auth/denied", nil)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusFound, w.Code)
+	assert.Equal(t, "/", w.Header().Get("Location"))
+}
+
+func TestDeniedScriptClearsSession(t *testing.T) {
+	s := testService(t)
+	router := gin.New()
+	s.SetupRouter(router)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/auth/denied.js", nil)
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "no-cache", w.Header().Get("Cache-Control"))
+	assert.Contains(t, w.Body.String(), "autoget_auth")
 }
 
 func TestCallbackPageHasNoInlineScript(t *testing.T) {

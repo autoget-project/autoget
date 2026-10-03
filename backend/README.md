@@ -99,7 +99,9 @@ auth:
 
 - `issuer` must support OIDC discovery (`/.well-known/openid-configuration`).
 - `required_role`: optional. If set, API requests must carry a JWT whose `roles` claim
-  (space-separated string) contains this role. Omit to skip role validation.
+  (space-separated string) contains this role. Omit to skip role validation. A
+  valid token without the role is rejected with `403` and the browser is sent to
+  `/auth/denied` rather than back through the login flow.
 - Register `{redirect_base_url}/auth/callback` as an allowed redirect URI with
   the provider.
 - `redirect_base_url` is the externally reachable base URL of this app. In the

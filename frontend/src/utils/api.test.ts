@@ -118,6 +118,17 @@ describe("apiFetch auth handling", () => {
     await vi.waitFor(() => expect(window.location.href).toContain("/auth/login"));
   });
 
+  it("redirects to the denial page on 403 without trying to refresh", async () => {
+    localStorage.setItem(KEY, JSON.stringify({ access_token: "old", refresh_token: "r1" }));
+    apiResponses = [403];
+    const mock = installFetchMock();
+
+    void apiFetch("/api/v1/indexers");
+
+    await vi.waitFor(() => expect(window.location.href).toContain("/auth/denied"));
+    expect(mock.mock.calls.some((call) => String(call[0]) === "/auth/refresh")).toBe(false);
+  });
+
   it("keeps the session and returns the response when the provider is unavailable", async () => {
     localStorage.setItem(KEY, JSON.stringify({ access_token: "old", refresh_token: "r1" }));
     apiResponses = [401];

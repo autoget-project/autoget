@@ -101,6 +101,10 @@ function redirectToLogin(): void {
   window.location.href = `/auth/login?redirect=${encodeURIComponent(current.pathname + current.search)}`;
 }
 
+function redirectToDenied(): void {
+  window.location.href = "/auth/denied";
+}
+
 export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const applyAuth = (init?: RequestInit): RequestInit => {
     const tokens = getTokens();
@@ -113,6 +117,15 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
   };
 
   let response = await fetch(input, applyAuth(init));
+  if (response.status === 403) {
+    // Authenticated but not authorized (missing required role). Refreshing or
+    // logging in again cannot help, so go to the denial page instead of
+    // bouncing through the OAuth flow (which loops and can fail the callback).
+    redirectToDenied();
+    // Return an unresolved promise so callers neither retry nor start an
+    // endless fetch loop while the browser navigates away.
+    return new Promise(() => {});
+  }
   if (response.status === 401) {
     // Tokens may be expired: try one refresh, then retry once.
     const result = await refreshOnce();
