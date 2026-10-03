@@ -170,20 +170,7 @@ export class ResourceList extends LitElement {
           <h3
             class="text-base-content font-medium line-clamp-4 text-balance break-all border-b border-base-300"
           >
-            ${
-              externalLink({
-                url: resource.detailsUrl,
-                class: "hover:underline inline-flex items-center gap-1.5",
-                title: "Open on indexer",
-                label: `Open ${resource.title || "Untitled Resource"} on the indexer`,
-                content: html`<span>${resource.title || "Untitled Resource"}</span>
-                  <span
-                    class="icon-[ph--arrow-square-out-bold] shrink-0 text-base-content/60"
-                    style="width: 1em; height: 1em;"
-                  ></span>`,
-              }) ??
-              (resource.title || "Untitled Resource")
-            }
+            ${resource.title || "Untitled Resource"}
           </h3>
           ${
             resource.title2

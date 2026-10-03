@@ -448,21 +448,7 @@ export class DownloaderView extends LitElement {
         <div class="card-body p-4 sm:p-6">
           <div class="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
             <div class="flex-1 min-w-0">
-              <h3 class="card-title text-base sm:text-lg break-words">
-                ${
-                  externalLink({
-                    url: item.DetailsURL,
-                    class: "hover:underline inline-flex items-center gap-1.5",
-                    title: "Open in indexer",
-                    label: `Open ${item.ResTitle} on the indexer`,
-                    content: html`<span>${item.ResTitle}</span>
-                      <span
-                        class="icon-[ph--arrow-square-out-bold] shrink-0 text-base-content/60"
-                        style="width: 1em; height: 1em;"
-                      ></span>`,
-                  }) ?? item.ResTitle
-                }
-              </h3>
+              <h3 class="card-title text-base sm:text-lg break-words">${item.ResTitle}</h3>
               ${item.ResTitle2 ? html`<p class="text-sm text-base-content/70 mt-1 break-words">${item.ResTitle2}</p>` : ""}
               <div class="flex flex-wrap gap-1.5 sm:gap-2 mt-2">
                 ${(() => {
