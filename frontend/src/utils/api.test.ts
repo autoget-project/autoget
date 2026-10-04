@@ -98,6 +98,65 @@ describe("apiFetch auth handling", () => {
     expect(JSON.parse(localStorage.getItem(KEY) ?? "{}").access_token).toBe("new");
   });
 
+  it("refreshes once for concurrent 401s in the same tab", async () => {
+    localStorage.setItem(KEY, JSON.stringify({ access_token: "old", refresh_token: "r1" }));
+    const mock = vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+      if (url === "/auth/refresh") {
+        return res(200, {
+          access_token: "new",
+          refresh_token: "r2",
+          expires_in: 300,
+          token_type: "Bearer",
+        });
+      }
+      const auth = new Headers(init?.headers).get("Authorization");
+      return auth === "Bearer new" ? res(200, { ok: true }) : res(401);
+    });
+    vi.stubGlobal("fetch", mock);
+
+    const responses = await Promise.all([
+      apiFetch("/api/v1/a"),
+      apiFetch("/api/v1/b"),
+      apiFetch("/api/v1/c"),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([200, 200, 200]);
+    const refreshCalls = mock.mock.calls.filter((call) => String(call[0]) === "/auth/refresh");
+    expect(refreshCalls).toHaveLength(1);
+  });
+
+  it("waits for another tab's refresh lock instead of refreshing concurrently", async () => {
+    const LOCK_KEY = "autoget_auth_refresh_lock";
+    localStorage.setItem(KEY, JSON.stringify({ access_token: "old", refresh_token: "r1" }));
+    // Another tab already holds the refresh lock.
+    localStorage.setItem(LOCK_KEY, JSON.stringify({ id: "other-tab", ts: Date.now() }));
+    const mock = vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+      if (url === "/auth/refresh") {
+        return res(200, {
+          access_token: "new",
+          refresh_token: "r2",
+          expires_in: 300,
+          token_type: "Bearer",
+        });
+      }
+      const auth = new Headers(init?.headers).get("Authorization");
+      return auth === "Bearer new" ? res(200, { ok: true }) : res(401);
+    });
+    vi.stubGlobal("fetch", mock);
+
+    const pending = apiFetch("/api/v1/indexers");
+    // The holder finishes and releases the lock shortly after.
+    setTimeout(() => localStorage.removeItem(LOCK_KEY), 120);
+
+    const response = await pending;
+
+    expect(response.status).toBe(200);
+    const refreshCalls = mock.mock.calls.filter((call) => String(call[0]) === "/auth/refresh");
+    expect(refreshCalls).toHaveLength(1);
+  });
+
   it("redirects to login when the refresh token is rejected", async () => {
     localStorage.setItem(KEY, JSON.stringify({ access_token: "old", refresh_token: "r1" }));
     apiResponses = [401];
@@ -106,7 +165,71 @@ describe("apiFetch auth handling", () => {
 
     void apiFetch("/api/v1/indexers");
 
-    await vi.waitFor(() => expect(window.location.href).toContain("/auth/login?redirect="));
+    await vi.waitFor(() => expect(window.location.href).toContain("/auth/login?redirect="), {
+      timeout: 3000,
+    });
+  });
+
+  it("adopts another tab's session when it loses the refresh race", async () => {
+    localStorage.setItem(KEY, JSON.stringify({ access_token: "old", refresh_token: "r1" }));
+    const mock = vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+      if (url === "/auth/refresh") {
+        // A concurrent tab exchanged the single-use refresh token first and
+        // published its session before our attempt was rejected as a replay.
+        localStorage.setItem(
+          KEY,
+          JSON.stringify({
+            access_token: "new",
+            refresh_token: "r2",
+            expires_in: 300,
+            token_type: "Bearer",
+          }),
+        );
+        return res(401, { error: "invalid_grant" });
+      }
+      const auth = new Headers(init?.headers).get("Authorization");
+      return auth === "Bearer new" ? res(200, { ok: true }) : res(401);
+    });
+    vi.stubGlobal("fetch", mock);
+
+    const response = await apiFetch("/api/v1/indexers");
+
+    expect(response.status).toBe(200);
+    expect(window.location.href).not.toContain("/auth/login");
+  });
+
+  it("waits for the winning tab to publish its session", async () => {
+    localStorage.setItem(KEY, JSON.stringify({ access_token: "old", refresh_token: "r1" }));
+    const mock = vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+      if (url === "/auth/refresh") {
+        return res(401, { error: "invalid_grant" });
+      }
+      const auth = new Headers(init?.headers).get("Authorization");
+      return auth === "Bearer new" ? res(200, { ok: true }) : res(401);
+    });
+    vi.stubGlobal("fetch", mock);
+
+    const pending = apiFetch("/api/v1/indexers");
+    // The winning tab publishes its session a moment after our rejection.
+    setTimeout(() => {
+      localStorage.setItem(
+        KEY,
+        JSON.stringify({
+          access_token: "new",
+          refresh_token: "r2",
+          expires_in: 300,
+          token_type: "Bearer",
+        }),
+      );
+      window.dispatchEvent(new StorageEvent("storage", { key: KEY }));
+    }, 50);
+
+    const response = await pending;
+
+    expect(response.status).toBe(200);
+    expect(window.location.href).not.toContain("/auth/login");
   });
 
   it("redirects to login when no session is stored", async () => {
