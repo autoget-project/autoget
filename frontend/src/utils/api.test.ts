@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vite
 import { apiFetch, isAuthenticated, logout } from "./api";
 
 const KEY = "autoget_auth";
+const LOCK_KEY = "autoget_auth_refresh_lock";
 
 function res(status: number, body: unknown = {}): Response {
   return {
@@ -61,6 +62,7 @@ beforeEach(() => {
   installStorage();
   // jsdom has no Web Locks; the module falls back to an in-page single flight.
   Object.defineProperty(navigator, "locks", { value: undefined, configurable: true });
+  Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
   Object.defineProperty(window, "location", {
     value: { href: "http://localhost/indexers/mteam" },
     writable: true,
@@ -166,7 +168,7 @@ describe("apiFetch auth handling", () => {
     void apiFetch("/api/v1/indexers");
 
     await vi.waitFor(() => expect(window.location.href).toContain("/auth/login?redirect="), {
-      timeout: 3000,
+      timeout: 5000,
     });
   });
 
@@ -232,6 +234,20 @@ describe("apiFetch auth handling", () => {
     expect(window.location.href).not.toContain("/auth/login");
   });
 
+  it("does not redirect to login when running in a background tab", async () => {
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    localStorage.setItem(KEY, JSON.stringify({ access_token: "old", refresh_token: "r1" }));
+    apiResponses = [401];
+    refreshResponse = () => res(401, { error: "refresh failed" });
+    installFetchMock();
+
+    void apiFetch("/api/v1/indexers");
+
+    // Give asynchronous tasks time to complete, confirming no redirect happens
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(window.location.href).not.toContain("/auth/login");
+  });
+
   it("redirects to login when no session is stored", async () => {
     apiResponses = [401];
     installFetchMock();
@@ -280,6 +296,30 @@ describe("apiFetch auth handling", () => {
 
     expect(response.status).toBe(401);
     expect(window.location.href).toBe(hrefBefore);
+  });
+
+  it("does not spin the lock deadline when localStorage writes throw", async () => {
+    localStorage.setItem(KEY, JSON.stringify({ access_token: "old", refresh_token: "r1" }));
+    apiResponses = [401];
+    refreshResponse = () => res(200, { access_token: "new", refresh_token: "r2" });
+    installFetchMock();
+
+    const origSetItem = localStorage.setItem.bind(localStorage);
+    // Simulate quota exceeded or storage blocked on writing the lock key
+    localStorage.setItem = vi.fn<typeof localStorage.setItem>((key: string, value: string) => {
+      if (key === LOCK_KEY) {
+        throw new DOMException("QuotaExceededError", "QuotaExceededError");
+      }
+      origSetItem(key, value);
+    });
+
+    const start = Date.now();
+    const response = await apiFetch("/api/v1/indexers");
+    const elapsed = Date.now() - start;
+
+    expect(response.status).toBe(200);
+    // Should complete immediately via in-page single flight, not waiting for the 10s tab lock deadline
+    expect(elapsed).toBeLessThan(1000);
   });
 });
 

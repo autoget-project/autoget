@@ -1,5 +1,6 @@
 const AUTH_STORAGE_KEY = "autoget_auth";
 const REFRESH_LOCK = "autoget_auth_refresh";
+const AUTH_CHANNEL_NAME = "autoget_auth_channel";
 // Cross-tab refresh lock kept in localStorage for browsers/site origins where
 // the Web Locks API is unavailable (it is restricted to secure contexts). See
 // acquireTabLock.
@@ -17,7 +18,7 @@ const TAB_LOCK_SETTLE_MS = 50;
 // once one of them is rejected even though the session is healthy. This bounds
 // how long the loser waits for the winner to publish its tokens before it
 // treats the session as gone.
-const SESSION_HANDOFF_TIMEOUT_MS = 1000;
+const SESSION_HANDOFF_TIMEOUT_MS = 2500;
 
 interface StoredTokens {
   access_token: string;
@@ -36,8 +37,21 @@ function getTokens(): StoredTokens | null {
   }
 }
 
+function broadcastSessionUpdate(tokens: StoredTokens): void {
+  try {
+    if (typeof BroadcastChannel !== "undefined") {
+      const channel = new BroadcastChannel(AUTH_CHANNEL_NAME);
+      channel.postMessage({ type: "session_updated", tokens });
+      channel.close();
+    }
+  } catch {
+    /* BroadcastChannel not available or failed */
+  }
+}
+
 function setTokens(tokens: StoredTokens): void {
   localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(tokens));
+  broadcastSessionUpdate(tokens);
 }
 
 // isAuthenticated reports whether a session is stored locally. It is only true
@@ -101,7 +115,7 @@ function sessionStamp(): SessionStamp {
 // single-use refresh token, so a tab that loses a cross-tab refresh race must
 // adopt the winner's session instead of forcing the user back through login.
 // The winner writes around the time our own rejection arrives, so wait for the
-// cross-tab storage event (bounded) before giving up.
+// cross-tab BroadcastChannel or storage event (bounded) before giving up.
 function sessionRefreshedElsewhere(before: SessionStamp): Promise<boolean> {
   const changed = (): boolean => {
     const now = sessionStamp();
@@ -119,20 +133,39 @@ function sessionRefreshedElsewhere(before: SessionStamp): Promise<boolean> {
 
   return new Promise((resolve) => {
     let settled = false;
+    let channel: BroadcastChannel | null = null;
     const finish = (value: boolean): void => {
       if (settled) {
         return;
       }
       settled = true;
       window.removeEventListener("storage", onStorage);
+      if (channel) {
+        channel.close();
+      }
       clearTimeout(timer);
       resolve(value);
     };
+
     const onStorage = (event: StorageEvent): void => {
       if (event.key === AUTH_STORAGE_KEY && changed()) {
         finish(true);
       }
     };
+
+    try {
+      if (typeof BroadcastChannel !== "undefined") {
+        channel = new BroadcastChannel(AUTH_CHANNEL_NAME);
+        channel.onmessage = (event: MessageEvent) => {
+          if (event.data?.type === "session_updated" && changed()) {
+            finish(true);
+          }
+        };
+      }
+    } catch {
+      /* BroadcastChannel not available */
+    }
+
     const timer = setTimeout(() => finish(false), SESSION_HANDOFF_TIMEOUT_MS);
     window.addEventListener("storage", onStorage);
     // The other tab may have written between the check above and here.
@@ -171,11 +204,13 @@ function readTabLock(): TabLock | null {
   }
 }
 
-function writeTabLock(lock: TabLock): void {
+function writeTabLock(lock: TabLock): boolean {
   try {
     localStorage.setItem(TAB_LOCK_KEY, JSON.stringify(lock));
+    return true;
   } catch {
-    /* storage unavailable (e.g. private mode): fall back to the in-page flight */
+    /* storage unavailable (e.g. private mode or quota reached): fall back to the in-page flight immediately */
+    return false;
   }
 }
 
@@ -204,7 +239,10 @@ async function acquireTabLock(): Promise<(() => void) | null> {
       !!current && current.id !== me.id && Date.now() - current.ts < TAB_LOCK_TTL_MS;
     if (!heldByOther) {
       me.ts = Date.now();
-      writeTabLock(me);
+      if (!writeTabLock(me)) {
+        // Storage is blocked or quota exceeded; do not spin until deadline.
+        return null;
+      }
       await sleep(TAB_LOCK_SETTLE_MS);
       if (readTabLock()?.id === me.id) {
         return () => {
@@ -296,6 +334,14 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
         // session it published instead of forcing a re-login.
         response = await fetch(input, applyAuth(init));
       } else {
+        // When running in a background tab (e.g. background polling), do not
+        // bounce the page to /auth/login. An inactive tab cannot complete the
+        // OAuth flow and would cause concurrent callback code exchanges or
+        // state invalidations with active tabs. Wait until the user activates
+        // the tab instead.
+        if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+          return new Promise(() => {});
+        }
         // No valid, renewable session; start the OAuth login flow, returning to
         // the current page afterwards.
         redirectToLogin();
