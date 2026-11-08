@@ -258,6 +258,37 @@ describe("apiFetch auth handling", () => {
     expect(window.location.href).toContain("/auth/login?redirect=");
   });
 
+  it("does not redirect visible tab if another tab refreshed the session after handoff timeout", async () => {
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    localStorage.setItem(KEY, JSON.stringify({ access_token: "old", refresh_token: "r1" }));
+    apiResponses = [401];
+    refreshResponse = () => res(401, { error: "refresh failed" });
+    installFetchMock();
+
+    void apiFetch("/api/v1/indexers");
+
+    // Wait past handoff timeout so the deferred visibility listener is registered
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    expect(window.location.href).not.toContain("/auth/login");
+
+    // Meanwhile another tab completes refresh late and writes new tokens
+    localStorage.setItem(
+      KEY,
+      JSON.stringify({
+        access_token: "recovered",
+        refresh_token: "r2",
+        expires_in: 300,
+        token_type: "Bearer",
+      }),
+    );
+
+    // User switches back to this tab
+    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    expect(window.location.href).not.toContain("/auth/login");
+  });
+
   it("adopts another tab's session broadcasted over BroadcastChannel", async () => {
     localStorage.setItem(KEY, JSON.stringify({ access_token: "old", refresh_token: "r1" }));
     const mock = vi.fn<typeof fetch>(async (input, init) => {

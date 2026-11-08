@@ -343,14 +343,25 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
         // bounce the page to /auth/login. An inactive tab cannot complete the
         // OAuth flow and would cause concurrent callback code exchanges or
         // state invalidations with active tabs. Complete the deferred redirect
-        // once the user actually looks at this tab.
+        // once the user actually looks at this tab, unless another tab has
+        // since restored a healthy session.
         if (typeof document !== "undefined" && document.visibilityState === "hidden") {
           document.addEventListener(
             "visibilitychange",
             () => {
-              if (document.visibilityState === "visible") {
-                redirectToLogin();
+              if (document.visibilityState !== "visible") {
+                return;
               }
+              // Another tab may have published a valid session after our handoff
+              // timeout expired; do not kick the user to login if the session recovered.
+              const now = sessionStamp();
+              if (
+                !!now.access &&
+                (now.access !== before.access || now.refresh !== before.refresh)
+              ) {
+                return;
+              }
+              redirectToLogin();
             },
             { once: true },
           );
