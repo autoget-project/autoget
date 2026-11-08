@@ -234,17 +234,63 @@ describe("apiFetch auth handling", () => {
     expect(window.location.href).not.toContain("/auth/login");
   });
 
-  it("does not redirect to login when running in a background tab", async () => {
+  it("defers redirect to login until the tab becomes visible", async () => {
     Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
     localStorage.setItem(KEY, JSON.stringify({ access_token: "old", refresh_token: "r1" }));
     apiResponses = [401];
     refreshResponse = () => res(401, { error: "refresh failed" });
     installFetchMock();
 
-    void apiFetch("/api/v1/indexers");
+    const pending = apiFetch("/api/v1/indexers");
 
-    // Give asynchronous tasks time to complete, confirming no redirect happens
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Wait past SESSION_HANDOFF_TIMEOUT_MS to prove the tab did not redirect while hidden
+    const outcome = await Promise.race([
+      pending.then(() => "resolved"),
+      new Promise((resolve) => setTimeout(() => resolve("pending"), 3000)),
+    ]);
+    expect(outcome).toBe("pending");
+    expect(window.location.href).not.toContain("/auth/login");
+
+    // Now user switches back to the tab
+    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    expect(window.location.href).toContain("/auth/login?redirect=");
+  });
+
+  it("adopts another tab's session broadcasted over BroadcastChannel", async () => {
+    localStorage.setItem(KEY, JSON.stringify({ access_token: "old", refresh_token: "r1" }));
+    const mock = vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+      if (url === "/auth/refresh") {
+        return res(401, { error: "invalid_grant" });
+      }
+      const auth = new Headers(init?.headers).get("Authorization");
+      return auth === "Bearer new_bc" ? res(200, { ok: true }) : res(401);
+    });
+    vi.stubGlobal("fetch", mock);
+
+    const pending = apiFetch("/api/v1/indexers");
+
+    // Another tab finishes refresh and broadcasts session_updated
+    setTimeout(() => {
+      localStorage.setItem(
+        KEY,
+        JSON.stringify({
+          access_token: "new_bc",
+          refresh_token: "r2",
+          expires_in: 300,
+          token_type: "Bearer",
+        }),
+      );
+      const channel = new BroadcastChannel("autoget_auth_channel");
+      channel.postMessage({ type: "session_updated" });
+      channel.close();
+    }, 50);
+
+    const response = await pending;
+
+    expect(response.status).toBe(200);
     expect(window.location.href).not.toContain("/auth/login");
   });
 

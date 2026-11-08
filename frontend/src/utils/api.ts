@@ -17,7 +17,8 @@ const TAB_LOCK_SETTLE_MS = 50;
 // A refresh token is single-use, so when two tabs exchange the same token at
 // once one of them is rejected even though the session is healthy. This bounds
 // how long the loser waits for the winner to publish its tokens before it
-// treats the session as gone.
+// treats the session as gone. The timeout covers network latency plus token
+// exchange at the OAuth provider, which may involve remote JWKS validation.
 const SESSION_HANDOFF_TIMEOUT_MS = 2500;
 
 interface StoredTokens {
@@ -301,6 +302,12 @@ function redirectToDenied(): void {
   window.location.href = "/auth/denied";
 }
 
+// never returns an unresolved promise so callers neither retry nor trigger error
+// toasts while the browser is navigating away to a login or denied page.
+function never(): Promise<Response> {
+  return new Promise(() => {});
+}
+
 export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const applyAuth = (init?: RequestInit): RequestInit => {
     const tokens = getTokens();
@@ -318,9 +325,7 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
     // logging in again cannot help, so go to the denial page instead of
     // bouncing through the OAuth flow (which loops and can fail the callback).
     redirectToDenied();
-    // Return an unresolved promise so callers neither retry nor start an
-    // endless fetch loop while the browser navigates away.
-    return new Promise(() => {});
+    return never();
   }
   if (response.status === 401) {
     // Tokens may be expired: try one refresh, then retry once.
@@ -337,16 +342,24 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
         // When running in a background tab (e.g. background polling), do not
         // bounce the page to /auth/login. An inactive tab cannot complete the
         // OAuth flow and would cause concurrent callback code exchanges or
-        // state invalidations with active tabs. Wait until the user activates
-        // the tab instead.
+        // state invalidations with active tabs. Complete the deferred redirect
+        // once the user actually looks at this tab.
         if (typeof document !== "undefined" && document.visibilityState === "hidden") {
-          return new Promise(() => {});
+          document.addEventListener(
+            "visibilitychange",
+            () => {
+              if (document.visibilityState === "visible") {
+                redirectToLogin();
+              }
+            },
+            { once: true },
+          );
+          return never();
         }
         // No valid, renewable session; start the OAuth login flow, returning to
         // the current page afterwards.
         redirectToLogin();
-        // Return an unresolved promise so downstream code doesn't throw or trigger error toasts during navigation
-        return new Promise(() => {});
+        return never();
       }
     }
     // "unavailable": keep the session and surface the response to the caller.
