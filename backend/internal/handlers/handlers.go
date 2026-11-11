@@ -1,12 +1,17 @@
 package handlers
 
 import (
+	"errors"
+	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog/log"
 	"gorm.io/gorm"
 
 	"github.com/autoget-project/autoget/backend/downloaders"
@@ -349,35 +354,95 @@ func (s *Service) getDownloaderStatuses(c *gin.Context) {
 	c.JSON(200, response)
 }
 
+const (
+	maxImageSize     = 10 << 20
+	maxImageRedirect = 3
+)
+
+// imageHost is the only host the image proxy may fetch from. It is a variable so tests can point it at a local server.
+var imageHost = "img.m-team.cc"
+
+var errInvalidImageURL = errors.New("invalid image url")
+
+// imageClient has a timeout and refuses to follow redirects off imageHost.
+var imageClient = &http.Client{
+	Timeout: 15 * time.Second,
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if req.URL.Scheme != "https" || req.URL.Host != imageHost || len(via) >= maxImageRedirect {
+			return http.ErrUseLastResponse
+		}
+		return nil
+	},
+}
+
+// validateImageURL strictly checks that raw points to an image on imageHost.
+func validateImageURL(raw string) (*url.URL, error) {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return nil, errInvalidImageURL
+	}
+	if u.Scheme != "https" || u.Host != imageHost || u.User != nil || u.Fragment != "" || u.Opaque != "" {
+		return nil, errInvalidImageURL
+	}
+	if !strings.HasPrefix(u.Path, "/images/") || path.Clean(u.Path) != u.Path {
+		return nil, errInvalidImageURL
+	}
+	return u, nil
+}
+
 func (s *Service) image(c *gin.Context) {
 	// m-team image require "referer" to request
-	u, ok := c.GetQuery("url")
+	raw, ok := c.GetQuery("url")
 	if !ok {
 		c.JSON(400, gin.H{"error": "missing url query"})
 		return
 	}
 
-	u, _ = url.QueryUnescape(u)
-	if !strings.HasPrefix(u, "https://img.m-team.cc/images/") {
+	u, err := validateImageURL(raw)
+	if err != nil {
 		c.JSON(400, gin.H{"error": "invalid url"})
 		return
 	}
 
-	req, err := http.NewRequest(http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, u.String(), nil)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		c.JSON(400, gin.H{"error": "invalid url"})
 		return
 	}
 
 	req.Header.Set("referer", "https://kp.m-team.cc/")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := imageClient.Do(req)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		log.Error().Err(err).Str("url", u.String()).Msg("image proxy upstream request failed")
+		c.JSON(502, gin.H{"error": "upstream error"})
+		return
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Warn().Int("status", resp.StatusCode).Str("url", u.String()).Msg("image proxy upstream non-200")
+		if resp.StatusCode == http.StatusNotFound {
+			c.JSON(404, gin.H{"error": "image not found"})
+			return
+		}
+		c.JSON(502, gin.H{"error": "upstream error"})
 		return
 	}
 
-	defer func() { _ = resp.Body.Close() }()
-	c.DataFromReader(resp.StatusCode, resp.ContentLength, resp.Header.Get("Content-Type"), resp.Body, nil)
+	contentType := resp.Header.Get("Content-Type")
+	if !strings.HasPrefix(strings.ToLower(contentType), "image/") {
+		log.Warn().Str("content_type", contentType).Str("url", u.String()).Msg("image proxy upstream non-image")
+		c.JSON(502, gin.H{"error": "upstream error"})
+		return
+	}
+	if resp.ContentLength > maxImageSize {
+		c.JSON(502, gin.H{"error": "upstream image too large"})
+		return
+	}
+
+	c.Header("Cache-Control", "public, max-age=86400")
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.DataFromReader(http.StatusOK, resp.ContentLength, contentType, io.LimitReader(resp.Body, maxImageSize), nil)
 }
 
 type organizeDownloadReq struct {
