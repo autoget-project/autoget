@@ -467,7 +467,11 @@ paths:
           content:
             text/plain: {schema: {type: string}}
         '502':
-          description: The provider reported an error or the code exchange failed.
+          description: |
+            The provider reported an error or the code exchange failed. For a
+            provider error the body is `auth error: <code>` when the code is a
+            standard OAuth/OIDC error code, otherwise just `auth error`; the
+            `error_description` is logged, never echoed.
           content:
             text/plain: {schema: {type: string}}
         '503':

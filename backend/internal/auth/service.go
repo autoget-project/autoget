@@ -343,9 +343,41 @@ func (s *Service) deniedScript(c *gin.Context) {
 	c.Data(http.StatusOK, "text/javascript; charset=utf-8", []byte(deniedScriptJS))
 }
 
+// allowedOAuthErrors are the standard error codes (RFC 6749, OIDC Core) that
+// may be echoed back to the browser; anything else is reported generically.
+var allowedOAuthErrors = map[string]bool{
+	"access_denied":             true,
+	"invalid_request":           true,
+	"unauthorized_client":       true,
+	"unsupported_response_type": true,
+	"invalid_scope":             true,
+	"server_error":              true,
+	"temporarily_unavailable":   true,
+	"login_required":            true,
+	"consent_required":          true,
+	"interaction_required":      true,
+}
+
+// truncateForLog bounds attacker-controlled values written to the log.
+func truncateForLog(v string) string {
+	const maxLen = 200
+	if r := []rune(v); len(r) > maxLen {
+		return string(r[:maxLen]) + "..."
+	}
+	return v
+}
+
 func (s *Service) callback(c *gin.Context) {
-	if errDesc := c.Query("error"); errDesc != "" {
-		c.String(http.StatusBadGateway, "auth error: %s", errDesc)
+	if errCode := c.Query("error"); errCode != "" {
+		log.Warn().
+			Str("error", truncateForLog(errCode)).
+			Str("error_description", truncateForLog(c.Query("error_description"))).
+			Msg("auth provider returned an error")
+		if allowedOAuthErrors[errCode] {
+			c.String(http.StatusBadGateway, "auth error: %s", errCode)
+		} else {
+			c.String(http.StatusBadGateway, "auth error")
+		}
 		return
 	}
 

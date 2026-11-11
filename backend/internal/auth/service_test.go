@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -355,6 +356,32 @@ func TestCallbackWithoutCookieIsRejected(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/auth/callback?state=known-state&code=x", nil)
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestCallbackProviderError(t *testing.T) {
+	s := testService(t)
+	router := gin.New()
+	s.SetupRouter(router)
+
+	get := func(q string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/auth/callback?"+q, nil))
+		return w
+	}
+
+	w := get("error=access_denied")
+	assert.Equal(t, http.StatusBadGateway, w.Code)
+	assert.Contains(t, w.Body.String(), "access_denied")
+
+	w = get("error=" + url.QueryEscape("<script>x"))
+	assert.Equal(t, http.StatusBadGateway, w.Code)
+	assert.Equal(t, "auth error", w.Body.String())
+	assert.NotContains(t, w.Body.String(), "<script>")
+
+	long := strings.Repeat("d", 500)
+	w = get("error=server_error&error_description=" + long)
+	assert.Contains(t, w.Body.String(), "server_error")
+	assert.NotContains(t, w.Body.String(), "ddd")
 }
 
 func TestCallbackInvalidState(t *testing.T) {
