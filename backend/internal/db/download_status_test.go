@@ -1,6 +1,7 @@
 package db
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -340,4 +341,23 @@ func TestGetStoppedMovedDownloadStatusByDownloader_ExcludesMoving(t *testing.T) 
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	assert.Equal(t, "moved", got[0].ID)
+}
+
+func TestDownloadStatusJSONWire(t *testing.T) {
+	ts := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
+	s := DownloadStatus{
+		ID: "h", CreatedAt: ts, UpdatedAt: ts, Downloader: "tr", DownloadProgress: 500,
+		State: DownloadSeeding, Size: 7, ResIndexer: "idx", ResTitle: "t", ResTitle2: "t2",
+		Category: "c", DetailsURL: "u", MoveState: Moved, OrganizeState: Planned,
+	}
+	b, err := json.Marshal(s)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"id":"h","created_at":"2025-01-02T03:04:05Z","updated_at":"2025-01-02T03:04:05Z",
+"downloader":"tr","download_progress":500,"state":1,"upload_histories":null,"size":7,"res_indexer":"idx",
+"res_title":"t","res_title2":"t2","category":"c","details_url":"u","file_list":null,"metadata":null,
+"move_state":1,"organize_state":1,"organize_plans":null}`, string(b))
+
+	var got DownloadStatus
+	require.NoError(t, json.Unmarshal(b, &got))
+	assert.Equal(t, s, got)
 }

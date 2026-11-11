@@ -739,41 +739,40 @@ components:
           items: {$ref: '#/components/schemas/PlanFailed'}
     DownloadStatus:
       description: |
-        A tracked download. Field names are the Go struct names (no JSON tags
-        exist on the model). The numeric states are enums: `State` 0 started,
-        1 seeding, 2 stopped, 3 deleted; `MoveState` 0 unmoved, 1 moved, 2
-        moving; `OrganizeState` 0 unplanned, 1 planned, 2 organized, 3 create
-        plan failed, 4 execute plan failed.
+        A tracked download. Field names are snake_case. The numeric states are
+        enums: `state` 0 started, 1 seeding, 2 stopped, 3 deleted; `move_state`
+        0 unmoved, 1 moved, 2 moving; `organize_state` 0 unplanned, 1 planned,
+        2 organized, 3 create plan failed, 4 execute plan failed.
       type: object
       properties:
-        ID: {type: string, description: Torrent hash.}
-        CreatedAt: {type: string, format: date-time}
-        UpdatedAt: {type: string, format: date-time}
-        Downloader: {type: string}
-        DownloadProgress: {type: integer, description: In thousandths (0 to 1000).}
-        State: {type: integer, enum: [0, 1, 2, 3]}
-        UploadHistories:
+        id: {type: string, description: Torrent hash.}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        downloader: {type: string}
+        download_progress: {type: integer, description: In thousandths (0 to 1000).}
+        state: {type: integer, enum: [0, 1, 2, 3]}
+        upload_histories:
           type: object
           nullable: true
           description: Uploaded bytes by `YYYY-MM-DD`.
           additionalProperties: {type: integer, format: int64}
-        Size: {type: integer, format: uint64}
-        ResIndexer: {type: string}
-        ResTitle: {type: string}
-        ResTitle2: {type: string}
-        Category: {type: string}
-        DetailsURL: {type: string}
-        FileList:
+        size: {type: integer, format: uint64}
+        res_indexer: {type: string}
+        res_title: {type: string}
+        res_title2: {type: string}
+        category: {type: string}
+        details_url: {type: string}
+        file_list:
           type: array
           nullable: true
           items: {type: string}
-        Metadata:
+        metadata:
           type: object
           nullable: true
           additionalProperties: true
-        MoveState: {type: integer, enum: [0, 1, 2]}
-        OrganizeState: {type: integer, enum: [0, 1, 2, 3, 4]}
-        OrganizePlans:
+        move_state: {type: integer, enum: [0, 1, 2]}
+        organize_state: {type: integer, enum: [0, 1, 2, 3, 4]}
+        organize_plans:
           type: object
           nullable: true
           allOf:

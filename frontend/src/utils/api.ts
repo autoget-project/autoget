@@ -606,19 +606,19 @@ export async function fetchDownloaders(): Promise<DownloaderInfo[]> {
 }
 
 export interface DownloadItem {
-  ID: string;
-  CreatedAt: string;
-  UpdatedAt: string;
-  Downloader: string;
-  DownloadProgress: number;
-  State: number;
-  ResIndexer: string;
-  ResTitle: string;
-  ResTitle2: string;
-  Category: string;
-  DetailsURL?: string;
-  FileList: string[];
-  Metadata: {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  downloader: string;
+  download_progress: number;
+  state: number;
+  res_indexer: string;
+  res_title: string;
+  res_title2: string;
+  category: string;
+  details_url?: string;
+  file_list: string[];
+  metadata: {
     actors: string[];
     category: string;
     description: string;
@@ -627,10 +627,10 @@ export interface DownloadItem {
     organizer_category: string[];
     title: string;
   };
-  Size?: number;
-  MoveState: number;
-  OrganizeState: number;
-  OrganizePlans: PlanResponse | null;
+  size?: number;
+  move_state: number;
+  organize_state: number;
+  organize_plans: PlanResponse | null;
 }
 
 export interface DownloaderState {

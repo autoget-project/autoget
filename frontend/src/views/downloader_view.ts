@@ -151,8 +151,8 @@ export class DownloaderView extends LitElement {
     if (a.length !== b.length) return false;
 
     // Create a map for quick lookup by ID
-    const aMap = new Map(a.map((item) => [item.ID, item]));
-    const bMap = new Map(b.map((item) => [item.ID, item]));
+    const aMap = new Map(a.map((item) => [item.id, item]));
+    const bMap = new Map(b.map((item) => [item.id, item]));
 
     // Check if all IDs match
     if (aMap.size !== bMap.size) return false;
@@ -164,12 +164,12 @@ export class DownloaderView extends LitElement {
 
       // Compare key properties that affect display
       if (
-        aItem.DownloadProgress !== bItem.DownloadProgress ||
-        aItem.MoveState !== bItem.MoveState ||
-        aItem.OrganizeState !== bItem.OrganizeState ||
-        aItem.State !== bItem.State ||
-        aItem.UpdatedAt !== bItem.UpdatedAt ||
-        JSON.stringify(aItem.OrganizePlans) !== JSON.stringify(bItem.OrganizePlans)
+        aItem.download_progress !== bItem.download_progress ||
+        aItem.move_state !== bItem.move_state ||
+        aItem.organize_state !== bItem.organize_state ||
+        aItem.state !== bItem.state ||
+        aItem.updated_at !== bItem.updated_at ||
+        JSON.stringify(aItem.organize_plans) !== JSON.stringify(bItem.organize_plans)
       ) {
         return false;
       }
@@ -445,50 +445,50 @@ export class DownloaderView extends LitElement {
         <div class="card-body p-4 sm:p-6">
           <div class="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
             <div class="flex-1 min-w-0">
-              <h3 class="card-title text-base sm:text-lg break-words">${item.ResTitle}</h3>
-              ${item.ResTitle2 ? html`<p class="text-sm text-base-content/70 mt-1 break-words">${item.ResTitle2}</p>` : ""}
+              <h3 class="card-title text-base sm:text-lg break-words">${item.res_title}</h3>
+              ${item.res_title2 ? html`<p class="text-sm text-base-content/70 mt-1 break-words">${item.res_title2}</p>` : ""}
               <div class="flex flex-wrap gap-1.5 sm:gap-2 mt-2">
                 ${(() => {
-                  if (!item.ResIndexer) return "";
+                  if (!item.res_indexer) return "";
                   return (
                     externalLink({
-                      url: item.DetailsURL,
+                      url: item.details_url,
                       class:
                         "badge badge-sm sm:badge-md badge-neutral hover:badge-primary transition-colors cursor-pointer inline-flex items-center gap-1",
-                      title: `Open on ${item.ResIndexer}`,
-                      label: `Open the ${item.ResIndexer} page for ${item.ResTitle}`,
-                      content: html`<span>${item.ResIndexer}</span>
+                      title: `Open on ${item.res_indexer}`,
+                      label: `Open the ${item.res_indexer} page for ${item.res_title}`,
+                      content: html`<span>${item.res_indexer}</span>
                         <span
                           class="icon-[ph--arrow-square-out-bold]"
                           style="width: 0.85em; height: 0.85em;"
                         ></span>`,
                     }) ??
                     html`<span class="badge badge-sm sm:badge-md badge-neutral"
-                      >${item.ResIndexer}</span
+                      >${item.res_indexer}</span
                     >`
                   );
                 })()}
-                ${item.Category ? html`<span class="badge badge-sm sm:badge-md badge-outline">${item.Category}</span>` : ""}
+                ${item.category ? html`<span class="badge badge-sm sm:badge-md badge-outline">${item.category}</span>` : ""}
                 ${
-                  item.Size
+                  item.size
                     ? html`<span class="badge badge-sm sm:badge-md badge-outline badge-secondary"
-                        >${formatBytes(item.Size)}</span
+                        >${formatBytes(item.size)}</span
                       >`
                     : ""
                 }
                 <span
-                  class="badge badge-sm sm:badge-md badge-${this.getMoveStateLabel(item.MoveState).color}"
+                  class="badge badge-sm sm:badge-md badge-${this.getMoveStateLabel(item.move_state).color}"
                 >
-                  ${this.getMoveStateLabel(item.MoveState).label}
+                  ${this.getMoveStateLabel(item.move_state).label}
                 </span>
                 <span
-                  class="badge badge-sm sm:badge-md badge-${this.getOrganizeStateLabel(item.OrganizeState).color}"
+                  class="badge badge-sm sm:badge-md badge-${this.getOrganizeStateLabel(item.organize_state).color}"
                 >
-                  ${this.getOrganizeStateLabel(item.OrganizeState).label}
+                  ${this.getOrganizeStateLabel(item.organize_state).label}
                 </span>
               </div>
               <div class="mt-2 text-xs sm:text-sm text-base-content/60">
-                <p>Created: ${this.formatDate(item.CreatedAt)}</p>
+                <p>Created: ${this.formatDate(item.created_at)}</p>
               </div>
             </div>
             <div
@@ -499,11 +499,11 @@ export class DownloaderView extends LitElement {
                   ? html`
                       <div
                         class="radial-progress text-primary"
-                        style="--value:${item.DownloadProgress / 10}; --size:3rem; --thickness: 4px;"
-                        aria-valuenow=${item.DownloadProgress / 10}
+                        style="--value:${item.download_progress / 10}; --size:3rem; --thickness: 4px;"
+                        aria-valuenow=${item.download_progress / 10}
                         role="progressbar"
                       >
-                        <span class="text-xs font-semibold">${item.DownloadProgress / 10}%</span>
+                        <span class="text-xs font-semibold">${item.download_progress / 10}%</span>
                       </div>
                     `
                   : html``
@@ -514,11 +514,11 @@ export class DownloaderView extends LitElement {
                     ? html`
                         <button
                           class="btn btn-xs sm:btn-sm btn-success"
-                          ?disabled=${this.isProcessing(item.ID, "accept_plan")}
-                          @click=${() => this.handleOrganizeAction(item.ID, "accept_plan")}
+                          ?disabled=${this.isProcessing(item.id, "accept_plan")}
+                          @click=${() => this.handleOrganizeAction(item.id, "accept_plan")}
                         >
                           ${
-                            this.isProcessing(item.ID, "accept_plan")
+                            this.isProcessing(item.id, "accept_plan")
                               ? html`<span class="loading loading-spinner loading-xs"></span>`
                               : html`<span
                                   class="icon-[ph--check-bold]"
@@ -529,11 +529,11 @@ export class DownloaderView extends LitElement {
                         </button>
                         <button
                           class="btn btn-xs sm:btn-sm btn-info"
-                          ?disabled=${this.isProcessing(item.ID, "re_plan")}
-                          @click=${() => this.handleOrganizeAction(item.ID, "re_plan")}
+                          ?disabled=${this.isProcessing(item.id, "re_plan")}
+                          @click=${() => this.handleOrganizeAction(item.id, "re_plan")}
                         >
                           ${
-                            this.isProcessing(item.ID, "re_plan")
+                            this.isProcessing(item.id, "re_plan")
                               ? html`<span class="loading loading-spinner loading-xs"></span>`
                               : html`<span
                                   class="icon-[ph--arrow-clockwise-bold]"
@@ -544,11 +544,11 @@ export class DownloaderView extends LitElement {
                         </button>
                         <button
                           class="btn btn-xs sm:btn-sm btn-primary"
-                          ?disabled=${this.isProcessing(item.ID, "manual_organized")}
-                          @click=${() => this.handleOrganizeAction(item.ID, "manual_organized")}
+                          ?disabled=${this.isProcessing(item.id, "manual_organized")}
+                          @click=${() => this.handleOrganizeAction(item.id, "manual_organized")}
                         >
                           ${
-                            this.isProcessing(item.ID, "manual_organized")
+                            this.isProcessing(item.id, "manual_organized")
                               ? html`<span class="loading loading-spinner loading-xs"></span>`
                               : html`<span
                                   class="icon-[ph--user-bold]"
@@ -562,11 +562,11 @@ export class DownloaderView extends LitElement {
                       ? html`
                           <button
                             class="btn btn-xs sm:btn-sm btn-info"
-                            ?disabled=${this.isProcessing(item.ID, "re_plan")}
-                            @click=${() => this.handleOrganizeAction(item.ID, "re_plan")}
+                            ?disabled=${this.isProcessing(item.id, "re_plan")}
+                            @click=${() => this.handleOrganizeAction(item.id, "re_plan")}
                           >
                             ${
-                              this.isProcessing(item.ID, "re_plan")
+                              this.isProcessing(item.id, "re_plan")
                                 ? html`<span class="loading loading-spinner loading-xs"></span>`
                                 : ""
                             }
@@ -574,11 +574,11 @@ export class DownloaderView extends LitElement {
                           </button>
                           <button
                             class="btn btn-xs sm:btn-sm btn-neutral"
-                            ?disabled=${this.isProcessing(item.ID, "manual_organized")}
-                            @click=${() => this.handleOrganizeAction(item.ID, "manual_organized")}
+                            ?disabled=${this.isProcessing(item.id, "manual_organized")}
+                            @click=${() => this.handleOrganizeAction(item.id, "manual_organized")}
                           >
                             ${
-                              this.isProcessing(item.ID, "manual_organized")
+                              this.isProcessing(item.id, "manual_organized")
                                 ? html`<span class="loading loading-spinner loading-xs"></span>`
                                 : ""
                             }
@@ -590,7 +590,7 @@ export class DownloaderView extends LitElement {
                 <!-- Delete button for all tabs -->
                 <button
                   class="btn btn-xs sm:btn-sm btn-error"
-                  @click=${() => this.handleDeleteDownload(item.ID)}
+                  @click=${() => this.handleDeleteDownload(item.id)}
                   title="Delete download and remove all local data"
                 >
                   <span class="icon-[ph--trash-bold]" style="width: 1.2em; height: 1.2em;"></span>
@@ -599,7 +599,7 @@ export class DownloaderView extends LitElement {
               </div>
             </div>
           </div>
-          ${this.renderOrganizePlans(item.OrganizePlans, item.ID)}
+          ${this.renderOrganizePlans(item.organize_plans, item.id)}
         </div>
       </div>
     `;

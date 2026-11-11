@@ -45,30 +45,30 @@ type OrganizePlan struct {
 }
 
 type DownloadStatus struct {
-	ID        string `gorm:"primarykey"` // hash
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID        string    `gorm:"primarykey" json:"id"` // hash
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 
-	Downloader       string        `gorm:"index:idx_downloader_state;index:idx_downloader_movestate_organizestate"`
-	DownloadProgress uint16        // in x/1000
-	State            DownloadState `gorm:"index:idx_downloader_state;index:idx_downloader_state_movestate"`
+	Downloader       string        `gorm:"index:idx_downloader_state;index:idx_downloader_movestate_organizestate" json:"downloader"`
+	DownloadProgress uint16        `json:"download_progress"` // in x/1000
+	State            DownloadState `gorm:"index:idx_downloader_state;index:idx_downloader_state_movestate" json:"state"`
 
-	UploadHistories map[string]int64 `gorm:"serializer:json"`
-	Size            uint64
+	UploadHistories map[string]int64 `gorm:"serializer:json" json:"upload_histories"`
+	Size            uint64           `json:"size"`
 
-	ResIndexer string
-	ResTitle   string
-	ResTitle2  string
-	Category   string
-	DetailsURL string
-	FileList   []string               `gorm:"serializer:json"`
-	Metadata   map[string]interface{} `gorm:"serializer:json"`
+	ResIndexer string                 `json:"res_indexer"`
+	ResTitle   string                 `json:"res_title"`
+	ResTitle2  string                 `json:"res_title2"`
+	Category   string                 `json:"category"`
+	DetailsURL string                 `json:"details_url"`
+	FileList   []string               `gorm:"serializer:json" json:"file_list"`
+	Metadata   map[string]interface{} `gorm:"serializer:json" json:"metadata"`
 
-	MoveState MoveState `gorm:"index:idx_downloader_state_movestate;index:idx_downloader_movestate_organizestate"`
+	MoveState MoveState `gorm:"index:idx_downloader_state_movestate;index:idx_downloader_movestate_organizestate" json:"move_state"`
 
-	OrganizeState OrganizeState `gorm:"index:idx_downloader_movestate_organizestate"`
+	OrganizeState OrganizeState `gorm:"index:idx_downloader_movestate_organizestate" json:"organize_state"`
 
-	OrganizePlans *organizer.PlanResponse `gorm:"serializer:json"`
+	OrganizePlans *organizer.PlanResponse `gorm:"serializer:json" json:"organize_plans"`
 }
 
 func (s *DownloadStatus) AddToday(b int64) {

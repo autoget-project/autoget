@@ -31,18 +31,18 @@ const deleteDownload = vi.mocked(api.deleteDownload);
 
 function item(over: Partial<DownloadItem> = {}): DownloadItem {
   return {
-    ID: "d1",
-    CreatedAt: "2024-01-01T00:00:00Z",
-    UpdatedAt: "2024-01-01T00:00:00Z",
-    Downloader: "tr",
-    DownloadProgress: 0.5,
-    State: 0,
-    ResIndexer: "mteam",
-    ResTitle: "Some Torrent",
-    ResTitle2: "",
-    Category: "Movies",
-    FileList: [],
-    Metadata: {
+    id: "d1",
+    created_at: "2024-01-01T00:00:00Z",
+    updated_at: "2024-01-01T00:00:00Z",
+    downloader: "tr",
+    download_progress: 0.5,
+    state: 0,
+    res_indexer: "mteam",
+    res_title: "Some Torrent",
+    res_title2: "",
+    category: "Movies",
+    file_list: [],
+    metadata: {
       actors: [],
       category: "",
       description: "",
@@ -51,9 +51,9 @@ function item(over: Partial<DownloadItem> = {}): DownloadItem {
       organizer_category: [],
       title: "",
     },
-    MoveState: 0,
-    OrganizeState: 0,
-    OrganizePlans: null,
+    move_state: 0,
+    organize_state: 0,
+    organize_plans: null,
     ...over,
   };
 }
@@ -104,7 +104,7 @@ describe("downloader-view", () => {
   });
 
   it("renders downloads when the fetch succeeds", async () => {
-    fetchItems.mockResolvedValue(status([item({ ResTitle: "Some Torrent" })]));
+    fetchItems.mockResolvedValue(status([item({ res_title: "Some Torrent" })]));
     const el = await mount();
     expect(el.shadowRoot?.textContent).toContain("Some Torrent");
     expect(el.shadowRoot?.textContent).not.toContain("No active downloads");
