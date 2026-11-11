@@ -78,3 +78,10 @@ func TestSetupRouterWithoutAuth(t *testing.T) {
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
+
+func TestNewServerTimeouts(t *testing.T) {
+	srv := newServer(":0", http.NotFoundHandler())
+	assert.NotZero(t, srv.ReadHeaderTimeout)
+	assert.NotZero(t, srv.ReadTimeout)
+	assert.NotZero(t, srv.IdleTimeout)
+}

@@ -27,7 +27,7 @@ import (
 var (
 	logger = log.With().Str("component", "transmission").Logger()
 
-	httpClient = http.DefaultClient
+	httpClient = &http.Client{Timeout: 30 * time.Second}
 )
 
 type Client struct {

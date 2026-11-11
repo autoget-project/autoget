@@ -13,6 +13,9 @@ import (
 	"github.com/autoget-project/autoget/backend/internal/db"
 )
 
+// maxTorrentSize caps the size of a downloaded .torrent file (typical ones are < 1 MiB).
+const maxTorrentSize = 20 << 20
+
 // DownloadTorrentFileFromURL downloads a file from a given URL and saves it to a specified local path,
 // while checking for duplicates using the provided database connection.
 func DownloadTorrentFileFromURL(httpClient *http.Client, url string, dest string, dbClient *gorm.DB) (*metainfo.MetaInfo, *metainfo.Info, error) {
@@ -27,13 +30,15 @@ func DownloadTorrentFileFromURL(httpClient *http.Client, url string, dest string
 		return nil, nil, fmt.Errorf("HTTP status error: %d %s", resp.StatusCode, resp.Status)
 	}
 
-	var buffer bytes.Buffer
-	_, err = io.Copy(&buffer, resp.Body)
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxTorrentSize+1))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read response body: %w", err)
 	}
+	if len(data) > maxTorrentSize {
+		return nil, nil, fmt.Errorf("torrent file too large (limit %d bytes)", maxTorrentSize)
+	}
 
-	m, err := metainfo.Load(bytes.NewReader(buffer.Bytes()))
+	m, err := metainfo.Load(bytes.NewReader(data))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to load metainfo: %w", err)
 	}
@@ -63,7 +68,7 @@ func DownloadTorrentFileFromURL(httpClient *http.Client, url string, dest string
 		return nil, nil, fmt.Errorf("failed to create file: %w", err)
 	}
 	// Write the response body to the file
-	_, err = io.Copy(out, bytes.NewReader(buffer.Bytes()))
+	_, err = out.Write(data)
 	if err != nil {
 		_ = out.Close()
 		return nil, nil, fmt.Errorf("failed to copy response body to file: %w", err)

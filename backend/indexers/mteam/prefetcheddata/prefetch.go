@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	_ "embed"
 
@@ -62,7 +63,7 @@ func FetchAll(apiKey string, excludeGayContent bool) (*prefetched, error) {
 }
 
 func fetchMTeamAPI(url, apiKey string, obj interface{}) error {
-	client := http.DefaultClient
+	client := &http.Client{Timeout: 30 * time.Second}
 	req, err := http.NewRequest(http.MethodPost, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)

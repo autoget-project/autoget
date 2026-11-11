@@ -59,7 +59,7 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to connect to database")
 	}
 
-	oc, err := organizer.NewClient(cfg.OrganizerService, http.DefaultClient)
+	oc, err := organizer.NewClient(cfg.OrganizerService, &http.Client{Timeout: organizerClientTimeout})
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to create organizer client")
 	}
@@ -108,10 +108,7 @@ func main() {
 	r := gin.Default()
 	setupRouter(r, authSvc, service.SetupRouter)
 
-	srv := &http.Server{
-		Addr:    ":" + cfg.Port,
-		Handler: r,
-	}
+	srv := newServer(":"+cfg.Port, r)
 
 	go func() {
 		log.Info().Str("addr", cfg.Port).Msg("server started")
@@ -132,4 +129,26 @@ func main() {
 	}
 
 	log.Info().Msg("Server exiting")
+}
+
+const (
+	// organizerClientTimeout is generous because /v1/plan runs a synchronous
+	// multi-stage AI + metadata pipeline (each AI call alone can take 60s).
+	organizerClientTimeout = 5 * time.Minute
+
+	serverReadHeaderTimeout = 10 * time.Second
+	serverReadTimeout       = 30 * time.Second
+	serverIdleTimeout       = 120 * time.Second
+)
+
+// newServer builds the HTTP server with read/idle timeouts. WriteTimeout is
+// intentionally unset because the image proxy streams responses.
+func newServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: serverReadHeaderTimeout,
+		ReadTimeout:       serverReadTimeout,
+		IdleTimeout:       serverIdleTimeout,
+	}
 }

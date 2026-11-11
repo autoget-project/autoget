@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/rs/zerolog/log"
@@ -81,7 +82,7 @@ func NewClient(config *Config, torrentsDir string, db *gorm.DB, notify notify.IN
 		torrentsDir:            torrentsDir,
 		db:                     db,
 		notify:                 notify,
-		httpClient:             http.DefaultClient,
+		httpClient:             &http.Client{Timeout: 60 * time.Second},
 		DefaultBaseURL:         defaultBaseURL,
 		CategoriesMap:          prefetcheddata.Categories,
 		CategoriesList:         prefetcheddata.CategoriesList,

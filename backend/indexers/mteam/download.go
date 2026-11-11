@@ -5,11 +5,15 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/autoget-project/autoget/backend/indexers"
 	"github.com/autoget-project/autoget/backend/internal/errors"
 	"github.com/autoget-project/autoget/backend/internal/helpers"
 )
+
+// downloadClient fetches .torrent files; bounded so a stalled tracker cannot hang a request.
+var downloadClient = &http.Client{Timeout: 60 * time.Second}
 
 type genDownloadLinkResponse struct {
 	Code    interface{} `json:"code"` // maybe string or int
@@ -38,7 +42,7 @@ func (m *MTeam) Download(id string) (*indexers.DownloadResult, *errors.HTTPStatu
 
 	destFilePath := filepath.Join(m.torrentsDir, name+"."+id+".torrent")
 
-	me, _, err := helpers.DownloadTorrentFileFromURL(http.DefaultClient, resp.Data, destFilePath, m.db)
+	me, _, err := helpers.DownloadTorrentFileFromURL(downloadClient, resp.Data, destFilePath, m.db)
 	if err != nil {
 		// Check if this is a duplicate download error
 		if strings.Contains(err.Error(), "duplicate download:") {
