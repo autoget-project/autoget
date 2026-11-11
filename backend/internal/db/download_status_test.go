@@ -126,18 +126,18 @@ func TestGetDownloaderStateCounts(t *testing.T) {
 		State:      DownloadStarted,
 	}
 
-	// Planned items (Moved + Planed)
+	// Planned items (Moved + Planned)
 	plannedStatus1 := &DownloadStatus{
 		ID:            "planned-1",
 		Downloader:    testDownloader,
 		MoveState:     Moved,
-		OrganizeState: Planed,
+		OrganizeState: Planned,
 	}
 	plannedStatus2 := &DownloadStatus{
 		ID:            "planned-2",
 		Downloader:    testDownloader,
 		MoveState:     Moved,
-		OrganizeState: Planed,
+		OrganizeState: Planned,
 	}
 
 	// Failed items (Moved + CreatePlanFailed)
@@ -214,7 +214,7 @@ func TestGetAllDownloadersStateCounts(t *testing.T) {
 		ID:            "1-2",
 		Downloader:    downloader1,
 		MoveState:     Moved,
-		OrganizeState: Planed,
+		OrganizeState: Planned,
 	}
 
 	// Items for downloader-2

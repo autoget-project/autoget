@@ -223,7 +223,7 @@ func (c *Client) updateDownloadProgress(torrentsByHash map[string]*transmissionr
 }
 
 func (c *Client) copyFinishedDownloads(torrentsByHash map[string]*transmissionrpc.Torrent) {
-	statuses, err := db.GetFinishedUnmoveedDownloadStatusByDownloader(c.db, c.name)
+	statuses, err := db.GetFinishedUnmovedDownloadStatusByDownloader(c.db, c.name)
 	if err != nil {
 		logger.Error().Err(err).Str("name", c.name).Msg("failed to get seeding download status")
 		return
@@ -366,9 +366,9 @@ func (c *Client) copyTorrentFiles(t *transmissionrpc.Torrent, s *db.DownloadStat
 }
 
 func (c *Client) createOrganizerPlan() {
-	statuses, err := db.GetMovedAndOrganizeStateDownloadStatusByDownloader(c.db, c.name, db.Unplaned)
+	statuses, err := db.GetMovedAndOrganizeStateDownloadStatusByDownloader(c.db, c.name, db.Unplanned)
 	if err != nil {
-		logger.Error().Err(err).Str("name", c.name).Msg("failed to get moved & unplaned download status")
+		logger.Error().Err(err).Str("name", c.name).Msg("failed to get moved & unplanned download status")
 		return
 	}
 
@@ -387,7 +387,7 @@ func (c *Client) createOrganizerPlan() {
 			continue
 		}
 		st.OrganizePlans = resp
-		st.OrganizeState = db.Planed
+		st.OrganizeState = db.Planned
 		if err := db.SaveDownloadStatus(c.db, &st); err != nil {
 			logger.Error().Err(err).Str("name", c.name).Str("id", st.ID).Msg("failed to save download status")
 		}

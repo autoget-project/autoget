@@ -354,7 +354,7 @@ func TestProgressChecker(t *testing.T) {
 		Downloader:    "test",
 		State:         db.DownloadSeeding,
 		MoveState:     db.Moved,
-		OrganizeState: db.Unplaned,
+		OrganizeState: db.Unplanned,
 		FileList:      []string{"file1.mkv", "file2.srt"},
 		Metadata:      map[string]interface{}{"title": "Test Movie"},
 	}
@@ -420,7 +420,7 @@ func TestProgressChecker(t *testing.T) {
 		// r3 should have organizer plan created
 		r := &db.DownloadStatus{}
 		require.NoError(t, d.First(r, "id = ?", "3").Error)
-		assert.Equal(t, db.Planed, r.OrganizeState)
+		assert.Equal(t, db.Planned, r.OrganizeState)
 		assert.NotEmpty(t, r.OrganizePlans)
 		assert.Len(t, r.OrganizePlans.Plan, 2)
 
@@ -479,7 +479,7 @@ func TestCreateOrganizerPlan(t *testing.T) {
 			Downloader:    "test",
 			State:         db.DownloadSeeding,
 			MoveState:     db.Moved,
-			OrganizeState: db.Unplaned,
+			OrganizeState: db.Unplanned,
 			FileList:      []string{"movie.mkv", "subtitle.srt"},
 			Metadata:      map[string]interface{}{"title": "Test Movie"},
 		}
@@ -490,7 +490,7 @@ func TestCreateOrganizerPlan(t *testing.T) {
 		// Verify the plan was created
 		updated := &db.DownloadStatus{}
 		require.NoError(t, d.First(updated, "id = ?", "test1").Error)
-		assert.Equal(t, db.Planed, updated.OrganizeState)
+		assert.Equal(t, db.Planned, updated.OrganizeState)
 		assert.NotNil(t, updated.OrganizePlans)
 		assert.Len(t, updated.OrganizePlans.Plan, 2)
 
@@ -526,7 +526,7 @@ func TestCreateOrganizerPlan(t *testing.T) {
 			Downloader:    "test",
 			State:         db.DownloadSeeding,
 			MoveState:     db.Moved,
-			OrganizeState: db.Unplaned,
+			OrganizeState: db.Unplanned,
 			FileList:      []string{"movie.mkv"},
 			Metadata:      map[string]interface{}{"title": "Test Movie"},
 		}
@@ -548,7 +548,7 @@ func TestCreateOrganizerPlan(t *testing.T) {
 			Downloader:    "test",
 			State:         db.DownloadSeeding,
 			MoveState:     db.Moved,
-			OrganizeState: db.Planed,
+			OrganizeState: db.Planned,
 			FileList:      []string{"movie.mkv"},
 			Metadata:      map[string]interface{}{"title": "Test Movie"},
 		}
@@ -559,7 +559,7 @@ func TestCreateOrganizerPlan(t *testing.T) {
 		// Verify no new requests were made to organizer service
 		updated := &db.DownloadStatus{}
 		require.NoError(t, d.First(updated, "id = ?", "test3").Error)
-		assert.Equal(t, db.Planed, updated.OrganizeState)
+		assert.Equal(t, db.Planned, updated.OrganizeState)
 	})
 }
 

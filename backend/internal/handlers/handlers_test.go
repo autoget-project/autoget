@@ -626,7 +626,7 @@ func TestService_handleManualOrganized_Success(t *testing.T) {
 		ID:            "test-hash",
 		Downloader:    "test-downloader",
 		State:         db.DownloadStarted,
-		OrganizeState: db.Unplaned,
+		OrganizeState: db.Unplanned,
 	}
 	err := testDB.Create(downloadStatus).Error
 	require.NoError(t, err)
@@ -706,7 +706,7 @@ func TestService_handleAcceptPlan_Success(t *testing.T) {
 		Downloader:    "test-downloader",
 		State:         db.DownloadStarted,
 		OrganizePlans: &organizer.PlanResponse{Plan: testPlan},
-		OrganizeState: db.Unplaned,
+		OrganizeState: db.Unplanned,
 	}
 	err = testDB.Create(downloadStatus).Error
 	require.NoError(t, err)
@@ -770,7 +770,7 @@ func TestService_handleAcceptPlan_PartialFailure(t *testing.T) {
 		Downloader:    "test-downloader",
 		State:         db.DownloadStarted,
 		OrganizePlans: &organizer.PlanResponse{Plan: testPlan},
-		OrganizeState: db.Unplaned,
+		OrganizeState: db.Unplanned,
 	}
 	err = testDB.Create(downloadStatus).Error
 	require.NoError(t, err)
@@ -853,7 +853,7 @@ func TestService_handleRePlan_Success(t *testing.T) {
 	var updatedStatus db.DownloadStatus
 	err = testDB.First(&updatedStatus, "id = ?", "test-hash").Error
 	require.NoError(t, err)
-	assert.Equal(t, db.Planed, updatedStatus.OrganizeState)
+	assert.Equal(t, db.Planned, updatedStatus.OrganizeState)
 	assert.NotNil(t, updatedStatus.OrganizePlans)
 }
 
@@ -962,7 +962,7 @@ func TestService_handleRePlan_WithUserHint_Success(t *testing.T) {
 	var updatedStatus db.DownloadStatus
 	err = testDB.First(&updatedStatus, "id = ?", "test-hash").Error
 	require.NoError(t, err)
-	assert.Equal(t, db.Planed, updatedStatus.OrganizeState)
+	assert.Equal(t, db.Planned, updatedStatus.OrganizeState)
 	assert.NotNil(t, updatedStatus.OrganizePlans)
 }
 
@@ -1076,7 +1076,7 @@ func TestService_handleRePlan_EmptyUserHint_UsesReplan(t *testing.T) {
 	var updatedStatus db.DownloadStatus
 	err = testDB.First(&updatedStatus, "id = ?", "test-hash").Error
 	require.NoError(t, err)
-	assert.Equal(t, db.Planed, updatedStatus.OrganizeState)
+	assert.Equal(t, db.Planned, updatedStatus.OrganizeState)
 	assert.NotNil(t, updatedStatus.OrganizePlans)
 }
 

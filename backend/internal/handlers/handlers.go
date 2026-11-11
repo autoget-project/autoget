@@ -317,7 +317,7 @@ func (s *Service) getDownloaderStatuses(c *gin.Context) {
 		statuses, err = db.GetDownloadStatusByDownloaderAndState(s.db, downloaderName, db.DownloadStopped)
 	case "planned":
 		// For planned, we want downloads that are moved and have been planned for organization
-		statuses, err = db.GetMovedAndOrganizeStateDownloadStatusByDownloader(s.db, downloaderName, db.Planed)
+		statuses, err = db.GetMovedAndOrganizeStateDownloadStatusByDownloader(s.db, downloaderName, db.Planned)
 	case "failed":
 		// For failed, we want downloads that have failed during either plan creation or execution
 		// Get both create_plan_failed and execute_plan_failed statuses
@@ -577,7 +577,7 @@ func (s *Service) handleRePlan(c *gin.Context, downloadStatus *db.DownloadStatus
 
 	// Update the organize plan and state
 	downloadStatus.OrganizePlans = resp
-	downloadStatus.OrganizeState = db.Planed
+	downloadStatus.OrganizeState = db.Planned
 
 	// Update the download status
 	if err := db.SaveDownloadStatus(s.db, downloadStatus); err != nil {

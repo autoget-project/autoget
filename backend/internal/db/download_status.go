@@ -32,8 +32,8 @@ const (
 type OrganizeState uint16
 
 const (
-	Unplaned OrganizeState = iota
-	Planed
+	Unplanned OrganizeState = iota
+	Planned
 	Organized
 	CreatePlanFailed
 	ExecutePlanFailed
@@ -111,7 +111,7 @@ func GetDownloadStatusByDownloaderAndState(db *gorm.DB, downloader string, state
 	return ss, err
 }
 
-func GetFinishedUnmoveedDownloadStatusByDownloader(db *gorm.DB, downloader string) ([]DownloadStatus, error) {
+func GetFinishedUnmovedDownloadStatusByDownloader(db *gorm.DB, downloader string) ([]DownloadStatus, error) {
 	var ss []DownloadStatus
 	err := db.Where("downloader = ?", downloader).Where("state >= ?", DownloadSeeding).Where("move_state IN ?", []MoveState{UnMoved, Moving}).Find(&ss).Error
 	return ss, err
@@ -162,8 +162,8 @@ func GetDownloaderStateCounts(db *gorm.DB, downloader string) (*DownloaderStateC
 		return nil, err
 	}
 
-	// Count planned (moved and organized state = Planed)
-	err = db.Model(&DownloadStatus{}).Where("downloader = ?", downloader).Where("state != ?", DownloadDeleted).Where("move_state = ?", Moved).Where("organize_state = ?", Planed).Count(&counts.CountOfPlanned).Error
+	// Count planned (moved and organized state = Planned)
+	err = db.Model(&DownloadStatus{}).Where("downloader = ?", downloader).Where("state != ?", DownloadDeleted).Where("move_state = ?", Moved).Where("organize_state = ?", Planned).Count(&counts.CountOfPlanned).Error
 	if err != nil {
 		return nil, err
 	}
