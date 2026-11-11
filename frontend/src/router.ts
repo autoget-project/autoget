@@ -7,6 +7,7 @@ import {
   fetchDownloaders,
   type DownloaderInfo,
 } from "./utils/api.ts";
+import { defaultCategoryId, resolveIndexers } from "./utils/router_helpers.ts";
 
 import "./views/search_view";
 import "./views/indexer_view";
@@ -27,6 +28,21 @@ export class AppRouter extends LitElement {
     this.fetchDownloaders();
   }
 
+  @state()
+  private loadFailed = false;
+
+  private async ensureIndexers(): Promise<string[]> {
+    if (this.indexers.length === 0) {
+      this.indexers = await resolveIndexers(fetchIndexers);
+    }
+    return this.indexers;
+  }
+
+  private retryLoad = () => {
+    this.loadFailed = false;
+    this.router.goto("/");
+  };
+
   private async fetchIndexers() {
     this.indexers = await fetchIndexers();
   }
@@ -38,12 +54,21 @@ export class AppRouter extends LitElement {
   private router = new Router(this, [
     {
       path: "/",
-      render: () => html`<div>Loading...</div>`,
+      render: () =>
+        this.loadFailed
+          ? html`<div class="p-8 text-center">
+              <p class="mb-4">No indexers available. Check configuration or backend, then retry.</p>
+              <button class="btn btn-primary" @click=${this.retryLoad}>Retry</button>
+            </div>`
+          : html`<div>Loading...</div>`,
       enter: async () => {
-        if (this.indexers.length === 0) {
-          await this.fetchIndexers();
+        const indexers = await this.ensureIndexers();
+        if (indexers.length === 0) {
+          this.loadFailed = true;
+          return true;
         }
-        const newUrl = `/indexers/${this.indexers[0]}`;
+        this.loadFailed = false;
+        const newUrl = `/indexers/${encodeURIComponent(indexers[0])}`;
         this.router.goto(newUrl);
         history.replaceState(null, "", newUrl);
         return false;
@@ -56,16 +81,24 @@ export class AppRouter extends LitElement {
         return html`<indexer-view .indexerId=${id || ""} category=""></indexer-view>`;
       },
       enter: async ({ id }) => {
-        while (this.indexers.length === 0) {
-          await this.fetchIndexers();
+        const indexers = await this.ensureIndexers();
+        if (indexers.length === 0) {
+          this.loadFailed = true;
+          this.router.goto("/");
+          return false;
         }
-        if (id === undefined || !this.indexers.includes(id)) {
+        if (id === undefined || !indexers.includes(id)) {
           this.router.goto("/404");
           return false;
         }
-        const categories = await fetchIndexerCategories(id);
-        this.router.goto(`/indexers/${id}/${categories[0].id}`);
-        history.replaceState(null, "", `/indexers/${id}/${categories[0].id}`);
+        const cid = defaultCategoryId(await fetchIndexerCategories(id));
+        if (!cid) {
+          this.router.goto("/404");
+          return false;
+        }
+        const newUrl = `/indexers/${encodeURIComponent(id)}/${encodeURIComponent(cid)}`;
+        this.router.goto(newUrl);
+        history.replaceState(null, "", newUrl);
         return false;
       },
     },
