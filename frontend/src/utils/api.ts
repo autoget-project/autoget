@@ -378,17 +378,67 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
   return response;
 }
 
-export async function fetchIndexers(): Promise<string[]> {
-  try {
-    const response = await apiFetch("/api/v1/indexers");
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    console.error("Failed to fetch indexers:", error);
-    return []; // Set to empty array on error
+export class ApiError extends Error {
+  status?: number;
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
   }
+}
+
+export function errorMessage(e: unknown): string {
+  if (e instanceof ApiError && e.status === 409) {
+    return "Already exists.";
+  }
+  return e instanceof Error && e.message ? e.message : "Unexpected error";
+}
+
+// seg encodes a single URL path segment.
+export function seg(value: string): string {
+  return encodeURIComponent(value);
+}
+
+// buildUrl appends query parameters with proper encoding, skipping empty values.
+export function buildUrl(
+  path: string,
+  params?: Record<string, string | number | undefined>,
+): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params ?? {})) {
+    if (value !== undefined && value !== "") {
+      query.set(key, String(value));
+    }
+  }
+  const qs = query.toString();
+  return qs ? `${path}?${qs}` : path;
+}
+
+// request performs an API call and throws ApiError on network or HTTP failure.
+async function request(url: string, init?: RequestInit): Promise<Response> {
+  let response: Response;
+  try {
+    response = await apiFetch(url, init);
+  } catch {
+    throw new ApiError("Network error");
+  }
+  if (!response.ok) {
+    throw new ApiError(`HTTP error ${response.status}`, response.status);
+  }
+  return response;
+}
+
+async function getJSON<T>(url: string): Promise<T> {
+  const response = await request(url);
+  try {
+    return (await response.json()) as T;
+  } catch {
+    throw new ApiError("Invalid response from server");
+  }
+}
+
+export async function fetchIndexers(): Promise<string[]> {
+  return getJSON<string[]>("/api/v1/indexers");
 }
 
 export interface Category {
@@ -398,16 +448,7 @@ export interface Category {
 }
 
 export async function fetchIndexerCategories(indexer: string): Promise<Category[]> {
-  try {
-    const response = await apiFetch(`/api/v1/indexers/${indexer}/categories`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    console.error("Failed to fetch indexers:", error);
-    return []; // Set to empty array on error
-  }
+  return getJSON<Category[]>(`/api/v1/indexers/${seg(indexer)}/categories`);
 }
 
 export interface DB {
@@ -451,19 +492,10 @@ export async function fetchIndexerResources(
   keyword: string,
   page: number,
   pageSize: number = 100,
-): Promise<ResourcesResponse | null> {
-  try {
-    const response = await apiFetch(
-      `/api/v1/indexers/${indexer}/resources?category=${category}&keyword=${keyword}&page=${page}&pageSize=${pageSize}`,
-    );
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    console.error("Failed to fetch indexer resources:", error);
-    return null;
-  }
+): Promise<ResourcesResponse> {
+  return getJSON<ResourcesResponse>(
+    buildUrl(`/api/v1/indexers/${seg(indexer)}/resources`, { category, keyword, page, pageSize }),
+  );
 }
 
 export interface DownloaderInfo {
@@ -474,16 +506,7 @@ export interface DownloaderInfo {
 }
 
 export async function fetchDownloaders(): Promise<DownloaderInfo[]> {
-  try {
-    const response = await apiFetch("/api/v1/downloaders");
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    console.error("Failed to fetch downloaders:", error);
-    return []; // Set to empty array on error
-  }
+  return getJSON<DownloaderInfo[]>("/api/v1/downloaders");
 }
 
 export interface DownloadItem {
@@ -531,25 +554,14 @@ export async function fetchDownloaderItems(
   downloaderName: string,
   state: DownloadState,
 ): Promise<DownloaderStatusResponse> {
-  try {
-    const response = await apiFetch(`/api/v1/downloaders/${downloaderName}?state=${state}`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    const data = await response.json();
-
-    // Ensure the response has the expected structure
-    return {
-      state: data.state || { count_of_downloading: 0, count_of_planned: 0, count_of_failed: 0 },
-      resources: data.resources || [],
-    };
-  } catch (error) {
-    console.error("Failed to fetch downloader items:", error);
-    return {
-      state: { count_of_downloading: 0, count_of_planned: 0, count_of_failed: 0 },
-      resources: [],
-    };
-  }
+  const data = await getJSON<Partial<DownloaderStatusResponse>>(
+    buildUrl(`/api/v1/downloaders/${seg(downloaderName)}`, { state }),
+  );
+  // Ensure the response has the expected structure
+  return {
+    state: data.state || { count_of_downloading: 0, count_of_planned: 0, count_of_failed: 0 },
+    resources: data.resources || [],
+  };
 }
 
 export type ActionType = "move" | "skip";
@@ -571,55 +583,23 @@ export async function organizeDownload(
   downloadId: string,
   action: OrganizeAction,
   userHint?: string,
-): Promise<boolean> {
-  try {
-    let url = `/api/v1/download/${downloadId}/organize?action=${action}`;
-    if (userHint && action === "re_plan") {
-      url += `&user_hint=${encodeURIComponent(userHint)}`;
-    }
-
-    const response = await apiFetch(url, {
-      method: "POST",
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return true;
-  } catch (error) {
-    console.error("Failed to organize download:", error);
-    return false;
-  }
+): Promise<void> {
+  await request(
+    buildUrl(`/api/v1/download/${seg(downloadId)}/organize`, {
+      action,
+      user_hint: action === "re_plan" ? userHint : undefined,
+    }),
+    { method: "POST" },
+  );
 }
 
-export async function deleteDownload(downloadId: string): Promise<boolean> {
-  try {
-    const response = await apiFetch(`/api/v1/download/${downloadId}`, {
-      method: "DELETE",
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return true;
-  } catch (error) {
-    console.error("Error deleting download:", error);
-    return false;
-  }
+export async function deleteDownload(downloadId: string): Promise<void> {
+  await request(`/api/v1/download/${seg(downloadId)}`, { method: "DELETE" });
 }
 
-export async function downloadResource(indexerId: string, resourceId: string): Promise<boolean> {
-  try {
-    const response = await apiFetch(
-      `/api/v1/indexers/${indexerId}/resources/${resourceId}/download`,
-      {
-        method: "POST",
-      },
-    );
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return true;
-  } catch (error) {
-    console.error("Error initiating download:", error);
-    return false;
-  }
+// downloadResource throws ApiError; status 409 means it is already downloading.
+export async function downloadResource(indexerId: string, resourceId: string): Promise<void> {
+  await request(`/api/v1/indexers/${seg(indexerId)}/resources/${seg(resourceId)}/download`, {
+    method: "POST",
+  });
 }

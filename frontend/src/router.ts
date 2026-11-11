@@ -38,33 +38,59 @@ export class AppRouter extends LitElement {
     return this.indexers;
   }
 
+  @state()
+  private loadMessage = "No indexers available. Check configuration or backend, then retry.";
+
+  private retryPath = "/";
+
+  // loadFailed stays set until a retry succeeds, so the failure view does not flash away.
   private retryLoad = () => {
-    this.loadFailed = false;
-    this.router.goto("/");
+    this.router.goto(this.retryPath);
   };
 
-  private async fetchIndexers() {
-    this.indexers = await fetchIndexers();
+  private renderLoadFailure() {
+    return html`<div class="p-8 text-center">
+      <p class="mb-4">${this.loadMessage}</p>
+      <button class="btn btn-primary" @click=${this.retryLoad}>Retry</button>
+    </div>`;
   }
 
-  private async fetchDownloaders() {
-    this.downloaders = await fetchDownloaders();
+  private showLoadFailure(message: string, retryPath: string) {
+    this.loadMessage = message;
+    this.retryPath = retryPath;
+    this.loadFailed = true;
+  }
+
+  private async fetchIndexers() {
+    try {
+      this.indexers = await fetchIndexers();
+    } catch (error) {
+      console.warn("Failed to fetch indexers:", error);
+    }
+  }
+
+  // Returns false when the downloader list could not be loaded.
+  private async fetchDownloaders(): Promise<boolean> {
+    try {
+      this.downloaders = await fetchDownloaders();
+      return true;
+    } catch (error) {
+      console.warn("Failed to fetch downloaders:", error);
+      return false;
+    }
   }
 
   private router = new Router(this, [
     {
       path: "/",
-      render: () =>
-        this.loadFailed
-          ? html`<div class="p-8 text-center">
-              <p class="mb-4">No indexers available. Check configuration or backend, then retry.</p>
-              <button class="btn btn-primary" @click=${this.retryLoad}>Retry</button>
-            </div>`
-          : html`<div>Loading...</div>`,
+      render: () => (this.loadFailed ? this.renderLoadFailure() : html`<div>Loading...</div>`),
       enter: async () => {
         const indexers = await this.ensureIndexers();
         if (indexers.length === 0) {
-          this.loadFailed = true;
+          this.showLoadFailure(
+            "No indexers available. Check configuration or backend, then retry.",
+            "/",
+          );
           return true;
         }
         this.loadFailed = false;
@@ -78,12 +104,18 @@ export class AppRouter extends LitElement {
     {
       path: "/indexers/:id",
       render: ({ id }) => {
+        if (this.loadFailed) {
+          return this.renderLoadFailure();
+        }
         return html`<indexer-view .indexerId=${id || ""} category=""></indexer-view>`;
       },
       enter: async ({ id }) => {
         const indexers = await this.ensureIndexers();
         if (indexers.length === 0) {
-          this.loadFailed = true;
+          this.showLoadFailure(
+            "No indexers available. Check configuration or backend, then retry.",
+            "/",
+          );
           this.router.goto("/");
           return false;
         }
@@ -91,7 +123,19 @@ export class AppRouter extends LitElement {
           this.router.goto("/404");
           return false;
         }
-        const cid = defaultCategoryId(await fetchIndexerCategories(id));
+        let categories;
+        try {
+          categories = await fetchIndexerCategories(id);
+        } catch (error) {
+          console.warn("Failed to fetch categories:", error);
+          this.showLoadFailure(
+            `Failed to load categories for "${id}". Check the backend, then retry.`,
+            `/indexers/${encodeURIComponent(id)}`,
+          );
+          return true;
+        }
+        this.loadFailed = false;
+        const cid = defaultCategoryId(categories);
         if (!cid) {
           this.router.goto("/404");
           return false;
@@ -120,11 +164,10 @@ export class AppRouter extends LitElement {
         return html`<downloader-view .downloaderId=${id || ""}></downloader-view>`;
       },
       enter: async ({ id }) => {
-        if (this.downloaders.length === 0) {
-          await this.fetchDownloaders();
-        }
+        const loaded = this.downloaders.length > 0 || (await this.fetchDownloaders());
         const downloaderNames = this.downloaders.map((d) => d.name);
-        if (id === undefined || !downloaderNames.includes(id)) {
+        // When the list could not be loaded, let the view render and report the error.
+        if (id === undefined || (loaded && !downloaderNames.includes(id))) {
           this.router.goto("/404");
           return false;
         }
@@ -143,11 +186,10 @@ export class AppRouter extends LitElement {
         ></downloader-view>`;
       },
       enter: async ({ id, tab }) => {
-        if (this.downloaders.length === 0) {
-          await this.fetchDownloaders();
-        }
+        const loaded = this.downloaders.length > 0 || (await this.fetchDownloaders());
         const downloaderNames = this.downloaders.map((d) => d.name);
-        if (id === undefined || !downloaderNames.includes(id)) {
+        // When the list could not be loaded, let the view render and report the error.
+        if (id === undefined || (loaded && !downloaderNames.includes(id))) {
           this.router.goto("/404");
           return false;
         }

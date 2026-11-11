@@ -7,6 +7,7 @@ import {
   fetchDownloaderItems,
   organizeDownload,
   deleteDownload,
+  errorMessage,
   type DownloadItem,
   type DownloadState,
   type OrganizeAction,
@@ -14,6 +15,7 @@ import {
   type PlanResponse,
   type DownloaderState,
 } from "../utils/api.ts";
+import { renderError } from "../components/error_alert.ts";
 import { formatBytes } from "../utils/format.ts";
 import { externalLink } from "../utils/links.ts";
 
@@ -41,6 +43,18 @@ export class DownloaderView extends LitElement {
 
   @state()
   private error: string | null = null;
+
+  @state()
+  private actionError: string | null = null;
+
+  private retryLoad = () => {
+    this.loading = true;
+    void this.loadDownloadItems();
+  };
+
+  private dismissActionError = () => {
+    this.actionError = null;
+  };
 
   @state()
   private refreshInterval: number = 20; // Default to 20 seconds
@@ -116,7 +130,7 @@ export class DownloaderView extends LitElement {
         this.initialLoad = false;
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : "Failed to load download items";
+      this.error = errorMessage(err);
       // Only clear items on error if there are no items yet
       if (this.downloadItems.length === 0) {
         this.downloadItems = [];
@@ -258,20 +272,17 @@ export class DownloaderView extends LitElement {
     this.processingActions = nextProcessing;
 
     try {
-      const success = await organizeDownload(downloadId, action, userHint);
-      if (success) {
-        // Clear the user hint for this download if the action was successful
-        if (userHint) {
-          this.userHints.delete(downloadId);
-        }
-        // Refresh the data after successful action
-        await this.loadDownloadItems();
-      } else {
-        // Show error message (could add a toast/notification here)
-        console.error("Failed to organize download");
+      this.actionError = null;
+      await organizeDownload(downloadId, action, userHint);
+      // Clear the user hint for this download if the action was successful
+      if (userHint) {
+        this.userHints.delete(downloadId);
       }
+      // Refresh the data after successful action
+      await this.loadDownloadItems();
     } catch (error) {
       console.error("Error organizing download:", error);
+      this.actionError = `Failed to update download: ${errorMessage(error)}`;
     } finally {
       const remaining = new Set(this.processingActions);
       remaining.delete(actionKey);
@@ -301,18 +312,13 @@ export class DownloaderView extends LitElement {
     }
 
     try {
-      const success = await deleteDownload(downloadId);
-      if (success) {
-        // Refresh the data after successful deletion
-        await this.loadDownloadItems();
-      } else {
-        // Show error message (could add a toast/notification here)
-        console.error("Failed to delete download");
-        alert("Failed to delete download. Please try again.");
-      }
+      this.actionError = null;
+      await deleteDownload(downloadId);
+      // Refresh the data after successful deletion
+      await this.loadDownloadItems();
     } catch (error) {
       console.error("Error deleting download:", error);
-      alert("Error deleting download. Please try again.");
+      this.actionError = `Failed to delete download: ${errorMessage(error)}`;
     }
   }
 
@@ -630,19 +636,21 @@ export class DownloaderView extends LitElement {
         <h2 class="text-xl font-semibold mb-4">${tabTitles[this.activeTab as DownloadState]}</h2>
 
         ${
+          this.actionError
+            ? html`<div class="mb-4">
+                ${renderError(this.actionError, undefined, this.dismissActionError)}
+              </div>`
+            : ""
+        }
+        ${
           this.loading
             ? html`
                 <div class="flex justify-center items-center py-8">
                   <span class="loading loading-spinner loading-lg"></span>
                 </div>
               `
-            : this.error
-              ? html`
-                  <div class="alert alert-error">
-                    <span class="icon-[ph--x-bold]" style="width: 1.2em; height: 1.2em;"></span>
-                    <span>Error: ${this.error}</span>
-                  </div>
-                `
+            : this.error && this.downloadItems.length === 0
+              ? renderError(`Failed to load downloads: ${this.error}`, this.retryLoad)
               : this.downloadItems.length === 0
                 ? html`
                     <div class="text-base-content/70">
@@ -650,6 +658,16 @@ export class DownloaderView extends LitElement {
                     </div>
                   `
                 : html`
+                    ${
+                      this.error
+                        ? html`<div class="mb-4">
+                            ${renderError(
+                              `Refresh failed, showing stale data: ${this.error}`,
+                              this.retryLoad,
+                            )}
+                          </div>`
+                        : ""
+                    }
                     <div class="space-y-4">
                       ${this.downloadItems.map((item) => this.renderDownloadItem(item))}
                     </div>

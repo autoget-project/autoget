@@ -1,6 +1,21 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vitest";
-import { apiFetch, isAuthenticated, logout } from "./api";
+import {
+  ApiError,
+  apiFetch,
+  buildUrl,
+  deleteDownload,
+  downloadResource,
+  errorMessage,
+  fetchDownloaderItems,
+  fetchDownloaders,
+  fetchIndexerCategories,
+  fetchIndexerResources,
+  fetchIndexers,
+  isAuthenticated,
+  logout,
+  organizeDownload,
+} from "./api";
 
 const KEY = "autoget_auth";
 const LOCK_KEY = "autoget_auth_refresh_lock";
@@ -412,5 +427,87 @@ describe("session helpers", () => {
     logout();
     expect(localStorage.getItem(KEY)).toBeNull();
     expect(window.location.href).toBe("/");
+  });
+});
+
+describe("request building and error handling", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    apiResponses = [];
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function urlOf(mock: Mock<typeof fetch>, call = 0): URL {
+    return new URL(String(mock.mock.calls[call][0]), "http://x");
+  }
+
+  it("encodes keyword and category as query parameters", async () => {
+    const mock = vi.fn<typeof fetch>(async () => res(200, { pagination: {}, resources: [] }));
+    vi.stubGlobal("fetch", mock);
+    const keyword = "a&pageSize=1#x+%";
+    await fetchIndexerResources("idx", "c&d", keyword, 2);
+    const url = urlOf(mock);
+    expect(url.searchParams.get("keyword")).toBe(keyword);
+    expect(url.searchParams.get("category")).toBe("c&d");
+    expect(url.searchParams.get("pageSize")).toBe("100");
+    expect(url.searchParams.get("page")).toBe("2");
+  });
+
+  it("encodes path segments and the organize hint", async () => {
+    const mock = vi.fn<typeof fetch>(async () => res(200, {}));
+    vi.stubGlobal("fetch", mock);
+    await fetchDownloaderItems("a/b c", "failed");
+    expect(String(mock.mock.calls[0][0])).toContain("/downloaders/a%2Fb%20c?state=failed");
+    await deleteDownload("x/y");
+    expect(String(mock.mock.calls[1][0])).toBe("/api/v1/download/x%2Fy");
+    await organizeDownload("id", "re_plan", "a&b=c");
+    expect(urlOf(mock, 2).searchParams.get("user_hint")).toBe("a&b=c");
+    expect(urlOf(mock, 2).searchParams.get("action")).toBe("re_plan");
+  });
+
+  it("omits empty query values", () => {
+    expect(buildUrl("/p", { a: "", b: undefined, c: 1 })).toBe("/p?c=1");
+  });
+
+  it("rejects with ApiError on HTTP failure but resolves an empty list", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () => res(500)),
+    );
+    await expect(fetchIndexers()).rejects.toMatchObject({ name: "ApiError", status: 500 });
+    await expect(fetchDownloaders()).rejects.toBeInstanceOf(ApiError);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () => res(200, [])),
+    );
+    await expect(fetchIndexers()).resolves.toEqual([]);
+  });
+
+  it("wraps network failures in ApiError", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () => {
+        throw new TypeError("boom");
+      }),
+    );
+    await expect(fetchIndexerCategories("a")).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it("surfaces 409 from downloadResource and normalises downloader items", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () => res(409)),
+    );
+    await expect(downloadResource("i", "r")).rejects.toMatchObject({ status: 409 });
+    expect(errorMessage(new ApiError("x", 409))).toBe("Already exists.");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () => res(200, {})),
+    );
+    const items = await fetchDownloaderItems("d", "failed");
+    expect(items.resources).toEqual([]);
+    expect(items.state.count_of_failed).toBe(0);
   });
 });

@@ -1,7 +1,8 @@
 import { html, LitElement, unsafeCSS, css, type TemplateResult, type PropertyValues } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { type Category, fetchIndexerCategories } from "../utils/api";
+import { type Category, errorMessage, fetchIndexerCategories } from "../utils/api";
+import { renderError } from "../components/error_alert";
 import "../components/navbar.ts";
 import "../components/resource_list.ts";
 import { scrollableOnScroll } from "../utils/scroll_to_top";
@@ -32,6 +33,9 @@ export class IndexerView extends LitElement {
 
   @state()
   private categories: Category[] = [];
+
+  @state()
+  private categoriesError: string | null = null;
 
   @property({ type: String })
   public category: string = "";
@@ -160,8 +164,22 @@ export class IndexerView extends LitElement {
     super.update(changedProperties);
   }
 
+  private retryCategories = () => {
+    void this.fetchIndexerCategories();
+  };
+
   private async fetchIndexerCategories() {
-    this.categories = await fetchIndexerCategories(this.indexerId);
+    const indexerId = this.indexerId;
+    this.categoriesError = null;
+    try {
+      const categories = await fetchIndexerCategories(indexerId);
+      if (indexerId === this.indexerId) this.categories = categories;
+    } catch (error) {
+      if (indexerId !== this.indexerId) return;
+      console.error("Failed to fetch categories:", error);
+      this.categories = [];
+      this.categoriesError = errorMessage(error);
+    }
   }
 
   render() {
@@ -215,6 +233,16 @@ export class IndexerView extends LitElement {
             >
               ${this.categories.map((category) => this.renderCategory(category))}
             </ul>
+            ${
+              this.categoriesError
+                ? html`<div class="p-2">
+                    ${renderError(
+                      `Failed to load categories: ${this.categoriesError}`,
+                      this.retryCategories,
+                    )}
+                  </div>`
+                : ""
+            }
           </div>
 
           <!-- Resize divider handle (desktop only) -->

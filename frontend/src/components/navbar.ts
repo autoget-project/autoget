@@ -41,8 +41,13 @@ export class AppNavbar extends LitElement {
 
   async connectedCallback() {
     super.connectedCallback();
-    this.indexers = await fetchIndexers();
-    this.downloaders = await fetchDownloaders();
+    // Keep the timer running on failure; polling retries periodically.
+    try {
+      this.indexers = await fetchIndexers();
+    } catch (error) {
+      console.warn("Failed to load indexers:", error);
+    }
+    await this.loadDownloaders();
     this.startRefreshTimer();
     this.requestUpdate();
   }
@@ -70,7 +75,7 @@ export class AppNavbar extends LitElement {
     try {
       this.downloaders = await fetchDownloaders();
     } catch (error) {
-      console.error("Failed to refresh downloaders:", error);
+      console.warn("Failed to refresh downloaders:", error);
     }
   }
 

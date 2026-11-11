@@ -58,4 +58,23 @@ describe("app-router", () => {
     await mount("/");
     await vi.waitFor(() => expect(window.location.pathname).toBe("/indexers/a/c"));
   });
+
+  it("shows an error with retry when the categories fetch fails", async () => {
+    vi.mocked(api.fetchIndexers).mockResolvedValue(["a"]);
+    vi.mocked(api.fetchIndexerCategories).mockRejectedValue(new Error("boom"));
+    const el = await mount("/indexers/a");
+    await vi.waitFor(() =>
+      expect(el.shadowRoot?.textContent).toContain("Failed to load categories"),
+    );
+    expect(el.shadowRoot?.querySelector("not-found-view")).toBeNull();
+    expect(el.shadowRoot?.querySelector("button")).not.toBeNull();
+  });
+
+  it("does not leak a rejection when the indexers fetch throws", async () => {
+    vi.mocked(api.fetchIndexers).mockRejectedValue(new Error("boom"));
+    const el = await mount("/");
+    await vi.waitFor(() => expect(el.shadowRoot?.textContent).toContain("No indexers available"), {
+      timeout: 5000,
+    });
+  });
 });

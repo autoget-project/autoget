@@ -2,7 +2,13 @@ import { html, LitElement, unsafeCSS, css, type TemplateResult, type PropertyVal
 import { customElement, property, state } from "lit/decorators.js";
 import { DateTime } from "luxon";
 
-import { fetchIndexerResources, type Resource, type ResourcesResponse } from "../utils/api";
+import {
+  errorMessage,
+  fetchIndexerResources,
+  type Resource,
+  type ResourcesResponse,
+} from "../utils/api";
+import { renderError } from "./error_alert";
 import { formatBytes, formatCreatedDate } from "../utils/format";
 import { externalLink } from "../utils/links";
 import { safeExternalUrl } from "../utils/url";
@@ -24,6 +30,9 @@ export class ResourceList extends LitElement {
 
   @property({ type: Number })
   public page: number = 1;
+
+  @state()
+  private error: string | null = null;
 
   @state()
   private resources: ResourcesResponse | null = null;
@@ -118,24 +127,37 @@ export class ResourceList extends LitElement {
     }
   }
 
+  private requestSeq = 0;
+
+  private retryFetch = () => {
+    void this.fetchIndexerResources();
+  };
+
   private async fetchIndexerResources() {
+    const seq = ++this.requestSeq;
     if (this.indexerId) {
       this.isLoading = true;
-      const response = await fetchIndexerResources(
-        this.indexerId,
-        this.category,
-        this.keyword,
-        this.page,
-      );
-      this.isLoading = false;
-      if (response) {
+      this.error = null;
+      try {
+        const response = await fetchIndexerResources(
+          this.indexerId,
+          this.category,
+          this.keyword,
+          this.page,
+        );
+        if (seq !== this.requestSeq) return; // a newer request superseded this one
         this.resources = response;
         this.totalPages = response.pagination.totalPages;
-      } else {
+      } catch (error) {
+        if (seq !== this.requestSeq) return;
+        console.error("Failed to fetch indexer resources:", error);
+        this.error = errorMessage(error);
         this.resources = null;
         this.totalPages = 1;
       }
+      this.isLoading = false;
     } else {
+      this.error = null;
       this.resources = null;
       this.totalPages = 1;
       this.isLoading = false;
@@ -290,6 +312,10 @@ export class ResourceList extends LitElement {
           <span class="loading loading-spinner loading-lg"></span>
         </div>
       `;
+    }
+
+    if (this.error) {
+      return html`<div class="p-4">${renderError(this.error, this.retryFetch)}</div>`;
     }
 
     // Show no resources message when no data is available

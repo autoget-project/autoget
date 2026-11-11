@@ -1,7 +1,8 @@
 import { html, LitElement, unsafeCSS, css, type TemplateResult } from "lit";
 import { customElement, state } from "lit/decorators.js";
 
-import { fetchIndexers, fetchIndexerCategories, type Category } from "../utils/api";
+import { fetchIndexers, fetchIndexerCategories, errorMessage, type Category } from "../utils/api";
+import { renderError } from "../components/error_alert";
 import "../components/navbar.ts";
 import "../components/resource_list.ts";
 import { scrollableOnScroll } from "../utils/scroll_to_top";
@@ -79,9 +80,12 @@ export class SearchView extends LitElement {
   @state()
   private showIndexerWarning: boolean = false;
 
+  @state()
+  private loadError: string | null = null;
+
   async connectedCallback() {
     super.connectedCallback();
-    this.indexers = await fetchIndexers();
+    await this.loadIndexers();
     window.addEventListener("popstate", this.handlePopState);
     this.handlePopState(); // Initial call to set state from URL
   }
@@ -171,9 +175,39 @@ export class SearchView extends LitElement {
     await this.fetchAndDisplayCategories();
   }
 
+  private async loadIndexers() {
+    this.loadError = null;
+    try {
+      this.indexers = await fetchIndexers();
+    } catch (error) {
+      console.error("Failed to fetch indexers:", error);
+      this.loadError = `Failed to load indexers: ${errorMessage(error)}`;
+    }
+  }
+
+  private retryLoad = async () => {
+    if (this.indexers.length === 0) {
+      await this.loadIndexers();
+    }
+    if (this.selectedIndexer) {
+      await this.fetchAndDisplayCategories();
+    }
+  };
+
   private async fetchAndDisplayCategories() {
     if (this.selectedIndexer) {
-      this.allCategories = await fetchIndexerCategories(this.selectedIndexer);
+      const indexer = this.selectedIndexer;
+      this.loadError = null;
+      try {
+        const categories = await fetchIndexerCategories(indexer);
+        if (indexer !== this.selectedIndexer) return;
+        this.allCategories = categories;
+      } catch (error) {
+        if (indexer !== this.selectedIndexer) return;
+        console.error("Failed to fetch categories:", error);
+        this.allCategories = [];
+        this.loadError = `Failed to load categories: ${errorMessage(error)}`;
+      }
       this.displayedCategoryLevels = [this.allCategories]; // Start with the top level
     } else {
       this.allCategories = [];
@@ -346,6 +380,11 @@ export class SearchView extends LitElement {
               </div>
             </div>
 
+            ${
+              this.loadError
+                ? html`<div class="mt-4">${renderError(this.loadError, this.retryLoad)}</div>`
+                : ""
+            }
             ${
               this.showIndexerWarning
                 ? html`
