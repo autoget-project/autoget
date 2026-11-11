@@ -5,7 +5,7 @@
 # Stage 2 ships the binary on a minimal Alpine runtime under a non-root user;
 # the resulting image stays well below 30MB.
 
-ARG GO_VERSION=1.27.1
+ARG GO_VERSION=1.27.4
 ARG ALPINE_VERSION=latest
 ARG UID=99
 ARG GID=100

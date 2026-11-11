@@ -14,7 +14,7 @@ COPY frontend/ ./
 RUN pnpm run build
 
 # Stage 2: Build backend
-FROM golang:1.27.1-alpine AS backend-builder
+FROM golang:1.27.4-alpine AS backend-builder
 
 WORKDIR /src
 
