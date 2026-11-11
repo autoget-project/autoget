@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"crypto"
 	"crypto/rand"
@@ -17,6 +18,8 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
@@ -781,4 +784,26 @@ func findCookie(w *httptest.ResponseRecorder, name string) *http.Cookie {
 		}
 	}
 	return nil
+}
+
+// auth.disabled returns a nil service and logs a loud warning.
+func TestNewDisabledWarns(t *testing.T) {
+	var buf bytes.Buffer
+	old := log.Logger
+	log.Logger = zerolog.New(&buf)
+	t.Cleanup(func() { log.Logger = old })
+
+	for _, cfg := range []*Config{nil, {Disabled: true}} {
+		buf.Reset()
+		s, err := New(context.Background(), cfg)
+		require.NoError(t, err)
+		assert.Nil(t, s)
+		assert.Contains(t, buf.String(), "auth is DISABLED")
+		assert.Contains(t, buf.String(), `"level":"warn"`)
+	}
+}
+
+func TestConfigValidateDisabledSkipsFields(t *testing.T) {
+	assert.NoError(t, (&Config{Disabled: true}).Validate())
+	assert.Error(t, (&Config{}).Validate())
 }

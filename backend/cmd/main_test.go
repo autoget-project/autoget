@@ -55,11 +55,11 @@ func TestSetupRouterProtectsOnlyAPI(t *testing.T) {
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 }
 
-// When the auth section is omitted the API is left open.
+// With auth.disabled the API is left open.
 func TestSetupRouterWithoutAuth(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	authSvc, err := auth.New(context.Background(), nil)
+	authSvc, err := auth.New(context.Background(), &auth.Config{Disabled: true})
 	require.NoError(t, err)
 	require.Nil(t, authSvc)
 

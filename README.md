@@ -18,3 +18,7 @@ AutoGet consists of a modern web frontend and Go backend service that allows you
 For detailed setup and API documentation, see:
 - [Frontend README](frontend/README.md)
 - [Backend README](backend/README.md)
+
+## Authentication
+
+The backend requires an `auth` section in its config and refuses to start without one. Configure OIDC login, or explicitly opt out with `auth: {disabled: true}` (the API is then unauthenticated). See [Backend README](backend/README.md#oauthoidc-login-auth) for provider requirements and the token-storage trade-off.

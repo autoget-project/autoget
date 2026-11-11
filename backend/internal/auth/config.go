@@ -5,8 +5,12 @@ import (
 	"net/url"
 )
 
-// Config is the optional auth section of the app config.
+// Config is the auth section of the app config. The section is required: to
+// run without authentication it must be present and set disabled: true.
 type Config struct {
+	// Disabled explicitly turns authentication off. The whole API is then open
+	// to anyone who can reach the port. The other fields are ignored.
+	Disabled     bool   `yaml:"disabled"`
 	Issuer       string `yaml:"issuer"`
 	ClientID     string `yaml:"client_id"`
 	ClientSecret string `yaml:"client_secret"`
@@ -22,6 +26,9 @@ type Config struct {
 
 // Validate checks the auth config fields.
 func (c *Config) Validate() error {
+	if c.Disabled {
+		return nil
+	}
 	if err := requireAbsoluteURL("auth issuer", c.Issuer); err != nil {
 		return err
 	}

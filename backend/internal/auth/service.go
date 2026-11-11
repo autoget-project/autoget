@@ -53,6 +53,9 @@ type Service struct {
 	providerErr   error
 	providerErrAt time.Time
 
+	// refreshLimit throttles the unauthenticated /auth/refresh endpoint.
+	refreshLimit *refreshLimiter
+
 	statesMu sync.Mutex
 	states   map[string]stateEntry
 }
@@ -68,12 +71,18 @@ type stateEntry struct {
 	exp      time.Time
 }
 
+// disabledWarning is logged at startup when auth.disabled is set.
+const disabledWarning = "auth is DISABLED (auth.disabled: true): the whole /api/v1 API " +
+	"(downloads, torrent deletion, file moves) is open to anyone who can reach this port; " +
+	"only run like this behind an authenticating reverse proxy or on a trusted network"
+
 // New creates the auth service. Discovery is attempted eagerly so
 // misconfiguration surfaces at startup, but a provider that is down only logs
 // a warning; the service retries on first use. The returned service is
 // nil-safe.
 func New(ctx context.Context, cfg *Config) (*Service, error) {
-	if cfg == nil {
+	if cfg == nil || cfg.Disabled {
+		log.Warn().Msg(disabledWarning)
 		return nil, nil
 	}
 	if err := cfg.Validate(); err != nil {
@@ -125,10 +134,10 @@ func (s *Service) ensureProvider(ctx context.Context) (*provider, error) {
 			RedirectURL:  strings.TrimRight(s.cfg.RedirectBaseURL, "/") + "/auth/callback",
 			Scopes:       []string{"openid", "profile", "offline_access"},
 		},
-		// The provider's access token is a signed JWT whose audience is the
-		// client id (see caddypaw authn), so the ID token verifier validates it
-		// unchanged. An access token without aud=client_id would need a
-		// different verifier.
+		// The access token is verified as an ID token, so the provider must
+		// issue JWT access tokens whose aud includes client_id. Opaque
+		// tokens or other audiences are rejected (see backend/README.md,
+		// "OIDC provider requirements").
 		verifier: p.Verifier(&oidc.Config{ClientID: s.cfg.ClientID}),
 	}
 	s.providerErr = nil
@@ -145,7 +154,10 @@ func (s *Service) SetupRouter(router *gin.Engine) {
 	router.GET("/auth/callback.js", s.callbackScript)
 	router.GET("/auth/denied", s.denied)
 	router.GET("/auth/denied.js", s.deniedScript)
-	router.POST("/auth/refresh", s.refresh)
+	if s.refreshLimit == nil {
+		s.refreshLimit = newRefreshLimiter(time.Now)
+	}
+	router.POST("/auth/refresh", s.limitRefresh, s.refresh)
 }
 
 // tokenStatus is the outcome of verifying a bearer token.
@@ -400,6 +412,7 @@ func (s *Service) refresh(c *gin.Context) {
 	var body struct {
 		RefreshToken string `json:"refresh_token"`
 	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRefreshBodyBytes)
 	if err := c.ShouldBindJSON(&body); err != nil || body.RefreshToken == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "refresh_token is required"})
 		return

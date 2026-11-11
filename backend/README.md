@@ -83,8 +83,14 @@ AutoGet Backend provides a centralized system for:
 
 ### Configuare
 
-See `example.config.yaml`. The `auth` section is optional: when present, the
-web UI requires an OAuth/OIDC login, and when omitted auth is disabled.
+See `example.config.yaml`. The `auth` section is **required**: the backend
+refuses to start without it. Configure OAuth/OIDC login, or explicitly opt out
+with `auth: {disabled: true}` (a loud warning is logged at startup, and the
+whole API is then open to anyone who can reach the port).
+
+> **Breaking change:** earlier versions disabled auth when the `auth` section
+> was omitted. Existing configs without an `auth` section must now add
+> `auth: {disabled: true}` to keep running unauthenticated.
 
 #### OAuth/OIDC login (`auth`)
 
@@ -109,6 +115,49 @@ auth:
   Caddy must forward `/auth/*` to the backend.
 - The backend only stores the client secret and a short-lived CSRF state; tokens
   live in the browser.
+
+To run without authentication (not recommended):
+
+```yaml
+auth:
+  disabled: true
+```
+
+All other `auth` fields are ignored in that case.
+
+#### OIDC provider requirements
+
+The backend verifies the **access token** itself (as a JWT) on every API call,
+so the provider must:
+
+- support OIDC discovery and the `offline_access` scope (needed for refresh
+  tokens; refresh uses the standard token endpoint, and rotating, single-use
+  refresh tokens are supported);
+- issue **JWT access tokens signed with keys from its JWKS, whose `aud` claim
+  includes `client_id`**. Opaque access tokens, or JWTs with another audience,
+  make every API call fail with 401;
+- if `required_role` is used, put a space-separated `roles` claim in the access
+  token.
+
+Serve the app over HTTPS (`redirect_base_url: https://...`); this also marks the
+login state cookie `Secure`.
+
+#### Token storage trade-off
+
+Access and refresh tokens are kept in the browser's `localStorage`, so any
+script injection (XSS) could read the long-lived refresh token. This is a known,
+accepted trade-off; moving the refresh token to an HttpOnly cookie behind a
+backend-for-frontend is deferred. The mitigation is the strict
+Content-Security-Policy the backend sends: do not relax it (for example, do not
+add `unsafe-inline` or third-party script origins), including in a reverse proxy.
+
+#### Refresh endpoint limits
+
+`POST /auth/refresh` is unauthenticated, so it is rate limited: 10 requests/min
+per client IP (burst 10) plus a global backstop of 60 requests/min (burst 60),
+answering `429` with `Retry-After`; request bodies over 8 KiB are rejected. The
+client IP comes from gin's `ClientIP()`; behind a reverse proxy make sure it
+overwrites (not appends to) `X-Forwarded-For`.
 
 ## API Documentation
 

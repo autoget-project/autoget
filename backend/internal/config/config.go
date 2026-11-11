@@ -122,5 +122,10 @@ func (c *Config) validate() error {
 			return fmt.Errorf("invalid downloader config for %s: %v", name, err)
 		}
 	}
+
+	// Fail closed: an omitted auth section must not silently expose the API.
+	if c.Auth == nil {
+		return fmt.Errorf("auth section is required: configure OIDC login, or set `auth: {disabled: true}` to explicitly run without authentication")
+	}
 	return nil
 }

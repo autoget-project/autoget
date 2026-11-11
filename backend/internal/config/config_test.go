@@ -9,6 +9,7 @@ import (
 	dlconfig "github.com/autoget-project/autoget/backend/downloaders/config"
 	"github.com/autoget-project/autoget/backend/indexers/mteam"
 	"github.com/autoget-project/autoget/backend/indexers/nyaa"
+	"github.com/autoget-project/autoget/backend/internal/auth"
 	"github.com/autoget-project/autoget/backend/internal/notify/telegram"
 )
 
@@ -20,6 +21,8 @@ port: "8080"
 proxy_url: "http://localhost:8888"
 pg_dsn: dsn
 organizer_service: "http://organizer:8080"
+auth:
+  disabled: true
 telegram:
   token: "telegram_token"
   chat_id: "telegram_chat_id"
@@ -83,6 +86,8 @@ port: "8081"
 proxy_url: "http://localhost:9999"
 pg_dsn: dsn
 organizer_service: "http://organizer:8081"
+auth:
+  disabled: true
 telegram:
   token: "telegram_token_2"
   chat_id: "telegram_chat_id_2"
@@ -142,6 +147,7 @@ func TestConfig_validate(t *testing.T) {
 		{
 			name: "Valid config",
 			config: &Config{
+				Auth:             &auth.Config{Disabled: true},
 				PgDSN:            "dsn",
 				OrganizerService: "http://organizer.svc",
 				Telegram: &telegram.Config{
@@ -170,6 +176,34 @@ func TestConfig_validate(t *testing.T) {
 				},
 			},
 			wantErr: "",
+		},
+		{
+			name: "Missing auth section is rejected",
+			config: &Config{
+				PgDSN:            "dsn",
+				OrganizerService: "http://organizer.svc",
+				Telegram:         &telegram.Config{Token: "t", ChatID: "c"},
+			},
+			wantErr: "auth section is required",
+		},
+		{
+			name: "Disabled auth needs no other auth fields",
+			config: &Config{
+				Auth:             &auth.Config{Disabled: true},
+				PgDSN:            "dsn",
+				OrganizerService: "http://organizer.svc",
+				Telegram:         &telegram.Config{Token: "t", ChatID: "c"},
+			},
+		},
+		{
+			name: "Enabled auth still validated",
+			config: &Config{
+				Auth:             &auth.Config{Issuer: "https://x"},
+				PgDSN:            "dsn",
+				OrganizerService: "http://organizer.svc",
+				Telegram:         &telegram.Config{Token: "t", ChatID: "c"},
+			},
+			wantErr: "client_id is required",
 		},
 		{
 			name: "Missing organizer_service",
