@@ -121,7 +121,8 @@ func main() {
 	}
 
 	gin.SetMode(gin.ReleaseMode)
-	r := gin.Default()
+	r := gin.New()
+	r.Use(gin.LoggerWithConfig(gin.LoggerConfig{SkipQueryString: true}), gin.Recovery())
 	setupRouter(r, authSvc, hstsEnabled(cfg.Auth), service.SetupRouter)
 
 	srv := newServer(":"+cfg.Port, r)
