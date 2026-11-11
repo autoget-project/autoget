@@ -1,5 +1,10 @@
 port: 8888
-pg_dsn: user=pg password=your_password dbname=your_db host=db_ip port=5432 sslmode=disable
+# Remote database: keep sslmode=require (or verify-full). sslmode=disable sends
+# the password and data in cleartext; only use it on a private network such as
+# the bundled docker-compose network (see docker-compose.example.yml).
+# This file holds plaintext secrets (pg_dsn password, client_secret, api_key,
+# telegram token): chmod 600, never commit it. See README.md, "Secrets".
+pg_dsn: user=pg password=your_password dbname=your_db host=db_ip port=5432 sslmode=require
 
 # REQUIRED. The backend refuses to start without an auth section.
 # To run with NO authentication (the whole API open to anyone who can reach the

@@ -8,6 +8,8 @@
 #
 # Everything marked CHANGE_ME is a placeholder: replace it, and keep real
 # secrets out of version control (use an .env file or Docker secrets).
+# config/config.yaml contains plaintext secrets: chmod 600 it (it is mounted
+# read-only below) and never commit it or bake it into an image.
 #
 # Shared paths (backend, transmission and organizer must see the same files):
 #   /watch      .torrent files written by the backend, picked up by Transmission
@@ -20,6 +22,9 @@
 #
 # The matching backend config (config/config.yaml) must contain:
 #   port: 8888
+#   # sslmode=disable is acceptable ONLY because the bundled postgres container has
+#   # no TLS and is reachable solely over this private compose network. For a
+#   # remote/external database use sslmode=require (or verify-full) instead.
 #   pg_dsn: user=autoget password=CHANGE_ME dbname=autoget host=postgres port=5432 sslmode=disable
 #   auth: ...                      # REQUIRED, see backend/README.md
 #   organizer_service: http://organizer:8000

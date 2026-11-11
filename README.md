@@ -53,6 +53,19 @@ yourself run `just build-images`. Go 1.27.4 is used by the Dockerfiles and CI.
 
 The backend requires an `auth` section in its config and refuses to start without one. Configure OIDC login, or explicitly opt out with `auth: {disabled: true}` (the API is then unauthenticated, so only do this behind another access control such as a VPN or an authenticating reverse proxy). See [Backend README](backend/README.md#oauthoidc-login-auth) for provider requirements and the token-storage trade-off.
 
+## Secrets
+
+`config.yaml` contains plaintext secrets: the `pg_dsn` password, the OIDC
+`client_secret`, the mteam `api_key` and the Telegram bot token. Treat it as a
+credential file:
+
+- `chmod 600 config/config.yaml` and mount it read-only (the compose example does).
+- Keep it out of git and out of images (`backend/config.yaml` is already in `.dockerignore`).
+- Rotate every secret in it if the file is ever leaked.
+- Use `sslmode=require` (or `verify-full`) in `pg_dsn` for any remote database.
+  `sslmode=disable` is only acceptable on the private compose network, because
+  the bundled Postgres container has no TLS.
+
 ## Upgrading and database migrations
 
 Schema management is GORM `AutoMigrate` only. It creates missing tables,

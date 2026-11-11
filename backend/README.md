@@ -92,6 +92,14 @@ whole API is then open to anyone who can reach the port).
 > was omitted. Existing configs without an `auth` section must now add
 > `auth: {disabled: true}` to keep running unauthenticated.
 
+#### Secrets and database TLS
+
+`config.yaml` holds plaintext secrets (`pg_dsn` password, `client_secret`, mteam
+`api_key`, Telegram token): `chmod 600` it, mount it read-only, keep it out of
+git and images, and rotate the secrets if it leaks. Use `sslmode=require` (or
+`verify-full`) in `pg_dsn` for a remote database; `sslmode=disable` is only
+acceptable on a private network such as the bundled docker-compose one.
+
 #### OAuth/OIDC login (`auth`)
 
 ```yaml
