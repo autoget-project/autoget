@@ -391,6 +391,15 @@ func TestProgressChecker(t *testing.T) {
 	assert.Len(t, fake.reqs, 2)
 	assert.Equal(t, "torrent-get", fake.reqs[0].Method)
 	assert.Equal(t, "session-stats", fake.reqs[1].Method)
+	{
+		args, ok := fake.reqs[0].Arguments.(map[string]any)
+		require.True(t, ok)
+		var fields []string
+		for _, f := range args["fields"].([]any) {
+			fields = append(fields, f.(string))
+		}
+		assert.ElementsMatch(t, progressFields, fields)
+	}
 
 	{
 		// r1 progress updated

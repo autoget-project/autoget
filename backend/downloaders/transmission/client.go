@@ -31,6 +31,11 @@ var (
 	httpClient = &http.Client{Timeout: 30 * time.Second}
 )
 
+// progressFields lists every torrent field read on the ProgressChecker path
+// (toTorrentsByHash, updateDownloadProgress, copyFinishedDownloads,
+// copyTorrentFiles, uploadTorrentFiles). Keep in sync when reading more fields.
+var progressFields = []string{"hashString", "percentDone", "status", "totalSize", "files", "downloadDir"}
+
 type Client struct {
 	client          *transmissionrpc.Client
 	name            string
@@ -164,9 +169,9 @@ func toTorrentsByHash(torrents []transmissionrpc.Torrent) map[string]*transmissi
 }
 
 func (c *Client) ProgressChecker() {
-	torrents, err := c.client.TorrentGetAll(c.context())
+	torrents, err := c.client.TorrentGet(c.context(), progressFields, nil)
 	if err != nil {
-		logger.Error().Err(err).Str("name", c.name).Msg("failed to get all torrents")
+		logger.Error().Err(err).Str("name", c.name).Msg("failed to get torrents")
 		return
 	}
 
@@ -237,6 +242,11 @@ func (c *Client) copyFinishedDownloads(torrentsByHash map[string]*transmissionrp
 	for _, s := range statuses {
 		t, ok := torrentsByHash[s.ID]
 		if !ok {
+			continue
+		}
+
+		if t.DownloadDir == nil || t.Files == nil {
+			logger.Warn().Str("name", c.name).Str("id", s.ID).Msg("torrent is missing files or download dir; skipping copy")
 			continue
 		}
 
