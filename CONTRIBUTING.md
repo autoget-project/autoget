@@ -62,6 +62,9 @@ Run `just fmt lint build test` before committing.
 - Never edit `pnpm-lock.yaml` by hand; use `pnpm`. Node `>=26` is required.
 - `@lit-labs/router` (labs, 0.1.x) and `urlpattern-polyfill` are a known
   dependency risk; Dependabot surfaces updates for them.
+- `urlpattern-polyfill` is loaded on demand (dynamic import in `src/app.ts`)
+  only when `URLPattern` is missing, and the router module loads after it.
+  Keep it out of static imports so modern browsers never download it.
 
 ## Commits
 
