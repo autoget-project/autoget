@@ -1,4 +1,3 @@
-import { Router } from "@lit-labs/router";
 import { LitElement, html } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import {
@@ -8,6 +7,7 @@ import {
   type DownloaderInfo,
 } from "./utils/api.ts";
 import { defaultCategoryId, resolveIndexers } from "./utils/router_helpers.ts";
+import { Router } from "./utils/router.ts";
 
 import "./views/search_view";
 import "./views/indexer_view";
@@ -95,8 +95,7 @@ export class AppRouter extends LitElement {
         }
         this.loadFailed = false;
         const newUrl = `/indexers/${encodeURIComponent(indexers[0])}`;
-        this.router.goto(newUrl);
-        history.replaceState(null, "", newUrl);
+        this.router.redirect(newUrl);
         return false;
       },
     },
@@ -116,11 +115,11 @@ export class AppRouter extends LitElement {
             "No indexers available. Check configuration or backend, then retry.",
             "/",
           );
-          this.router.goto("/");
+          this.router.redirect("/");
           return false;
         }
         if (id === undefined || !indexers.includes(id)) {
-          this.router.goto("/404");
+          this.router.redirect("/404");
           return false;
         }
         let categories;
@@ -137,12 +136,11 @@ export class AppRouter extends LitElement {
         this.loadFailed = false;
         const cid = defaultCategoryId(categories);
         if (!cid) {
-          this.router.goto("/404");
+          this.router.redirect("/404");
           return false;
         }
         const newUrl = `/indexers/${encodeURIComponent(id)}/${encodeURIComponent(cid)}`;
-        this.router.goto(newUrl);
-        history.replaceState(null, "", newUrl);
+        this.router.redirect(newUrl);
         return false;
       },
     },
@@ -168,12 +166,11 @@ export class AppRouter extends LitElement {
         const downloaderNames = this.downloaders.map((d) => d.name);
         // When the list could not be loaded, let the view render and report the error.
         if (id === undefined || (loaded && !downloaderNames.includes(id))) {
-          this.router.goto("/404");
+          this.router.redirect("/404");
           return false;
         }
         // Redirect to default tab if no tab specified
-        this.router.goto(`/downloaders/${id}/downloading`);
-        history.replaceState(null, "", `/downloaders/${id}/downloading`);
+        this.router.redirect(`/downloaders/${id}/downloading`);
         return false;
       },
     },
@@ -190,13 +187,13 @@ export class AppRouter extends LitElement {
         const downloaderNames = this.downloaders.map((d) => d.name);
         // When the list could not be loaded, let the view render and report the error.
         if (id === undefined || (loaded && !downloaderNames.includes(id))) {
-          this.router.goto("/404");
+          this.router.redirect("/404");
           return false;
         }
         // Validate tab parameter
         const validTabs = ["downloading", "seeding", "stopped", "planned", "failed"];
         if (tab === undefined || !validTabs.includes(tab)) {
-          this.router.goto(`/downloaders/${id}/downloading`);
+          this.router.redirect(`/downloaders/${id}/downloading`);
           return false;
         }
         return true;

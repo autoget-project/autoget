@@ -17,7 +17,6 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@lit-labs/router": "^0.1.4",
     "@tailwindcss/vite": "^4.3.5",
     "daisyui": "^5.7.50",
     "lit": "^3.3.3",
