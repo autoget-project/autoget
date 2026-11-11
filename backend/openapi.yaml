@@ -1,0 +1,791 @@
+openapi: 3.0.3
+info:
+  title: autoget backend API
+  version: 1.0.0
+  description: |
+    HTTP API of the autoget backend, hand-written from the handlers in
+    `internal/handlers` and `internal/auth`. `cmd/openapi_test.go` fails when a
+    registered route is missing from this file (or this file lists a route that
+    is not registered), but request and response schemas are NOT verified, so
+    update them together with the handlers.
+
+    Authentication: every `/api/v1` call needs `Authorization: Bearer <access
+    token>` (a JWT issued by the configured OIDC provider) unless the config
+    sets `auth.disabled: true`. In that case no token is checked and the `/auth/*`
+    routes are not registered (they fall through to the SPA shell when the
+    frontend is served, and answer 404 otherwise).
+
+    The authentication middleware answers 401 (missing, malformed or expired
+    token), 403 (valid token without the required `roles` entry) and 503 (OIDC
+    provider unreachable) with an EMPTY body. Every other error uses the
+    `Error` JSON shape. The SPA and its static assets are served by the same
+    server, are public, and are deliberately not part of this document.
+servers:
+  - url: /
+security:
+  - bearerAuth: []
+tags:
+  - {name: indexers, description: Browse and download from indexers.}
+  - {name: downloads, description: Downloaders and tracked downloads.}
+  - {name: utility, description: Helpers.}
+  - {name: auth, description: Browser OIDC login flow (only when auth is enabled).}
+paths:
+  /api/v1/indexers:
+    get:
+      tags: [indexers]
+      operationId: listIndexers
+      summary: List configured indexers
+      description: Names of the configured indexers, sorted alphabetically.
+      responses:
+        '200':
+          description: Indexer names.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '503': {$ref: '#/components/responses/AuthUnavailable'}
+  /api/v1/indexers/{indexer}/categories:
+    get:
+      tags: [indexers]
+      operationId: indexerCategories
+      summary: List an indexer's resource categories
+      parameters:
+        - $ref: '#/components/parameters/Indexer'
+      responses:
+        '200':
+          description: Category tree.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/IndexerNotFound'}
+        '503': {$ref: '#/components/responses/AuthUnavailable'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/indexers/{indexer}/resources:
+    get:
+      tags: [indexers]
+      operationId: indexerListResources
+      summary: List or search resources of an indexer
+      parameters:
+        - $ref: '#/components/parameters/Indexer'
+        - name: category
+          in: query
+          description: Category id as returned by the categories endpoint.
+          schema: {type: string}
+        - name: keyword
+          in: query
+          schema: {type: string}
+        - name: page
+          in: query
+          schema: {type: integer, format: uint32, minimum: 0}
+        - name: pageSize
+          in: query
+          schema: {type: integer, format: uint32, minimum: 0}
+        - name: free
+          in: query
+          description: Only list free-leech resources.
+          schema: {type: boolean}
+        - name: standards
+          in: query
+          description: Resolution filter, repeat the parameter for several values.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [8K, 4K, 1080p, 1080i, 720p, SD]
+      responses:
+        '200':
+          description: One page of resources.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListResult'
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/IndexerNotFound'}
+        '503': {$ref: '#/components/responses/AuthUnavailable'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/indexers/{indexer}/resources/{resource}:
+    get:
+      tags: [indexers]
+      operationId: indexerResourceDetail
+      summary: Get a resource's details, including its file list
+      parameters:
+        - $ref: '#/components/parameters/Indexer'
+        - $ref: '#/components/parameters/Resource'
+      responses:
+        '200':
+          description: Resource details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceDetail'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/IndexerNotFound'}
+        '503': {$ref: '#/components/responses/AuthUnavailable'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/indexers/{indexer}/resources/{resource}/download:
+    post:
+      tags: [indexers, downloads]
+      operationId: indexerDownload
+      summary: Start downloading a resource
+      description: |
+        Fetches the torrent, records it as a download and hands it to the
+        indexer's downloader. No request body.
+      parameters:
+        - $ref: '#/components/parameters/Indexer'
+        - $ref: '#/components/parameters/Resource'
+      responses:
+        '200':
+          description: Download started.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: {type: string, enum: [started]}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/IndexerNotFound'}
+        '409':
+          description: The torrent is already tracked (duplicate download).
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '503': {$ref: '#/components/responses/AuthUnavailable'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/indexers/{indexer}/registerSearch:
+    post:
+      tags: [indexers]
+      operationId: indexerRegisterSearch
+      summary: Register an RSS search for an indexer
+      description: Saves a search text that the indexer's RSS job matches new items against.
+      parameters:
+        - $ref: '#/components/parameters/Indexer'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text, action]
+              properties:
+                text: {type: string, minLength: 1}
+                action:
+                  type: string
+                  enum: [download, notification]
+                  description: Download matches automatically, or only notify.
+      responses:
+        '200':
+          description: Search registered.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: {type: string, enum: [ok]}
+        '400':
+          description: Malformed body, missing `text`/`action`, or invalid `action`.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/IndexerNotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/AuthUnavailable'}
+  /api/v1/downloaders:
+    get:
+      tags: [downloads]
+      operationId: listDownloaders
+      summary: List downloaders with their task counts
+      description: Sorted by name. The body is `null` when no downloader is configured.
+      responses:
+        '200':
+          description: Downloaders.
+          content:
+            application/json:
+              schema:
+                type: array
+                nullable: true
+                items:
+                  $ref: '#/components/schemas/DownloaderInfo'
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/AuthUnavailable'}
+  /api/v1/downloaders/{downloader}:
+    get:
+      tags: [downloads]
+      operationId: getDownloaderStatuses
+      summary: List a downloader's tasks in one state
+      parameters:
+        - name: downloader
+          in: path
+          required: true
+          description: Downloader name as returned by `GET /api/v1/downloaders`.
+          schema: {type: string}
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [downloading, seeding, stopped, planned, failed]
+      responses:
+        '200':
+          description: State counts plus the tasks in the requested state, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloaderStatus'
+        '400':
+          description: '`state` is missing or invalid.'
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404':
+          description: Downloader not found.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/AuthUnavailable'}
+  /api/v1/download/{id}/organize:
+    post:
+      tags: [downloads]
+      operationId: organizeDownload
+      summary: Act on a download's organize plan
+      description: |
+        All parameters are query parameters; there is no request body.
+
+        - `accept_plan`: execute the stored plan through the organizer service.
+          400 when no plan exists. Answers 200 even when some moves failed; then
+          `failed` lists them and the download becomes `ExecutePlanFailed`.
+        - `manual_organized`: mark the download as organized by hand.
+        - `re_plan`: ask the organizer for a new plan, optionally steered by
+          `user_hint`. On organizer failure the state becomes `CreatePlanFailed`
+          and 500 is returned.
+      parameters:
+        - $ref: '#/components/parameters/DownloadId'
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [accept_plan, manual_organized, re_plan]
+        - name: user_hint
+          in: query
+          description: Only used by `re_plan`.
+          schema: {type: string}
+      responses:
+        '200':
+          description: Action performed.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    description: '`accept_plan` succeeded or `manual_organized`.'
+                    required: [status]
+                    properties:
+                      status:
+                        type: string
+                        enum:
+                          - organization completed successfully
+                          - marked as manually organized
+                  - type: object
+                    description: '`accept_plan` finished with failed moves.'
+                    required: [status, failed]
+                    properties:
+                      status:
+                        type: string
+                        enum: [organization partially completed]
+                      failed: {$ref: '#/components/schemas/ExecuteResponse'}
+                  - type: object
+                    description: '`re_plan` succeeded.'
+                    required: [status, plan]
+                    properties:
+                      status:
+                        type: string
+                        enum: [re_plan completed successfully]
+                      plan: {$ref: '#/components/schemas/PlanResponse'}
+        '400':
+          description: Missing or invalid `action`, or `accept_plan` without a stored plan.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/DownloadNotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/AuthUnavailable'}
+  /api/v1/download/{id}:
+    delete:
+      tags: [downloads]
+      operationId: deleteDownload
+      summary: Delete a download's torrent
+      parameters:
+        - $ref: '#/components/parameters/DownloadId'
+      responses:
+        '200':
+          description: Torrent deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: {type: string, enum: [deleted]}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404':
+          description: Download or its downloader not found.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/AuthUnavailable'}
+  /api/v1/image:
+    get:
+      tags: [utility]
+      operationId: image
+      summary: Proxy an indexer image
+      description: |
+        Fetches an image from the one allowed upstream host (`img.m-team.cc`,
+        https, path under `/images/`), adding the required Referer. Redirects
+        off that host are not followed. Images over 10 MiB are rejected with 502 when the
+        upstream declares its length (truncated at 10 MiB only when the length
+        is unknown).
+      parameters:
+        - name: url
+          in: query
+          required: true
+          description: Absolute https URL of the image.
+          schema: {type: string, format: uri}
+      responses:
+        '200':
+          description: The image bytes.
+          headers:
+            Cache-Control:
+              schema: {type: string, example: 'public, max-age=86400'}
+            X-Content-Type-Options:
+              schema: {type: string, example: nosniff}
+          content:
+            image/*:
+              schema: {type: string, format: binary}
+        '400':
+          description: '`url` is missing or not an allowed image URL.'
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404':
+          description: The upstream answered 404.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '502':
+          description: Upstream failed, answered non-200, returned a non-image or an oversized image.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '503': {$ref: '#/components/responses/AuthUnavailable'}
+  /auth/login:
+    get:
+      tags: [auth]
+      operationId: authLogin
+      summary: Start the OIDC login
+      description: |
+        Browser endpoint. Sets the `autoget_auth_state` cookie and redirects to
+        the provider. Only registered when auth is enabled.
+      security: []
+      parameters:
+        - name: redirect
+          in: query
+          description: Same-origin path to return to after login. Anything else becomes `/`.
+          schema: {type: string, maxLength: 2048}
+      responses:
+        '302':
+          description: Redirect to the provider's authorization endpoint.
+          headers:
+            Location: {schema: {type: string}}
+            Set-Cookie: {schema: {type: string}}
+        '500':
+          description: State generation failed.
+          content:
+            text/plain: {schema: {type: string}}
+        '503':
+          description: OIDC provider unavailable.
+          content:
+            text/plain: {schema: {type: string}}
+  /auth/callback:
+    get:
+      tags: [auth]
+      operationId: authCallback
+      summary: OIDC redirect target
+      description: |
+        Browser endpoint the provider redirects to. On success it renders a
+        small HTML page whose script stores the tokens and redirects. Requires
+        the state cookie set by `/auth/login`.
+      security: []
+      parameters:
+        - {name: code, in: query, schema: {type: string}}
+        - {name: state, in: query, schema: {type: string}}
+        - {name: error, in: query, description: Error reported by the provider., schema: {type: string}}
+      responses:
+        '200':
+          description: HTML page that completes the login in the browser.
+          content:
+            text/html: {schema: {type: string}}
+        '400':
+          description: Invalid or missing state.
+          content:
+            text/plain: {schema: {type: string}}
+        '403':
+          description: The account lacks the required role; renders the access-denied page.
+          content:
+            text/html: {schema: {type: string}}
+        '500':
+          description: Token serialisation failed.
+          content:
+            text/plain: {schema: {type: string}}
+        '502':
+          description: The provider reported an error or the code exchange failed.
+          content:
+            text/plain: {schema: {type: string}}
+        '503':
+          description: OIDC provider unavailable.
+          content:
+            text/plain: {schema: {type: string}}
+  /auth/denied:
+    get:
+      tags: [auth]
+      operationId: authDenied
+      summary: Access-denied page
+      description: |
+        Landing page for sessions rejected with 403. Redirects to `/` when no
+        `required_role` is configured.
+      security: []
+      responses:
+        '302':
+          description: No role requirement; redirect to `/`.
+          headers:
+            Location: {schema: {type: string}}
+        '403':
+          description: HTML access-denied page.
+          content:
+            text/html: {schema: {type: string}}
+  /auth/refresh:
+    post:
+      tags: [auth]
+      operationId: authRefresh
+      summary: Exchange a refresh token for new tokens
+      description: |
+        Unauthenticated, so rate limited: 10 requests/min per client IP (burst
+        10) plus a global limit of 60 requests/min (burst 60). Request bodies
+        over 8 KiB are rejected with 400.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: {type: string, minLength: 1}
+      responses:
+        '200':
+          description: New tokens.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TokenResponse'}
+        '400':
+          description: Malformed, oversized or empty body (`refresh_token is required`).
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '401':
+          description: The grant is expired, revoked or used; the user must log in again.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '429':
+          description: Rate limit exceeded.
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying.
+              schema: {type: integer, minimum: 1}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '503':
+          description: Provider unavailable; keep the session and retry later.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Access token from the OIDC login, verified as a JWT whose audience
+        includes the client id. Not checked when `auth.disabled` is set.
+  parameters:
+    Indexer:
+      name: indexer
+      in: path
+      required: true
+      description: Indexer name as returned by `GET /api/v1/indexers`.
+      schema: {type: string}
+    Resource:
+      name: resource
+      in: path
+      required: true
+      description: Resource id within the indexer.
+      schema: {type: string}
+    DownloadId:
+      name: id
+      in: path
+      required: true
+      description: Download id (the torrent hash).
+      schema: {type: string}
+  responses:
+    Unauthorized:
+      description: Missing, malformed or expired bearer token. Empty body.
+    Forbidden:
+      description: Valid token without the required role. Empty body.
+    AuthUnavailable:
+      description: OIDC provider unreachable, token could not be checked. Empty body.
+    BadRequest:
+      description: Invalid request.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    IndexerNotFound:
+      description: Indexer not found (`Indexer not found`), or a not-found error from the indexer.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    DownloadNotFound:
+      description: Download not found.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    InternalError:
+      description: Internal error.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Error:
+      description: |
+        Error reported by the indexer; the status code is whatever the indexer
+        chose (typically 4xx, 5xx or 502 for upstream failures).
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: {type: string}
+    Category:
+      type: object
+      required: [id, name]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        subCategories:
+          type: array
+          items: {$ref: '#/components/schemas/Category'}
+    Pagination:
+      type: object
+      required: [page, totalPages, pageSize, total]
+      properties:
+        page: {type: integer}
+        totalPages: {type: integer}
+        pageSize: {type: integer}
+        total: {type: integer}
+    VideoDB:
+      type: object
+      required: [db, link]
+      properties:
+        db: {type: string}
+        link: {type: string}
+        rating: {type: string}
+    ListResourceItem:
+      type: object
+      required: [id, title, category, size, seeders, leechers]
+      properties:
+        id: {type: string}
+        title: {type: string}
+        title2: {type: string}
+        createdDate: {type: integer, format: int64, description: Unix timestamp.}
+        category: {type: string}
+        size: {type: integer, format: uint64, description: Bytes.}
+        resolution: {type: string}
+        seeders: {type: integer}
+        leechers: {type: integer}
+        dbs:
+          type: array
+          items: {$ref: '#/components/schemas/VideoDB'}
+        images:
+          type: array
+          items: {type: string}
+        free: {type: boolean}
+        labels:
+          type: array
+          items: {type: string}
+        detailsUrl: {type: string}
+    ListResult:
+      type: object
+      required: [pagination, resources]
+      properties:
+        pagination: {$ref: '#/components/schemas/Pagination'}
+        resources:
+          type: array
+          nullable: true
+          items: {$ref: '#/components/schemas/ListResourceItem'}
+    File:
+      type: object
+      required: [name, size]
+      properties:
+        name: {type: string}
+        size: {type: integer, format: uint64}
+    ResourceDetail:
+      description: A list item plus detail fields.
+      allOf:
+        - $ref: '#/components/schemas/ListResourceItem'
+        - type: object
+          properties:
+            mediainfo: {type: string}
+            description: {type: string}
+            files:
+              type: array
+              items: {$ref: '#/components/schemas/File'}
+            metadata:
+              type: object
+              additionalProperties: true
+    DownloaderInfo:
+      type: object
+      required: [name, count_of_downloading, count_of_planned, count_of_failed]
+      properties:
+        name: {type: string}
+        count_of_downloading: {type: integer, format: int64}
+        count_of_planned: {type: integer, format: int64}
+        count_of_failed: {type: integer, format: int64}
+    StateCounts:
+      type: object
+      required: [count_of_downloading, count_of_planned, count_of_failed]
+      properties:
+        count_of_downloading: {type: integer, format: int64}
+        count_of_planned: {type: integer, format: int64}
+        count_of_failed: {type: integer, format: int64}
+    PlanAction:
+      type: object
+      required: [file, action, target]
+      properties:
+        file: {type: string}
+        action: {type: string, enum: [move, skip]}
+        target: {type: string, nullable: true, description: Null for `skip`.}
+    PlanResponse:
+      type: object
+      required: [plan, error]
+      properties:
+        plan:
+          type: array
+          items: {$ref: '#/components/schemas/PlanAction'}
+        error: {type: string, nullable: true}
+    PlanFailed:
+      type: object
+      required: [file, action, target, reason]
+      properties:
+        file: {type: string}
+        action: {type: string}
+        target: {type: string, nullable: true}
+        reason: {type: string}
+    ExecuteResponse:
+      type: object
+      required: [failed_move]
+      properties:
+        failed_move:
+          type: array
+          items: {$ref: '#/components/schemas/PlanFailed'}
+    DownloadStatus:
+      description: |
+        A tracked download. Field names are the Go struct names (no JSON tags
+        exist on the model). The numeric states are enums: `State` 0 started,
+        1 seeding, 2 stopped, 3 deleted; `MoveState` 0 unmoved, 1 moved, 2
+        moving; `OrganizeState` 0 unplanned, 1 planned, 2 organized, 3 create
+        plan failed, 4 execute plan failed.
+      type: object
+      properties:
+        ID: {type: string, description: Torrent hash.}
+        CreatedAt: {type: string, format: date-time}
+        UpdatedAt: {type: string, format: date-time}
+        Downloader: {type: string}
+        DownloadProgress: {type: integer, description: In thousandths (0 to 1000).}
+        State: {type: integer, enum: [0, 1, 2, 3]}
+        UploadHistories:
+          type: object
+          nullable: true
+          description: Uploaded bytes by `YYYY-MM-DD`.
+          additionalProperties: {type: integer, format: int64}
+        Size: {type: integer, format: uint64}
+        ResIndexer: {type: string}
+        ResTitle: {type: string}
+        ResTitle2: {type: string}
+        Category: {type: string}
+        DetailsURL: {type: string}
+        FileList:
+          type: array
+          nullable: true
+          items: {type: string}
+        Metadata:
+          type: object
+          nullable: true
+          additionalProperties: true
+        MoveState: {type: integer, enum: [0, 1, 2]}
+        OrganizeState: {type: integer, enum: [0, 1, 2, 3, 4]}
+        OrganizePlans:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/PlanResponse'
+    DownloaderStatus:
+      type: object
+      required: [state, resources]
+      properties:
+        state: {$ref: '#/components/schemas/StateCounts'}
+        resources:
+          type: array
+          nullable: true
+          items: {$ref: '#/components/schemas/DownloadStatus'}
+    TokenResponse:
+      type: object
+      properties:
+        access_token: {type: string}
+        refresh_token: {type: string}
+        id_token: {type: string}
+        expires_in: {type: integer, format: int64, description: Access token lifetime in seconds.}
+        token_type: {type: string}

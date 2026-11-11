@@ -67,5 +67,6 @@ There is no versioned migration tooling.
 For detailed setup and API documentation, see:
 - [Frontend README](frontend/README.md)
 - [Backend README](backend/README.md) (configuration, auth, API)
+- [Backend OpenAPI spec](backend/openapi.yaml)
 - [Organizer README](organizer/README.md) (environment variables, API)
 - [docker-compose.example.yml](docker-compose.example.yml)

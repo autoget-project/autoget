@@ -161,6 +161,8 @@ overwrites (not appends to) `X-Forwarded-For`.
 
 ## API Documentation
 
+The full machine-readable spec (paths, parameters, request and response schemas, error codes, bearer auth) is [openapi.yaml](openapi.yaml). A test (`cmd/openapi_test.go`) fails if a registered route is missing from it. The summary below is informal.
+
 ### Base URL
 ```
 http://localhost:8080/api/v1
