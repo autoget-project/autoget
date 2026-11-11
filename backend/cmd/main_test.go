@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -84,4 +85,26 @@ func TestNewServerTimeouts(t *testing.T) {
 	assert.NotZero(t, srv.ReadHeaderTimeout)
 	assert.NotZero(t, srv.ReadTimeout)
 	assert.NotZero(t, srv.IdleTimeout)
+}
+
+func TestNewCronRecoversFromPanickingJob(t *testing.T) {
+	c := newCron()
+	ran := make(chan struct{})
+	_, err := c.AddFunc("@every 1s", func() {
+		defer close(ran)
+		panic("boom")
+	})
+	require.NoError(t, err)
+	c.Start()
+
+	select {
+	case <-ran:
+	case <-time.After(3 * time.Second):
+		t.Fatal("job did not run")
+	}
+	select {
+	case <-c.Stop().Done():
+	case <-time.After(3 * time.Second):
+		t.Fatal("cron did not stop")
+	}
 }

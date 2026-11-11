@@ -1,6 +1,7 @@
 package downloaders
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/robfig/cron/v3"
@@ -12,7 +13,8 @@ import (
 )
 
 type IDownloader interface {
-	RegisterCronjobs(cron *cron.Cron)
+	RegisterCronjobs(ctx context.Context, cron *cron.Cron)
+	Shutdown(ctx context.Context) error
 	RegisterDailySeedingChecker(cron *cron.Cron)
 	ProgressChecker()
 	TorrentsDir() string

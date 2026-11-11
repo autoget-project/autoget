@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -40,6 +41,49 @@ type Client struct {
 	inFlightMu      sync.Mutex
 	inFlight        map[string]bool
 	uploadSem       chan struct{}
+
+	// ctx is cancelled at shutdown; set by RegisterCronjobs before any
+	// background goroutine starts. nil means c.context().
+	ctx context.Context
+	wg  sync.WaitGroup
+}
+
+// progressInterval is how often the progress checker runs.
+var progressInterval = time.Minute
+
+func (c *Client) context() context.Context {
+	if c.ctx == nil {
+		return context.Background()
+	}
+	return c.ctx
+}
+
+// safely runs f and logs, rather than propagates, any panic so a bad response
+// cannot crash the whole process from a background goroutine.
+func (c *Client) safely(name string, f func()) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error().Str("name", c.name).Str("task", name).Interface("panic", r).
+				Bytes("stack", debug.Stack()).Msg("recovered from panic")
+		}
+	}()
+	f()
+}
+
+// Shutdown waits for the progress loop and in-flight uploads to finish, or for
+// ctx to expire. Cancel the context passed to RegisterCronjobs first.
+func (c *Client) Shutdown(ctx context.Context) error {
+	done := make(chan struct{})
+	go func() {
+		c.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func New(name string, cfg *config.DownloaderConfig, db *gorm.DB, organizerClient *organizer.Client) (*Client, error) {
@@ -87,13 +131,22 @@ func New(name string, cfg *config.DownloaderConfig, db *gorm.DB, organizerClient
 	}, nil
 }
 
-func (c *Client) RegisterCronjobs(cron *cron.Cron) {
+func (c *Client) RegisterCronjobs(ctx context.Context, cron *cron.Cron) {
+	c.ctx = ctx
 	c.RegisterDailySeedingChecker(cron)
 
+	c.wg.Add(1)
 	go func() {
+		defer c.wg.Done()
+		t := time.NewTicker(progressInterval)
+		defer t.Stop()
 		for {
-			time.Sleep(time.Minute)
-			c.ProgressChecker()
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				c.safely("progress checker", c.ProgressChecker)
+			}
 		}
 	}()
 }
@@ -101,13 +154,17 @@ func (c *Client) RegisterCronjobs(cron *cron.Cron) {
 func toTorrentsByHash(torrents []transmissionrpc.Torrent) map[string]*transmissionrpc.Torrent {
 	torrentsByHash := make(map[string]*transmissionrpc.Torrent)
 	for _, t := range torrents {
+		if t.HashString == nil {
+			logger.Warn().Msg("skipping torrent without hash")
+			continue
+		}
 		torrentsByHash[*t.HashString] = &t
 	}
 	return torrentsByHash
 }
 
 func (c *Client) ProgressChecker() {
-	torrents, err := c.client.TorrentGetAll(context.Background())
+	torrents, err := c.client.TorrentGetAll(c.context())
 	if err != nil {
 		logger.Error().Err(err).Str("name", c.name).Msg("failed to get all torrents")
 		return
@@ -118,9 +175,10 @@ func (c *Client) ProgressChecker() {
 	c.updateDownloadProgress(torrentsByHash)
 
 	// check if transmission is actively downloading.
-	stats, err := c.client.SessionStats(context.Background())
+	stats, err := c.client.SessionStats(c.context())
 	if err != nil {
 		logger.Err(err).Str("name", c.name).Msg("failed to get session stats")
+		return
 	}
 
 	// if downloadSpeed > 2M/s, consider transimission is still busy
@@ -145,6 +203,11 @@ func (c *Client) updateDownloadProgress(torrentsByHash map[string]*transmissionr
 	for _, s := range statuses {
 		t, ok := torrentsByHash[s.ID]
 		if !ok {
+			continue
+		}
+
+		if t.PercentDone == nil || t.Status == nil || t.TotalSize == nil {
+			logger.Warn().Str("name", c.name).Str("id", s.ID).Msg("torrent is missing fields; skipping progress update")
 			continue
 		}
 
@@ -207,7 +270,9 @@ func (c *Client) dispatchHTTPUpload(t *transmissionrpc.Torrent, s db.DownloadSta
 		}
 	}
 
+	c.wg.Add(1)
 	go func(torrent *transmissionrpc.Torrent, status db.DownloadStatus) {
+		defer c.wg.Done()
 		defer func() {
 			c.inFlightMu.Lock()
 			delete(c.inFlight, status.ID)
@@ -217,13 +282,13 @@ func (c *Client) dispatchHTTPUpload(t *transmissionrpc.Torrent, s db.DownloadSta
 		c.uploadSem <- struct{}{}
 		defer func() { <-c.uploadSem }()
 
-		c.uploadTorrentFiles(torrent, &status)
+		c.safely("upload", func() { c.uploadTorrentFiles(torrent, &status) })
 	}(t, s)
 }
 
 func (c *Client) uploadTorrentFiles(t *transmissionrpc.Torrent, s *db.DownloadStatus) {
 	files := make([]string, 0, len(t.Files))
-	ctx := context.Background()
+	ctx := c.context()
 
 	for _, f := range t.Files {
 		srcPath := filepath.Join(*t.DownloadDir, f.Name)
@@ -336,7 +401,7 @@ func (c *Client) RegisterDailySeedingChecker(cron *cron.Cron) {
 	}
 
 	jobID, err := cron.AddFunc("0 8 * * *", func() {
-		c.checkDailySeeding()
+		c.safely("daily seeding", c.checkDailySeeding)
 	})
 	if err != nil {
 		logger.Error().Err(err).Str("name", c.name).Msg("failed to add cron job")
@@ -348,7 +413,7 @@ func (c *Client) RegisterDailySeedingChecker(cron *cron.Cron) {
 func (c *Client) checkDailySeeding() {
 	logger.Info().Str("name", c.name).Msg("checking daily seeding")
 
-	torrents, err := c.client.TorrentGetAll(context.Background())
+	torrents, err := c.client.TorrentGetAll(c.context())
 	if err != nil {
 		logger.Error().Err(err).Str("name", c.name).Msg("failed to get all torrents")
 		return
@@ -366,7 +431,11 @@ func (c *Client) stopTorrents(torrents []transmissionrpc.Torrent) {
 
 	for _, t := range torrents {
 		// only check seeding torrents
-		if *t.Status != transmissionrpc.TorrentStatusSeed {
+		if t.Status == nil || *t.Status != transmissionrpc.TorrentStatusSeed {
+			continue
+		}
+		if t.HashString == nil || t.UploadedEver == nil || t.ID == nil {
+			logger.Warn().Str("name", c.name).Msg("seeding torrent is missing fields; skipping")
 			continue
 		}
 
@@ -374,12 +443,18 @@ func (c *Client) stopTorrents(torrents []transmissionrpc.Torrent) {
 		uploaded := *t.UploadedEver
 
 		ss, err := db.GetDownloadStatus(c.db, hash)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			logger.Error().Err(err).Str("name", c.name).Str("hash", hash).Msg("failed to get download status")
+			continue
+		}
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			ss.ID = hash
 			ss.Downloader = c.name
 			ss.State = db.DownloadSeeding
 			ss.UploadHistories = make(map[string]int64)
-			ss.ResTitle = *t.Name
+			if t.Name != nil {
+				ss.ResTitle = *t.Name
+			}
 			ss.AddToday(uploaded)
 			if err := db.SaveDownloadStatus(c.db, ss); err != nil {
 				logger.Error().Err(err).Str("name", c.name).Str("id", ss.ID).Msg("failed to save download status")
@@ -417,7 +492,7 @@ func (c *Client) stopTorrents(torrents []transmissionrpc.Torrent) {
 	}
 
 	// stop torrents
-	if err := c.client.TorrentStopIDs(context.Background(), stopTorIDs); err != nil {
+	if err := c.client.TorrentStopIDs(c.context(), stopTorIDs); err != nil {
 		logger.Error().Err(err).Str("name", c.name).Msg("failed to stop torrents")
 		return
 	}
@@ -444,6 +519,9 @@ func (c *Client) removeTorrents(torrentsByHash map[string]*transmissionrpc.Torre
 			continue
 		}
 
+		if t.ID == nil {
+			continue
+		}
 		deleteTorIDs = append(deleteTorIDs, *t.ID)
 		deleteStatusIDs = append(deleteStatusIDs, s.ID)
 	}
@@ -454,7 +532,7 @@ func (c *Client) removeTorrents(torrentsByHash map[string]*transmissionrpc.Torre
 	}
 
 	// delete torrents
-	if err := c.client.TorrentRemove(context.Background(), transmissionrpc.TorrentRemovePayload{IDs: deleteTorIDs, DeleteLocalData: true}); err != nil {
+	if err := c.client.TorrentRemove(c.context(), transmissionrpc.TorrentRemovePayload{IDs: deleteTorIDs, DeleteLocalData: true}); err != nil {
 		logger.Error().Err(err).Str("name", c.name).Msg("failed to delete torrents")
 		return
 	}
@@ -469,7 +547,7 @@ func (c *Client) TorrentsDir() string {
 }
 
 func (c *Client) DeleteTorrent(hash string) error {
-	torrents, err := c.client.TorrentGetAll(context.Background())
+	torrents, err := c.client.TorrentGetAll(c.context())
 	if err != nil {
 		logger.Error().Err(err).Str("name", c.name).Msg("failed to get all torrents")
 		return err
@@ -478,7 +556,7 @@ func (c *Client) DeleteTorrent(hash string) error {
 	// Find the torrent by hash
 	var torrentID int64
 	for _, t := range torrents {
-		if *t.HashString == hash {
+		if t.HashString != nil && t.ID != nil && *t.HashString == hash {
 			torrentID = *t.ID
 			break
 		}
@@ -491,10 +569,10 @@ func (c *Client) DeleteTorrent(hash string) error {
 	// If torrent is Moving, attempt to cancel upload sessions with organizer
 	if st, err := db.GetDownloadStatus(c.db, hash); err == nil && st != nil && st.MoveState == db.Moving {
 		for _, t := range torrents {
-			if *t.HashString == hash {
+			if t.HashString != nil && *t.HashString == hash {
 				for _, f := range t.Files {
 					upID := protocol.DeriveUploadID(hash, f.Name)
-					_ = c.organizerClient.CancelUpload(context.Background(), upID)
+					_ = c.organizerClient.CancelUpload(c.context(), upID)
 				}
 				break
 			}
@@ -502,7 +580,7 @@ func (c *Client) DeleteTorrent(hash string) error {
 	}
 
 	// Delete the torrent from Transmission
-	if err := c.client.TorrentRemove(context.Background(), transmissionrpc.TorrentRemovePayload{
+	if err := c.client.TorrentRemove(c.context(), transmissionrpc.TorrentRemovePayload{
 		IDs:             []int64{torrentID},
 		DeleteLocalData: true,
 	}); err != nil {

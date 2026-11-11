@@ -44,6 +44,8 @@ type answerPayload struct {
 type fakeTransmission struct {
 	reqs []*requestPayload
 	resp []any
+	// failMethods lists RPC methods that get an HTTP 500 without consuming a queued response.
+	failMethods map[string]bool
 }
 
 func (f *fakeTransmission) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -52,6 +54,11 @@ func (f *fakeTransmission) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	req := &requestPayload{}
 	_ = json.NewDecoder(r.Body).Decode(req)
 	f.reqs = append(f.reqs, req)
+
+	if f.failMethods[req.Method] {
+		http.Error(w, "boom", http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 

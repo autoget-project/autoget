@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -83,10 +84,11 @@ func (d *downloadersMock) DownloadDir() string {
 	return d.mockDownloadDir
 }
 
-func (d *downloadersMock) RegisterCronjobs(cron *cron.Cron)            {}
-func (d *downloadersMock) RegisterDailySeedingChecker(cron *cron.Cron) {}
-func (d *downloadersMock) ProgressChecker()                            {}
-func (d *downloadersMock) DeleteTorrent(hash string) error             { return nil }
+func (d *downloadersMock) RegisterCronjobs(ctx context.Context, cron *cron.Cron) {}
+func (d *downloadersMock) Shutdown(ctx context.Context) error                    { return nil }
+func (d *downloadersMock) RegisterDailySeedingChecker(cron *cron.Cron)           {}
+func (d *downloadersMock) ProgressChecker()                                      {}
+func (d *downloadersMock) DeleteTorrent(hash string) error                       { return nil }
 
 func testSetup(t *testing.T) (*Service, *gin.Engine, *indexerMock, *gorm.DB) {
 	t.Helper()

@@ -64,7 +64,10 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to create organizer client")
 	}
 
-	cronjob := cron.New()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	cronjob := newCron()
 	cronjob.Start()
 
 	downloaderMap := map[string]downloaders.IDownloader{}
@@ -74,7 +77,7 @@ func main() {
 			log.Fatal().Err(err).Msg("failed to create downloader")
 		}
 		downloaderMap[name] = downloader
-		downloader.RegisterCronjobs(cronjob)
+		downloader.RegisterCronjobs(ctx, cronjob)
 	}
 
 	indexerMap := map[string]indexers.IIndexer{}
@@ -99,7 +102,7 @@ func main() {
 
 	service := handlers.NewService(cfg, db, indexerMap, downloaderMap, oc)
 
-	authSvc, err := auth.New(context.Background(), cfg.Auth)
+	authSvc, err := auth.New(ctx, cfg.Auth)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to create auth service")
 	}
@@ -110,28 +113,46 @@ func main() {
 
 	srv := newServer(":"+cfg.Port, r)
 
+	serveErr := make(chan error, 1)
 	go func() {
 		log.Info().Str("addr", cfg.Port).Msg("server started")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal().Err(err).Msg("listen")
+			serveErr <- err
 		}
 	}()
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-	log.Info().Msg("Shutting down server...")
+	select {
+	case <-ctx.Done():
+		log.Info().Msg("Shutting down server...")
+	case err := <-serveErr:
+		log.Error().Err(err).Msg("listen")
+		stop()
+	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatal().Err(err).Msg("Server forced to shutdown")
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Error().Err(err).Msg("Server forced to shutdown")
+	}
+
+	// Wait for running cron jobs, then for downloader background work.
+	select {
+	case <-cronjob.Stop().Done():
+	case <-shutdownCtx.Done():
+		log.Warn().Msg("timed out waiting for cron jobs")
+	}
+	for name, d := range downloaderMap {
+		if err := d.Shutdown(shutdownCtx); err != nil {
+			log.Warn().Err(err).Str("downloader", name).Msg("downloader shutdown incomplete")
+		}
 	}
 
 	log.Info().Msg("Server exiting")
 }
 
 const (
+	shutdownTimeout = 10 * time.Second
+
 	// organizerClientTimeout is generous because /v1/plan runs a synchronous
 	// multi-stage AI + metadata pipeline (each AI call alone can take 60s).
 	organizerClientTimeout = 5 * time.Minute
@@ -151,4 +172,10 @@ func newServer(addr string, handler http.Handler) *http.Server {
 		ReadTimeout:       serverReadTimeout,
 		IdleTimeout:       serverIdleTimeout,
 	}
+}
+
+// newCron builds the scheduler with panic recovery so a panicking job is
+// logged instead of crashing the process.
+func newCron() *cron.Cron {
+	return cron.New(cron.WithChain(cron.Recover(cron.DefaultLogger)))
 }
