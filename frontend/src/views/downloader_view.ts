@@ -17,6 +17,14 @@ import {
 } from "../utils/api.ts";
 import { renderError } from "../components/error_alert.ts";
 import { formatBytes } from "../utils/format.ts";
+import {
+  downloadItemsEqual,
+  downloaderStatesEqual,
+  getMoveStateLabel,
+  getOrganizeStateLabel,
+  getTabBadgeColor,
+  getTabCount,
+} from "../utils/download_format.ts";
 import { externalLink } from "../utils/links.ts";
 import { createVisibilityPoller } from "../utils/polling";
 
@@ -127,8 +135,8 @@ export class DownloaderView extends LitElement {
       // Only update if data has actually changed or if it's the initial load
       if (
         this.initialLoad ||
-        !this.arraysEqual(this.downloadItems, resources) ||
-        !this.statesEqual(this.downloaderState, state)
+        !downloadItemsEqual(this.downloadItems, resources) ||
+        !downloaderStatesEqual(this.downloaderState, state)
       ) {
         this.downloadItems = resources;
         this.downloaderState = state;
@@ -147,112 +155,11 @@ export class DownloaderView extends LitElement {
     }
   }
 
-  private arraysEqual(a: DownloadItem[], b: DownloadItem[]): boolean {
-    if (a.length !== b.length) return false;
-
-    // Create a map for quick lookup by ID
-    const aMap = new Map(a.map((item) => [item.id, item]));
-    const bMap = new Map(b.map((item) => [item.id, item]));
-
-    // Check if all IDs match
-    if (aMap.size !== bMap.size) return false;
-
-    // Check each item's key properties
-    for (const [id, aItem] of aMap) {
-      const bItem = bMap.get(id);
-      if (!bItem) return false;
-
-      // Compare key properties that affect display
-      if (
-        aItem.download_progress !== bItem.download_progress ||
-        aItem.move_state !== bItem.move_state ||
-        aItem.organize_state !== bItem.organize_state ||
-        aItem.state !== bItem.state ||
-        aItem.updated_at !== bItem.updated_at ||
-        JSON.stringify(aItem.organize_plans) !== JSON.stringify(bItem.organize_plans)
-      ) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  private statesEqual(a: DownloaderState | null, b: DownloaderState | null): boolean {
-    if (!a && !b) return true;
-    if (!a || !b) return false;
-    return (
-      a.count_of_downloading === b.count_of_downloading &&
-      a.count_of_planned === b.count_of_planned &&
-      a.count_of_failed === b.count_of_failed
-    );
-  }
-
-  private getTabCount(tabId: string): number {
-    if (!this.downloaderState) return 0;
-
-    switch (tabId) {
-      case "downloading":
-        return this.downloaderState.count_of_downloading;
-      case "planned":
-        return this.downloaderState.count_of_planned;
-      case "failed":
-        return this.downloaderState.count_of_failed;
-      default:
-        return 0;
-    }
-  }
-
-  private getTabBadgeColor(tabId: string): string {
-    switch (tabId) {
-      case "downloading":
-        return "badge-success";
-      case "planned":
-        return "badge-info";
-      case "failed":
-        return "badge-error";
-      default:
-        return "badge-neutral";
-    }
-  }
-
   private handleTabChange(tabId: string) {
     if (this.activeTab !== tabId) {
       this.activeTab = tabId;
       this.initialLoad = true; // Reset for new tab
       this.loading = true;
-    }
-  }
-
-  private formatDate(dateString: string): string {
-    return new Date(dateString).toLocaleString();
-  }
-
-  private getMoveStateLabel(moveState: number): { label: string; color: string } {
-    switch (moveState) {
-      case 0: // UnMoved
-        return { label: "Unmoved", color: "warning" };
-      case 1: // Moved
-        return { label: "Moved", color: "success" };
-      default:
-        return { label: "Unknown", color: "neutral" };
-    }
-  }
-
-  private getOrganizeStateLabel(organizeState: number): { label: string; color: string } {
-    switch (organizeState) {
-      case 0: // Unplanned
-        return { label: "Unplanned", color: "neutral" };
-      case 1: // Planned
-        return { label: "Planned", color: "info" };
-      case 2: // Organized
-        return { label: "Organized", color: "success" };
-      case 3: // CreatePlanFailed
-        return { label: "Create Failed", color: "error" };
-      case 4: // ExecutePlanFailed
-        return { label: "Execute Failed", color: "error" };
-      default:
-        return { label: "Unknown", color: "neutral" };
     }
   }
 
@@ -477,18 +384,18 @@ export class DownloaderView extends LitElement {
                     : ""
                 }
                 <span
-                  class="badge badge-sm sm:badge-md badge-${this.getMoveStateLabel(item.move_state).color}"
+                  class="badge badge-sm sm:badge-md badge-${getMoveStateLabel(item.move_state).color}"
                 >
-                  ${this.getMoveStateLabel(item.move_state).label}
+                  ${getMoveStateLabel(item.move_state).label}
                 </span>
                 <span
-                  class="badge badge-sm sm:badge-md badge-${this.getOrganizeStateLabel(item.organize_state).color}"
+                  class="badge badge-sm sm:badge-md badge-${getOrganizeStateLabel(item.organize_state).color}"
                 >
-                  ${this.getOrganizeStateLabel(item.organize_state).label}
+                  ${getOrganizeStateLabel(item.organize_state).label}
                 </span>
               </div>
               <div class="mt-2 text-xs sm:text-sm text-base-content/60">
-                <p>Created: ${this.formatDate(item.created_at)}</p>
+                <p>Created: ${new Date(item.created_at).toLocaleString()}</p>
               </div>
             </div>
             <div
@@ -682,8 +589,8 @@ export class DownloaderView extends LitElement {
                 <div class="overflow-x-auto min-w-0 flex-1 scrollbar-none py-1">
                   <div role="tablist" class="tabs tabs-border flex-nowrap whitespace-nowrap">
                     ${this.tabs.map((tab) => {
-                      const count = this.getTabCount(tab.id);
-                      const badgeColor = this.getTabBadgeColor(tab.id);
+                      const count = getTabCount(this.downloaderState, tab.id);
+                      const badgeColor = getTabBadgeColor(tab.id);
                       return html`
                         <button
                           role="tab"

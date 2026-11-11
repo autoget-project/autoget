@@ -5,6 +5,7 @@ import { fetchIndexers, fetchIndexerCategories, errorMessage, type Category } fr
 import { renderError } from "../components/error_alert";
 import "../components/navbar.ts";
 import "../components/resource_list.ts";
+import { categoryLevelTitle, findCategoryPath, levelsForPath } from "../utils/categories";
 import { scrollableOnScroll } from "../utils/scroll_to_top";
 import globalStyles from "/src/index.css?inline";
 
@@ -123,35 +124,11 @@ export class SearchView extends LitElement {
       const categoryInPath = this.selectedCategoryPath.find((c) => c.id === this.currentCategory);
       if (!categoryInPath) {
         // Attempt to find the category in allCategories and set the path
-        const findCategoryAndPath = (
-          categories: Category[],
-          targetId: string,
-          currentPath: Category[],
-        ): Category[] | null => {
-          for (const cat of categories) {
-            const newPath = [...currentPath, cat];
-            if (cat.id === targetId) {
-              return newPath;
-            }
-            if (cat.subCategories) {
-              const subPath = findCategoryAndPath(cat.subCategories, targetId, newPath);
-              if (subPath) {
-                return subPath;
-              }
-            }
-          }
-          return null;
-        };
-        const newPath = findCategoryAndPath(this.allCategories, this.currentCategory, []);
+        const newPath = findCategoryPath(this.allCategories, this.currentCategory);
         if (newPath) {
           this.selectedCategoryPath = newPath;
           // Also update displayedCategoryLevels to reflect the path
-          this.displayedCategoryLevels = [];
-          let currentLevelCategories = this.allCategories;
-          for (let i = 0; i < newPath.length; i++) {
-            this.displayedCategoryLevels.push(currentLevelCategories);
-            currentLevelCategories = newPath[i].subCategories || [];
-          }
+          this.displayedCategoryLevels = levelsForPath(this.allCategories, newPath);
         } else {
           this.selectedCategoryPath = [];
           this.displayedCategoryLevels = [this.allCategories];
@@ -274,8 +251,7 @@ export class SearchView extends LitElement {
   }
 
   private renderCategoryLevel(categories: Category[], level: number): TemplateResult {
-    const levelTitle =
-      level === 0 ? "Main Category" : level === 1 ? "Sub Category" : "Tertiary Category";
+    const levelTitle = categoryLevelTitle(level);
     const selectedIdInLevel = this.selectedCategoryPath[level]?.id;
 
     return html`
