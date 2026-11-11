@@ -20,14 +20,36 @@ const contentSecurityPolicy = "default-src 'self'; " +
 	"frame-ancestors 'none'; " +
 	"form-action 'self'"
 
+// hstsValue pins the host to HTTPS for a year. No includeSubDomains or preload:
+// the policy is sticky in browsers, so it stays scoped to this host.
+const hstsValue = "max-age=31536000"
+
+// permissionsPolicy turns off powerful browser features the app never uses.
+const permissionsPolicy = "camera=(), microphone=(), geolocation=(), payment=()"
+
 // SecurityHeaders adds the baseline browser-facing response headers. It covers
 // the SPA and API responses alike.
-func SecurityHeaders() gin.HandlerFunc {
+//
+// Cross-Origin-Opener-Policy and Cross-Origin-Resource-Policy are same-origin:
+// the SPA, its assets and the /api/v1/image proxy are only ever loaded by the
+// app's own pages, and the OIDC login is a top-level redirect (no popup), so
+// neither header interferes with it.
+//
+// Strict-Transport-Security is sent only when hsts is true (the configured
+// public URL is https) or the request itself arrived over TLS. It is never
+// sent on plain HTTP, where browsers ignore it anyway.
+func SecurityHeaders(hsts bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		h := c.Writer.Header()
 		h.Set("Content-Security-Policy", contentSecurityPolicy)
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "no-referrer")
+		h.Set("Permissions-Policy", permissionsPolicy)
+		h.Set("Cross-Origin-Opener-Policy", "same-origin")
+		h.Set("Cross-Origin-Resource-Policy", "same-origin")
+		if hsts || (c.Request != nil && c.Request.TLS != nil) {
+			h.Set("Strict-Transport-Security", hstsValue)
+		}
 		c.Next()
 	}
 }

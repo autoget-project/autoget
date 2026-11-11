@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -30,11 +31,22 @@ import (
 // setupRouter wires the routes onto the engine. Only the API is guarded by
 // auth; the SPA shell and its assets must stay public because document
 // requests never carry the Bearer token held in localStorage.
-func setupRouter(r *gin.Engine, authSvc *auth.Service, setupAPI func(*gin.RouterGroup)) {
-	r.Use(handlers.SecurityHeaders())
+func setupRouter(r *gin.Engine, authSvc *auth.Service, hsts bool, setupAPI func(*gin.RouterGroup)) {
+	r.Use(handlers.SecurityHeaders(hsts))
 	authSvc.SetupRouter(r)
 	handlers.ServeStatic(r)
 	setupAPI(r.Group("/api/v1", authSvc.Middleware()))
+}
+
+// hstsEnabled reports whether Strict-Transport-Security should be sent: only
+// when auth is configured and enabled and its redirect_base_url is https. A nil
+// or disabled auth config never enables it.
+func hstsEnabled(cfg *auth.Config) bool {
+	if cfg == nil || cfg.Disabled {
+		return false
+	}
+	u, err := url.Parse(cfg.RedirectBaseURL)
+	return err == nil && u.Scheme == "https"
 }
 
 func main() {
@@ -110,7 +122,7 @@ func main() {
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
-	setupRouter(r, authSvc, service.SetupRouter)
+	setupRouter(r, authSvc, hstsEnabled(cfg.Auth), service.SetupRouter)
 
 	srv := newServer(":"+cfg.Port, r)
 

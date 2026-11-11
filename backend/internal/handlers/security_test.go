@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	tls_ "crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -24,7 +25,7 @@ func directive(csp, name string) string {
 func TestSecurityHeaders(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.Use(SecurityHeaders())
+	r.Use(SecurityHeaders(false))
 	r.GET("/assets/app.js", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	w := httptest.NewRecorder()
@@ -44,6 +45,31 @@ func TestSecurityHeaders(t *testing.T) {
 
 	assert.Equal(t, "nosniff", w.Header().Get("X-Content-Type-Options"))
 	assert.Equal(t, "no-referrer", w.Header().Get("Referrer-Policy"))
+	assert.Equal(t, "camera=(), microphone=(), geolocation=(), payment=()", w.Header().Get("Permissions-Policy"))
+	assert.Equal(t, "same-origin", w.Header().Get("Cross-Origin-Opener-Policy"))
+	assert.Equal(t, "same-origin", w.Header().Get("Cross-Origin-Resource-Policy"))
+	assert.Empty(t, w.Header().Get("Strict-Transport-Security"))
+}
+
+func TestSecurityHeadersHSTS(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	serve := func(hsts bool, tls bool) http.Header {
+		r := gin.New()
+		r.Use(SecurityHeaders(hsts))
+		r.GET("/", func(c *gin.Context) { c.Status(http.StatusOK) })
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		if tls {
+			req.TLS = &tls_.ConnectionState{}
+		}
+		r.ServeHTTP(w, req)
+		return w.Header()
+	}
+
+	assert.Equal(t, "max-age=31536000", serve(true, false).Get("Strict-Transport-Security"))
+	assert.Equal(t, "max-age=31536000", serve(false, true).Get("Strict-Transport-Security"))
+	assert.Empty(t, serve(false, false).Get("Strict-Transport-Security"))
 }
 
 // The headers must also cover responses produced by the 404 handler, which is
@@ -51,7 +77,7 @@ func TestSecurityHeaders(t *testing.T) {
 func TestSecurityHeadersOnNoRoute(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.Use(SecurityHeaders())
+	r.Use(SecurityHeaders(false))
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/some/deep/link", nil)

@@ -26,7 +26,7 @@ func TestServeStaticServesShellAndAssets(t *testing.T) {
 	writeFile(t, filepath.Join(root, "assets", "app.js"), "/*app*/")
 
 	r := gin.New()
-	r.Use(SecurityHeaders())
+	r.Use(SecurityHeaders(false))
 	serveStatic(r, root)
 
 	cases := []struct {

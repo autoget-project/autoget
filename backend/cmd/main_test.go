@@ -30,7 +30,7 @@ func TestSetupRouterProtectsOnlyAPI(t *testing.T) {
 	require.NotNil(t, authSvc)
 
 	r := gin.New()
-	setupRouter(r, authSvc, func(g *gin.RouterGroup) {
+	setupRouter(r, authSvc, false, func(g *gin.RouterGroup) {
 		g.GET("/ping", func(c *gin.Context) { c.Status(http.StatusOK) })
 	})
 
@@ -64,7 +64,7 @@ func TestSetupRouterWithoutAuth(t *testing.T) {
 	require.Nil(t, authSvc)
 
 	r := gin.New()
-	setupRouter(r, authSvc, func(g *gin.RouterGroup) {
+	setupRouter(r, authSvc, false, func(g *gin.RouterGroup) {
 		g.GET("/ping", func(c *gin.Context) { c.Status(http.StatusOK) })
 	})
 
@@ -107,4 +107,11 @@ func TestNewCronRecoversFromPanickingJob(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("cron did not stop")
 	}
+}
+
+func TestHSTSEnabled(t *testing.T) {
+	assert.False(t, hstsEnabled(nil))
+	assert.False(t, hstsEnabled(&auth.Config{Disabled: true, RedirectBaseURL: "https://a.example.com"}))
+	assert.False(t, hstsEnabled(&auth.Config{RedirectBaseURL: "http://a.example.com"}))
+	assert.True(t, hstsEnabled(&auth.Config{RedirectBaseURL: "https://a.example.com"}))
 }

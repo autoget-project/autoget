@@ -121,6 +121,12 @@ auth:
 - `redirect_base_url` is the externally reachable base URL of this app. In the
   local dev setup it is `http://127.0.0.1:8880` (the Caddy entrypoint), and
   Caddy must forward `/auth/*` to the backend.
+- The backend always sends CSP, `Permissions-Policy`, `Cross-Origin-Opener-Policy`
+  and `Cross-Origin-Resource-Policy` (both `same-origin`). It sends
+  `Strict-Transport-Security: max-age=31536000` only when auth is enabled and
+  `redirect_base_url` is `https://` (or the request arrives over TLS). HSTS is
+  sticky in browsers, so make sure that URL really serves HTTPS; a reverse
+  proxy may set it instead.
 - The backend only stores the client secret and a short-lived CSRF state; tokens
   live in the browser.
 

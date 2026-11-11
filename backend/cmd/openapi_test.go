@@ -42,7 +42,7 @@ func TestOpenAPISpecMatchesRoutes(t *testing.T) {
 
 	r := gin.New()
 	svc := handlers.NewService(nil, nil, nil, nil, nil)
-	setupRouter(r, authSvc, svc.SetupRouter)
+	setupRouter(r, authSvc, false, svc.SetupRouter)
 
 	registered := map[string]bool{}
 	for _, ri := range r.Routes() {
