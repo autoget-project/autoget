@@ -165,3 +165,140 @@ func TestStopTorrents_DBError(t *testing.T) {
 	assert.Zero(t, n, "no row may be written when the lookup fails")
 	assert.Empty(t, fake.reqs, "no torrent-stop request may be sent")
 }
+
+func TestSafeRel(t *testing.T) {
+	for _, ok := range []string{"a.mkv", "sub/a.mkv", "a/../b"} {
+		assert.NoError(t, safeRel(ok), ok)
+	}
+	for _, bad := range []string{"../x", "/abs", "a/../../x", "", ".."} {
+		assert.Error(t, safeRel(bad), bad)
+	}
+}
+
+func TestCopyFileAtomic(t *testing.T) {
+	dir := t.TempDir()
+	from := filepath.Join(dir, "src.bin")
+	require.NoError(t, os.WriteFile(from, []byte("payload"), 0o644))
+
+	target := filepath.Join(dir, "out", "nested", "dst.bin")
+	require.NoError(t, copyFileAtomic(context.Background(), from, target))
+	got, err := os.ReadFile(target)
+	require.NoError(t, err)
+	assert.Equal(t, "payload", string(got))
+	assert.NoFileExists(t, target+".part")
+}
+
+func TestCopyFileAtomic_FailureLeavesNothing(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "out", "dst.bin")
+
+	// missing source
+	require.Error(t, copyFileAtomic(context.Background(), filepath.Join(dir, "missing"), target))
+	assert.NoFileExists(t, target)
+	assert.NoFileExists(t, target+".part")
+
+	// cancelled context aborts mid-copy and cleans the .part file
+	from := filepath.Join(dir, "src.bin")
+	require.NoError(t, os.WriteFile(from, []byte("payload"), 0o644))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	require.ErrorIs(t, copyFileAtomic(ctx, from, target), context.Canceled)
+	assert.NoFileExists(t, target)
+	assert.NoFileExists(t, target+".part")
+}
+
+func TestCopyFinishedDownloads_RejectsUnsafePath(t *testing.T) {
+	d, err := db.SqliteForTest()
+	require.NoError(t, err)
+	tmp := t.TempDir()
+	downloadDir := filepath.Join(tmp, "download")
+	finishedDir := filepath.Join(tmp, "finished")
+	require.NoError(t, os.MkdirAll(downloadDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(tmp, "secret"), []byte("s"), 0o644))
+	require.NoError(t, d.Create(&db.DownloadStatus{ID: "h", Downloader: "t", State: db.DownloadSeeding, MoveState: db.UnMoved}).Error)
+
+	c := &Client{name: "t", db: d, cfg: &config.DownloaderConfig{Transmission: &config.TransmissionConfig{FinishedDir: finishedDir}},
+		inFlight: map[string]bool{}, uploadSem: make(chan struct{}, 1)}
+	hash := "h"
+	c.copyFinishedDownloads(map[string]*transmissionrpc.Torrent{"h": {
+		HashString: &hash, DownloadDir: &downloadDir,
+		Files: []transmissionrpc.TorrentFile{{Name: "../secret"}},
+	}})
+	c.wg.Wait()
+
+	got, err := db.GetDownloadStatus(d, "h")
+	require.NoError(t, err)
+	assert.Equal(t, db.UnMoved, got.MoveState)
+	assert.NoDirExists(t, finishedDir)
+}
+
+func TestCopyFinishedDownloads_LocalIsAsyncAndDeduped(t *testing.T) {
+	d, err := db.SqliteForTest()
+	require.NoError(t, err)
+	tmp := t.TempDir()
+	downloadDir := filepath.Join(tmp, "download")
+	finishedDir := filepath.Join(tmp, "finished")
+	require.NoError(t, os.MkdirAll(downloadDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(downloadDir, "f.txt"), []byte("data"), 0o644))
+	require.NoError(t, d.Create(&db.DownloadStatus{ID: "h", Downloader: "t", State: db.DownloadSeeding, MoveState: db.UnMoved}).Error)
+
+	c := &Client{name: "t", db: d, cfg: &config.DownloaderConfig{Transmission: &config.TransmissionConfig{FinishedDir: finishedDir}},
+		inFlight: map[string]bool{}, uploadSem: make(chan struct{}, 1)}
+
+	// Occupy the only worker slot so the copy cannot start: the call must
+	// still return immediately, and a second tick must not dispatch again.
+	c.uploadSem <- struct{}{}
+	hash := "h"
+	torrents := map[string]*transmissionrpc.Torrent{"h": {
+		HashString: &hash, DownloadDir: &downloadDir,
+		Files: []transmissionrpc.TorrentFile{{Name: "f.txt"}},
+	}}
+	c.copyFinishedDownloads(torrents)
+	c.copyFinishedDownloads(torrents)
+
+	got, err := db.GetDownloadStatus(d, "h")
+	require.NoError(t, err)
+	assert.Equal(t, db.Moving, got.MoveState)
+	assert.NoFileExists(t, filepath.Join(finishedDir, "h", "f.txt"))
+
+	<-c.uploadSem
+	c.wg.Wait()
+
+	got, err = db.GetDownloadStatus(d, "h")
+	require.NoError(t, err)
+	assert.Equal(t, db.Moved, got.MoveState)
+	assert.Equal(t, []string{"f.txt"}, []string(got.FileList))
+	assert.FileExists(t, filepath.Join(finishedDir, "h", "f.txt"))
+}
+
+func TestShutdown_CancelsQueuedCopy(t *testing.T) {
+	d, err := db.SqliteForTest()
+	require.NoError(t, err)
+	tmp := t.TempDir()
+	downloadDir := filepath.Join(tmp, "download")
+	finishedDir := filepath.Join(tmp, "finished")
+	require.NoError(t, os.MkdirAll(downloadDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(downloadDir, "f.txt"), []byte("data"), 0o644))
+	require.NoError(t, d.Create(&db.DownloadStatus{ID: "h", Downloader: "t", State: db.DownloadSeeding, MoveState: db.UnMoved}).Error)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	c := &Client{name: "t", db: d, ctx: ctx, cfg: &config.DownloaderConfig{Transmission: &config.TransmissionConfig{FinishedDir: finishedDir}},
+		inFlight: map[string]bool{}, uploadSem: make(chan struct{}, 1)}
+	c.uploadSem <- struct{}{} // never released: the worker stays queued
+	hash := "h"
+	c.copyFinishedDownloads(map[string]*transmissionrpc.Torrent{"h": {
+		HashString: &hash, DownloadDir: &downloadDir,
+		Files: []transmissionrpc.TorrentFile{{Name: "f.txt"}},
+	}})
+	cancel()
+
+	sctx, scancel := context.WithTimeout(context.Background(), time.Second)
+	defer scancel()
+	require.NoError(t, c.Shutdown(sctx))
+
+	// state stays resumable
+	got, err := db.GetDownloadStatus(d, "h")
+	require.NoError(t, err)
+	assert.Equal(t, db.Moving, got.MoveState)
+	assert.NoFileExists(t, filepath.Join(finishedDir, "h", "f.txt"))
+}

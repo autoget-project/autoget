@@ -387,6 +387,8 @@ func TestProgressChecker(t *testing.T) {
 	}
 
 	client.ProgressChecker()
+	// local copies run asynchronously
+	client.wg.Wait()
 
 	assert.Len(t, fake.reqs, 2)
 	assert.Equal(t, "torrent-get", fake.reqs[0].Method)

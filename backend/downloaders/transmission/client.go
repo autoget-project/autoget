@@ -250,20 +250,23 @@ func (c *Client) copyFinishedDownloads(torrentsByHash map[string]*transmissionrp
 			continue
 		}
 
+		if err := validateTorrentPaths(t); err != nil {
+			logger.Error().Err(err).Str("name", c.name).Str("id", s.ID).Msg("torrent has unsafe file path; skipping copy")
+			continue
+		}
+
 		if mode == "http" {
-			c.dispatchHTTPUpload(t, s)
+			c.dispatch(t, s, c.uploadTorrentFiles)
 		} else {
-			if c.copyTorrentFiles(t, &s) {
-				s.MoveState = db.Moved
-				if err := db.SaveDownloadStatus(c.db, &s); err != nil {
-					logger.Error().Err(err).Str("name", c.name).Str("id", s.ID).Msg("failed to save download status")
-				}
-			}
+			c.dispatch(t, s, c.copyTorrentFiles)
 		}
 	}
 }
 
-func (c *Client) dispatchHTTPUpload(t *transmissionrpc.Torrent, s db.DownloadStatus) {
+// dispatch runs work for one torrent on a background worker, bounded by
+// uploadSem and deduplicated by torrent ID via inFlight. The status is marked
+// Moving first so an interrupted transfer is picked up again after a restart.
+func (c *Client) dispatch(t *transmissionrpc.Torrent, s db.DownloadStatus, work func(*transmissionrpc.Torrent, *db.DownloadStatus)) {
 	c.inFlightMu.Lock()
 	if c.inFlight[s.ID] {
 		c.inFlightMu.Unlock()
@@ -289,16 +292,42 @@ func (c *Client) dispatchHTTPUpload(t *transmissionrpc.Torrent, s db.DownloadSta
 			c.inFlightMu.Unlock()
 		}()
 
-		c.uploadSem <- struct{}{}
-		defer func() { <-c.uploadSem }()
+		select {
+		case c.uploadSem <- struct{}{}:
+			defer func() { <-c.uploadSem }()
+		case <-c.context().Done():
+			return
+		}
 
-		c.safely("upload", func() { c.uploadTorrentFiles(torrent, &status) })
+		c.safely("transfer", func() { work(torrent, &status) })
 	}(t, s)
+}
+
+// safeRel rejects torrent file names that would escape their base directory.
+func safeRel(name string) error {
+	if !filepath.IsLocal(name) {
+		return fmt.Errorf("unsafe file path %q", name)
+	}
+	return nil
+}
+
+func validateTorrentPaths(t *transmissionrpc.Torrent) error {
+	for _, f := range t.Files {
+		if err := safeRel(f.Name); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *Client) uploadTorrentFiles(t *transmissionrpc.Torrent, s *db.DownloadStatus) {
 	files := make([]string, 0, len(t.Files))
 	ctx := c.context()
+
+	if err := validateTorrentPaths(t); err != nil {
+		logger.Error().Err(err).Str("name", c.name).Str("id", s.ID).Msg("rejecting torrent upload")
+		return
+	}
 
 	for _, f := range t.Files {
 		srcPath := filepath.Join(*t.DownloadDir, f.Name)
@@ -334,45 +363,89 @@ func (c *Client) uploadTorrentFiles(t *transmissionrpc.Torrent, s *db.DownloadSt
 	logger.Info().Str("name", c.name).Str("id", s.ID).Int("files", len(files)).Msg("successfully uploaded torrent files via HTTP")
 }
 
-func (c *Client) copyTorrentFiles(t *transmissionrpc.Torrent, s *db.DownloadStatus) bool {
+// copyTorrentFiles copies every file of t into FinishedDir/<id>/ and, once all
+// succeeded, marks the status Moved. On failure the status stays Moving and is
+// retried on a later tick.
+func (c *Client) copyTorrentFiles(t *transmissionrpc.Torrent, s *db.DownloadStatus) {
+	if err := validateTorrentPaths(t); err != nil {
+		logger.Error().Err(err).Str("name", c.name).Str("id", s.ID).Msg("rejecting torrent copy")
+		return
+	}
+
+	ctx := c.context()
 	files := []string{}
 	for _, f := range t.Files {
 		from := filepath.Join(*t.DownloadDir, f.Name)
 		target := filepath.Join(c.cfg.Transmission.FinishedDir, s.ID, f.Name)
 
-		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-			logger.Error().Err(err).Str("name", c.name).Msg("failed to create parent directory for copied file")
-			return false
-		}
-
-		if err := func() error {
-			fromFile, err := os.Open(from)
-			if err != nil {
-				return fmt.Errorf("failed to open file: %w", err)
-			}
-			defer func() { _ = fromFile.Close() }()
-
-			targetFile, err := os.Create(target)
-			if err != nil {
-				return fmt.Errorf("failed to create file: %w", err)
-			}
-			defer func() { _ = targetFile.Close() }()
-
-			_, err = io.Copy(targetFile, fromFile)
-			if err != nil {
-				return fmt.Errorf("failed to copy file: %w", err)
-			}
-			return nil
-		}(); err != nil {
-			logger.Error().Err(err).Str("name", c.name).Msg("failed to copy torrent file")
-			return false
+		if err := copyFileAtomic(ctx, from, target); err != nil {
+			logger.Error().Err(err).Str("name", c.name).Str("id", s.ID).Str("file", f.Name).Msg("failed to copy torrent file; will retry")
+			return
 		}
 
 		files = append(files, f.Name)
 	}
+
 	// add files based on path from transmission.
 	s.FileList = files
-	return true
+	s.MoveState = db.Moved
+	if err := db.SaveDownloadStatus(c.db, s); err != nil {
+		logger.Error().Err(err).Str("name", c.name).Str("id", s.ID).Msg("failed to save download status after copy")
+	}
+}
+
+// ctxReader aborts reads once ctx is cancelled so shutdown is not held up by
+// a large copy.
+type ctxReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (r ctxReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.r.Read(p)
+}
+
+// copyFileAtomic copies from to target via target+".part", fsyncs, then renames,
+// so target is either absent or complete. The .part file is removed on failure.
+func copyFileAtomic(ctx context.Context, from, target string) (err error) {
+	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+		return fmt.Errorf("failed to create parent directory: %w", err)
+	}
+
+	src, err := os.Open(from)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
+	}
+	defer func() { _ = src.Close() }()
+
+	part := target + ".part"
+	dst, err := os.Create(part)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = dst.Close()
+			_ = os.Remove(part)
+		}
+	}()
+
+	if _, err = io.Copy(dst, ctxReader{ctx: ctx, r: src}); err != nil {
+		return fmt.Errorf("failed to copy file: %w", err)
+	}
+	if err = dst.Sync(); err != nil {
+		return fmt.Errorf("failed to sync file: %w", err)
+	}
+	if err = dst.Close(); err != nil {
+		return fmt.Errorf("failed to close file: %w", err)
+	}
+	if err = os.Rename(part, target); err != nil {
+		return fmt.Errorf("failed to rename file: %w", err)
+	}
+	return nil
 }
 
 func (c *Client) createOrganizerPlan() {

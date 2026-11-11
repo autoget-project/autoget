@@ -67,6 +67,13 @@ func SqliteForTest() (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	// ":memory:" is per-connection; pin one connection so background
+	// goroutines see the same database as the test.
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
+	sqlDB.SetMaxOpenConns(1)
 	if err := migrate(db); err != nil {
 		return nil, err
 	}
