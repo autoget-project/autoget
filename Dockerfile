@@ -38,7 +38,7 @@ WORKDIR /src/backend
 RUN CGO_ENABLED=0 GOOS=linux go build -o autoget ./cmd/main.go
 
 # Stage 3: Deploy image
-FROM alpine:latest AS deploy
+FROM alpine:3.22 AS deploy
 
 # Install runtime dependencies
 RUN apk --no-cache add ca-certificates tzdata

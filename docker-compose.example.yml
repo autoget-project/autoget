@@ -54,6 +54,13 @@ services:
       - ./data/watch:/watch
       - ./data/downloads:/downloads
       - ./data/finished:/finished
+    healthcheck:
+      # The port here must match `port:` in config.yaml (and the mapping above).
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8888/"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
     depends_on:
       - postgres
       - organizer
@@ -64,6 +71,7 @@ services:
     restart: unless-stopped
     user: "1000:1000" # must be able to write to /finished and /media
     # Listens on 8000 by default (PORT unset); the backend reaches it at http://organizer:8000
+    # The image defines its own HEALTHCHECK (GET /healthz on $PORT).
     environment:
       DOWNLOAD_COMPLETED_DIR: /finished
       TARGET_DIR: /media

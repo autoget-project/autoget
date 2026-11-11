@@ -6,7 +6,7 @@
 # the resulting image stays well below 30MB.
 
 ARG GO_VERSION=1.27.4
-ARG ALPINE_VERSION=latest
+ARG ALPINE_VERSION=3.22
 ARG UID=99
 ARG GID=100
 
@@ -53,5 +53,8 @@ COPY --from=builder /out/organizer /usr/local/bin/organizer
 USER ${UID}:${GID}
 
 EXPOSE 8000
+
+# busybox wget ships with alpine; shell form so ${PORT} expands at run time.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s CMD wget -q -O /dev/null http://127.0.0.1:${PORT:-8000}/healthz || exit 1
 
 ENTRYPOINT ["organizer"]
