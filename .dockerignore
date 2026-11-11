@@ -1,0 +1,13 @@
+.git
+.github
+.local
+tmp
+**/node_modules
+frontend/dist
+backend/bin
+organizer/bin
+organizer/build
+**/*.db
+**/*.log
+**/.env*
+backend/config.yaml
