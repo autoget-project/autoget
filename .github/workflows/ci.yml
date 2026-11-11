@@ -104,6 +104,9 @@ jobs:
       - name: Lint check
         run: pnpm run lint
 
+      - name: Type check
+        run: pnpm run typecheck
+
       - name: Format check
         run: pnpm run fmt:check
 

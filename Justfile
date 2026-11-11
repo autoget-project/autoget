@@ -23,8 +23,8 @@ build-images:
     docker build --target deploy -t autoget:latest -f Dockerfile .
     docker build --target deploy -t organizer:latest -f Dockerfile.organizer .
 
-# Run linters for protocol, backend, organizer and frontend
-lint: lint-protocol lint-backend lint-organizer lint-frontend
+# Run linters for protocol, backend, organizer and frontend, plus frontend typecheck
+lint: lint-protocol lint-backend lint-organizer lint-frontend typecheck
 
 # Lint protocol code using golangci-lint
 lint-protocol:
