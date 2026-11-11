@@ -66,6 +66,24 @@ export class IndexerView extends LitElement {
     return Math.min(this.sidebarMaxWidth, Math.max(this.sidebarMinWidth, Math.round(width)));
   }
 
+  private persistSidebarWidth(): void {
+    localStorage.setItem(this.sidebarWidthStorageKey, String(this.sidebarWidth));
+  }
+
+  private handleSidebarResizeKeydown(e: KeyboardEvent): void {
+    let delta = 0;
+    if (e.key === "ArrowLeft") {
+      delta = -16;
+    } else if (e.key === "ArrowRight") {
+      delta = 16;
+    } else {
+      return;
+    }
+    e.preventDefault();
+    this.sidebarWidth = this.clampSidebarWidth(this.sidebarWidth + delta);
+    this.persistSidebarWidth();
+  }
+
   private handleSidebarResizeStart(e: PointerEvent): void {
     if (e.button !== 0) {
       return;
@@ -82,7 +100,7 @@ export class IndexerView extends LitElement {
       target.removeEventListener("pointermove", onMove);
       target.removeEventListener("pointerup", onEnd);
       target.removeEventListener("pointercancel", onEnd);
-      localStorage.setItem(this.sidebarWidthStorageKey, String(this.sidebarWidth));
+      this.persistSidebarWidth();
       this.isResizing = false;
     };
     target.addEventListener("pointermove", onMove);
@@ -249,8 +267,17 @@ export class IndexerView extends LitElement {
           <div
             class="hidden lg:block ${this.sidebarVisible ? "w-1.5" : "w-0"} shrink-0 cursor-col-resize select-none ${
               this.isResizing ? "bg-primary" : "hover:bg-primary/50"
-            } ${transitionClass}"
+            } focus-visible:bg-primary focus-visible:outline-none ${transitionClass}"
             style="touch-action: none;"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize sidebar"
+            aria-valuenow=${this.sidebarWidth}
+            aria-valuemin=${this.sidebarMinWidth}
+            aria-valuemax=${this.sidebarMaxWidth}
+            tabindex=${this.sidebarVisible ? "0" : "-1"}
+            aria-hidden=${this.sidebarVisible ? "false" : "true"}
+            @keydown=${this.handleSidebarResizeKeydown}
             @pointerdown=${this.handleSidebarResizeStart}
           ></div>
 

@@ -71,6 +71,39 @@ describe("indexer-view", () => {
     expect(document.title).toBe("AutoGet - mteam - Action - Page 3");
   });
 
+  it("resizes the sidebar with arrow keys, clamps and persists", async () => {
+    fetchCategories.mockResolvedValue([] as Category[]);
+    const el = await mount();
+    const sep = () => el.shadowRoot?.querySelector('[role="separator"]') as HTMLElement;
+    expect(sep().getAttribute("aria-valuenow")).toBe("256");
+    sep().dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    await el.updateComplete;
+    expect(sep().getAttribute("aria-valuenow")).toBe("272");
+    expect(localStorage.getItem("indexer-sidebar-width")).toBe("272");
+    for (let i = 0; i < 30; i++) {
+      sep().dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    }
+    await el.updateComplete;
+    expect(sep().getAttribute("aria-valuenow")).toBe("160");
+    for (let i = 0; i < 60; i++) {
+      sep().dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    }
+    await el.updateComplete;
+    expect(sep().getAttribute("aria-valuenow")).toBe("600");
+  });
+
+  it("makes the resize handle unfocusable when the sidebar is collapsed", async () => {
+    fetchCategories.mockResolvedValue([] as Category[]);
+    const el = await mount();
+    const sep = () => el.shadowRoot?.querySelector('[role="separator"]') as HTMLElement;
+    expect(sep().getAttribute("tabindex")).toBe("0");
+    expect(sep().getAttribute("aria-hidden")).toBe("false");
+    (el as unknown as { sidebarVisible: boolean }).sidebarVisible = false;
+    await el.updateComplete;
+    expect(sep().getAttribute("tabindex")).toBe("-1");
+    expect(sep().getAttribute("aria-hidden")).toBe("true");
+  });
+
   it("shows an error with Retry when categories fail to load", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     fetchCategories.mockRejectedValue(new Error("nope"));

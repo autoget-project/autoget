@@ -308,8 +308,9 @@ export class ResourceList extends LitElement {
     // Show loading spinner when fetching data
     if (this.isLoading) {
       return html`
-        <div class="flex justify-center items-center py-20">
-          <span class="loading loading-spinner loading-lg"></span>
+        <div class="flex justify-center items-center py-20" role="status" aria-live="polite">
+          <span class="loading loading-spinner loading-lg" aria-hidden="true"></span>
+          <span class="sr-only">Loading...</span>
         </div>
       `;
     }
@@ -322,7 +323,7 @@ export class ResourceList extends LitElement {
     if (!this.resources || !this.resources.resources || this.resources.resources.length === 0) {
       return html`
         <div class="flex justify-center items-center py-20">
-          <p class="text-base-content/60">No resources found</p>
+          <p class="text-base-content/60" aria-live="polite">No resources found</p>
         </div>
       `;
     }

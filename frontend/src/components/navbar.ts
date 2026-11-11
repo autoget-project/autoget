@@ -144,7 +144,7 @@ export class AppNavbar extends LitElement {
               : ""
           }
           <a href="/" class="btn btn-square btn-ghost btn-sm sm:btn-md shrink-0" aria-label="Home">
-            <img src="/icon.svg" alt="Icon" class="w-6 h-6 sm:w-8 sm:h-8" />
+            <img src="/icon.svg" alt="" class="w-6 h-6 sm:w-8 sm:h-8" />
           </a>
 
           <!-- Desktop Indexers scrollable tabs container -->

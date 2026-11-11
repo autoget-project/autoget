@@ -73,8 +73,9 @@ export class DownloadButton extends LitElement {
     if (this.isLoading) {
       // Show loading spinner
       return html`
-        <button class="btn btn-xs btn-info" disabled>
-          <span class="loading loading-spinner loading-xs"></span>
+        <button class="btn btn-xs btn-info" disabled role="status" aria-live="polite">
+          <span class="loading loading-spinner loading-xs" aria-hidden="true"></span>
+          <span class="sr-only">Loading...</span>
         </button>
       `;
     } else if (this.isAdded) {

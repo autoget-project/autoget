@@ -73,6 +73,7 @@ describe("download-button", () => {
     await el.updateComplete;
     expect(button(el).disabled).toBe(true);
     expect(el.shadowRoot?.querySelector(".loading")).not.toBeNull();
+    expect(el.shadowRoot?.querySelector("[role=status]")?.textContent).toContain("Loading...");
     button(el).click();
     expect(downloadResource).toHaveBeenCalledTimes(1);
     resolve();

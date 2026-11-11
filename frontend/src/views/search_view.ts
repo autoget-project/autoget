@@ -401,8 +401,13 @@ export class SearchView extends LitElement {
             ${
               this.isSearching
                 ? html`
-                    <div class="flex justify-center items-center py-8">
-                      <span class="loading loading-dots loading-lg"></span>
+                    <div
+                      class="flex justify-center items-center py-8"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <span class="loading loading-dots loading-lg" aria-hidden="true"></span>
+                      <span class="sr-only">Loading...</span>
                     </div>
                   `
                 : ""

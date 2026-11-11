@@ -636,8 +636,9 @@ export class DownloaderView extends LitElement {
         ${
           this.loading
             ? html`
-                <div class="flex justify-center items-center py-8">
-                  <span class="loading loading-spinner loading-lg"></span>
+                <div class="flex justify-center items-center py-8" role="status" aria-live="polite">
+                  <span class="loading loading-spinner loading-lg" aria-hidden="true"></span>
+                  <span class="sr-only">Loading...</span>
                 </div>
               `
             : this.error && this.downloadItems.length === 0
@@ -645,7 +646,7 @@ export class DownloaderView extends LitElement {
               : this.downloadItems.length === 0
                 ? html`
                     <div class="text-base-content/70">
-                      <p>${emptyMessages[this.activeTab as DownloadState]}</p>
+                      <p aria-live="polite">${emptyMessages[this.activeTab as DownloadState]}</p>
                     </div>
                   `
                 : html`
