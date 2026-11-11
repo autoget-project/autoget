@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/robfig/cron/v3"
@@ -564,6 +565,33 @@ func TestGetDownloaderStatuses(t *testing.T) {
 				assert.NotNil(t, response.Resources)
 			})
 		}
+	})
+
+	t.Run("failed state returns merged failed rows newest first", func(t *testing.T) {
+		_, router, _, testDB := testSetup(t)
+		base := time.Now().Add(-time.Hour)
+		rows := []*db.DownloadStatus{
+			{ID: "old-create", Downloader: "mock", MoveState: db.Moved, OrganizeState: db.CreatePlanFailed, CreatedAt: base},
+			{ID: "new-exec", Downloader: "mock", MoveState: db.Moved, OrganizeState: db.ExecutePlanFailed, CreatedAt: base.Add(30 * time.Minute)},
+			{ID: "mid-create", Downloader: "mock", MoveState: db.Moved, OrganizeState: db.CreatePlanFailed, CreatedAt: base.Add(10 * time.Minute)},
+			{ID: "decoy-planned", Downloader: "mock", MoveState: db.Moved, OrganizeState: db.Planned, CreatedAt: base.Add(40 * time.Minute)},
+		}
+		for _, r := range rows {
+			require.NoError(t, testDB.Create(r).Error)
+		}
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/downloaders/mock?state=failed", nil)
+		router.ServeHTTP(w, req)
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var response DownloaderStatusResponse
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+		ids := []string{}
+		for _, r := range response.Resources {
+			ids = append(ids, r.ID)
+		}
+		assert.Equal(t, []string{"new-exec", "mid-create", "old-create"}, ids)
 	})
 
 	t.Run("invalid state filter", func(t *testing.T) {

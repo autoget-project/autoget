@@ -319,24 +319,8 @@ func (s *Service) getDownloaderStatuses(c *gin.Context) {
 		// For planned, we want downloads that are moved and have been planned for organization
 		statuses, err = db.GetMovedAndOrganizeStateDownloadStatusByDownloader(s.db, downloaderName, db.Planned)
 	case "failed":
-		// For failed, we want downloads that have failed during either plan creation or execution
-		// Get both create_plan_failed and execute_plan_failed statuses
-		var createFailedStatuses, executeFailedStatuses []db.DownloadStatus
-
-		createFailedStatuses, err = db.GetMovedAndOrganizeStateDownloadStatusByDownloader(s.db, downloaderName, db.CreatePlanFailed)
-		if err != nil {
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
-		}
-
-		executeFailedStatuses, err = db.GetMovedAndOrganizeStateDownloadStatusByDownloader(s.db, downloaderName, db.ExecutePlanFailed)
-		if err != nil {
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
-		}
-
-		// Combine both lists
-		statuses = append(createFailedStatuses, executeFailedStatuses...)
+		// For failed, we want downloads that failed during either plan creation or execution
+		statuses, err = db.GetMovedAndOrganizeStatesDownloadStatusByDownloader(s.db, downloaderName, []db.OrganizeState{db.CreatePlanFailed, db.ExecutePlanFailed})
 	default:
 		c.JSON(400, gin.H{"error": "Invalid state. Valid states: downloading, seeding, stopped, planned, failed"})
 		return
@@ -353,11 +337,6 @@ func (s *Service) getDownloaderStatuses(c *gin.Context) {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-
-	// sort statuses by create date, latest , ..., earliest
-	slices.SortFunc(statuses, func(a, b db.DownloadStatus) int {
-		return b.CreatedAt.Compare(a.CreatedAt)
-	})
 
 	response := DownloaderStatusResponse{
 		State:     *stateCounts,

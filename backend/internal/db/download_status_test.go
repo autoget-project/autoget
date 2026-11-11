@@ -290,3 +290,34 @@ func TestDownloadStatus_DuplicateCreateTranslatesError(t *testing.T) {
 	err = d.Create(&DownloadStatus{ID: "dup"}).Error
 	assert.ErrorIs(t, err, gorm.ErrDuplicatedKey)
 }
+
+func TestGetDownloadStatuses_OrderAndInQuery(t *testing.T) {
+	d, err := SqliteForTest()
+	require.NoError(t, err)
+	base := time.Now().Add(-time.Hour)
+	rows := []*DownloadStatus{
+		{ID: "a-old-create", Downloader: "dl", MoveState: Moved, OrganizeState: CreatePlanFailed, CreatedAt: base},
+		{ID: "b-new-exec", Downloader: "dl", MoveState: Moved, OrganizeState: ExecutePlanFailed, CreatedAt: base.Add(30 * time.Minute)},
+		{ID: "c-mid-create", Downloader: "dl", MoveState: Moved, OrganizeState: CreatePlanFailed, CreatedAt: base.Add(10 * time.Minute)},
+		{ID: "d-planned", Downloader: "dl", MoveState: Moved, OrganizeState: Planned, CreatedAt: base.Add(40 * time.Minute)},
+		{ID: "f-tie-b", Downloader: "dl", MoveState: Moved, OrganizeState: CreatePlanFailed, CreatedAt: base.Add(20 * time.Minute)},
+		{ID: "f-tie-a", Downloader: "dl", MoveState: Moved, OrganizeState: ExecutePlanFailed, CreatedAt: base.Add(20 * time.Minute)},
+		{ID: "e-other", Downloader: "other", MoveState: Moved, OrganizeState: CreatePlanFailed, CreatedAt: base.Add(50 * time.Minute)},
+	}
+	for _, r := range rows {
+		require.NoError(t, d.Create(r).Error)
+	}
+
+	got, err := GetMovedAndOrganizeStatesDownloadStatusByDownloader(d, "dl", []OrganizeState{CreatePlanFailed, ExecutePlanFailed})
+	require.NoError(t, err)
+	ids := []string{}
+	for _, g := range got {
+		ids = append(ids, g.ID)
+	}
+	assert.Equal(t, []string{"b-new-exec", "f-tie-a", "f-tie-b", "c-mid-create", "a-old-create"}, ids)
+
+	single, err := GetMovedAndOrganizeStateDownloadStatusByDownloader(d, "dl", Planned)
+	require.NoError(t, err)
+	require.Len(t, single, 1)
+	assert.Equal(t, "d-planned", single[0].ID)
+}

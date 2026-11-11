@@ -101,13 +101,13 @@ func GetDownloadStatusByID(db *gorm.DB, id string) (*DownloadStatus, error) {
 
 func GetUnfinishedDownloadStatusByDownloader(db *gorm.DB, downloader string) ([]DownloadStatus, error) {
 	var ss []DownloadStatus
-	err := db.Where("downloader = ?", downloader).Where("state = ?", DownloadStarted).Find(&ss).Error
+	err := db.Where("downloader = ?", downloader).Where("state = ?", DownloadStarted).Order("created_at DESC, id ASC").Find(&ss).Error
 	return ss, err
 }
 
 func GetDownloadStatusByDownloaderAndState(db *gorm.DB, downloader string, state DownloadState) ([]DownloadStatus, error) {
 	var ss []DownloadStatus
-	err := db.Where("downloader = ?", downloader).Where("state = ?", state).Find(&ss).Error
+	err := db.Where("downloader = ?", downloader).Where("state = ?", state).Order("created_at DESC, id ASC").Find(&ss).Error
 	return ss, err
 }
 
@@ -124,8 +124,14 @@ func GetStoppedMovedDownloadStatusByDownloader(db *gorm.DB, downloader string) (
 }
 
 func GetMovedAndOrganizeStateDownloadStatusByDownloader(db *gorm.DB, downloader string, organizeState OrganizeState) ([]DownloadStatus, error) {
+	return GetMovedAndOrganizeStatesDownloadStatusByDownloader(db, downloader, []OrganizeState{organizeState})
+}
+
+// GetMovedAndOrganizeStatesDownloadStatusByDownloader returns moved, non-deleted statuses whose organize state is any of
+// the given states, newest first.
+func GetMovedAndOrganizeStatesDownloadStatusByDownloader(db *gorm.DB, downloader string, organizeStates []OrganizeState) ([]DownloadStatus, error) {
 	var ss []DownloadStatus
-	err := db.Where("downloader = ?", downloader).Where("state != ?", DownloadDeleted).Where("move_state = ?", Moved).Where("organize_state = ?", organizeState).Find(&ss).Error
+	err := db.Where("downloader = ?", downloader).Where("state != ?", DownloadDeleted).Where("move_state = ?", Moved).Where("organize_state IN ?", organizeStates).Order("created_at DESC, id ASC").Find(&ss).Error
 	return ss, err
 }
 
