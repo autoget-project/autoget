@@ -91,6 +91,13 @@ test-organizer:
 test-frontend:
     cd frontend && pnpm run test:run
 
+# Run tests with coverage reporting (no threshold) for all modules
+test-coverage:
+    cd protocol && go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out | tail -1
+    cd backend && CGO_ENABLED=0 LOCAL_TEST=1 go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out | tail -1
+    cd organizer && CGO_ENABLED=0 go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out | tail -1
+    cd frontend && pnpm run test:coverage
+
 # Run organizer end-to-end (E2E) tests; hits live LLM providers and costs money
 test-e2e:
     cd organizer && E2E_TEST=1 go test -v ./tests/e2e/...

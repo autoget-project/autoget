@@ -34,3 +34,7 @@ go.work.sum
 
 # Organizer build binary
 organizer/bin/
+
+# Coverage output
+coverage.out
+frontend/coverage/
