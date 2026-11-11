@@ -30,7 +30,7 @@ Configure the following environment variables before starting the service:
 
 | Variable | Required | Default / Example | Description |
 | :--- | :---: | :--- | :--- |
-| `PORT` | No | `8080` | HTTP service listening port |
+| `PORT` | No | `8000` | HTTP service listening port |
 | `DOWNLOAD_COMPLETED_DIR` | **Yes** | `/data/downloads/completed` | Path to downloaded files directory (source) |
 | `TARGET_DIR` | **Yes** | `/data/media` | Target root media library directory (must be writable) |
 | `JAV_ACTOR_FILE` | **Yes** | `/data/config/actor.json` | Path to the local actress alias mapping JSON |
@@ -44,7 +44,7 @@ Configure the following environment variables before starting the service:
 | `XAI_API_KEY` | Conditional | `xai-...` | Required when using Grok models |
 | `TPDB_API_TOKEN` | No | (empty) | ThePornDB API token; when set, the porn category queries real scene names via LLM function calling, otherwise the local naming chain is used |
 
-> **Note**: `TARGET_DIR` must contain required media subdirectories (e.g., `movie`, `tv_series`, `jav`, `book`, `music`, `photobook`, etc.). The startup routine validates that these directories exist and are writable.
+> **Note**: `TARGET_DIR` must contain required media subdirectories (all of them): `audio_book`, `book`, `music`, `music_video`, `photobook`, `movie`, `anim_movie`, `tv_series`, `anim_tv_series`, `porn`, `porn_vr`, `jav`, `jav_vr`, `madou`. The startup routine validates that every one exists and is writable, and exits otherwise. Create them with `mkdir -p $TARGET_DIR/{audio_book,book,music,music_video,photobook,movie,anim_movie,tv_series,anim_tv_series,porn,porn_vr,jav,jav_vr,madou}`.
 
 ### Building & Running Locally
 
@@ -71,7 +71,7 @@ just build-images
 # Run the container
 docker run -d \
   --name autoget-organizer \
-  -p 8080:8080 \
+  -p 8000:8000 \
   -e DOWNLOAD_COMPLETED_DIR=/downloads \
   -e TARGET_DIR=/media \
   -e JAV_ACTOR_FILE=/config/actor.json \

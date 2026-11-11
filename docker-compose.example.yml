@@ -1,0 +1,111 @@
+# Example single-host deployment of AutoGet.
+#
+#   cp docker-compose.example.yml docker-compose.yml
+#   mkdir -p config organizer-config data/{watch,downloads,finished}
+#   mkdir -p data/media/{audio_book,book,music,music_video,photobook,movie,anim_movie,tv_series,anim_tv_series,porn,porn_vr,jav,jav_vr,madou}
+#   cp backend/example.config.yaml config/config.yaml   # then edit, see below
+#   docker compose up -d
+#
+# Everything marked CHANGE_ME is a placeholder: replace it, and keep real
+# secrets out of version control (use an .env file or Docker secrets).
+#
+# Shared paths (backend, transmission and organizer must see the same files):
+#   /watch      .torrent files written by the backend, picked up by Transmission
+#   /downloads  Transmission download dir. This image defaults to
+#               /downloads/complete (staging in /downloads/incomplete); the backend
+#               uses the path Transmission reports, so only the mount must match.
+#   /finished   backend copies completed downloads here; organizer reads from here
+#   /media      organizer's library root; it refuses to start unless ALL category
+#               sub-directories exist (see the mkdir above / organizer/README.md)
+#
+# The matching backend config (config/config.yaml) must contain:
+#   port: 8888
+#   pg_dsn: user=autoget password=CHANGE_ME dbname=autoget host=postgres port=5432 sslmode=disable
+#   auth: ...                      # REQUIRED, see backend/README.md
+#   organizer_service: http://organizer:8000
+#   downloaders:
+#     transmission:
+#       transmission:
+#         url: http://transmission:9091/transmission/rpc
+#         torrents_dir: /watch
+#         download_dir: /downloads
+#         finished_dir: /finished
+#   (plus mteam/nyaa/sukebei sections pointing "downloader:" at "transmission")
+#
+# Note: the backend does not publish a port by itself; it is exposed below so you
+# can put a TLS reverse proxy in front. The OIDC redirect_base_url must be the
+# externally reachable (HTTPS) URL of that proxy.
+
+services:
+  backend:
+    image: ghcr.io/autoget-project/autoget:latest
+    restart: unless-stopped
+    user: "1000:1000" # the image's built-in user
+    command: ["/app/autoget", "-c", "/config/config.yaml"]
+    ports:
+      - "8888:8888" # must match `port:` in config.yaml
+    volumes:
+      - ./config:/config:ro
+      - ./data/watch:/watch
+      - ./data/downloads:/downloads
+      - ./data/finished:/finished
+    depends_on:
+      - postgres
+      - organizer
+      - transmission
+
+  organizer:
+    image: ghcr.io/autoget-project/autoget-organizer:latest
+    restart: unless-stopped
+    user: "1000:1000" # must be able to write to /finished and /media
+    # Listens on 8000 by default (PORT unset); the backend reaches it at http://organizer:8000
+    environment:
+      DOWNLOAD_COMPLETED_DIR: /finished
+      TARGET_DIR: /media
+      JAV_ACTOR_FILE: /config/actor.json
+      FLARESOLVERR_URL: http://flaresolverr:8191
+      METATUBE_API_URL: http://metatube:8080
+      TMDB_API_KEY: CHANGE_ME
+      MODEL: "gemini:gemini-2.5-flash"
+      GEMINI_API_KEY: CHANGE_ME # or XAI_API_KEY with MODEL=xai:grok-4
+    volumes:
+      - ./data/finished:/finished
+      - ./data/media:/media
+      - ./organizer-config:/config
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: autoget
+      POSTGRES_PASSWORD: CHANGE_ME
+      POSTGRES_DB: autoget
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  transmission:
+    image: lscr.io/linuxserver/transmission:latest
+    restart: unless-stopped
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: Etc/UTC
+    volumes:
+      - ./transmission-config:/config
+      - ./data/downloads:/downloads
+      - ./data/watch:/watch # image's default settings already watch /watch
+    ports:
+      - "51413:51413" # BitTorrent peer port (needed to be connectable/seed)
+      - "51413:51413/udp"
+
+  # The organizer also needs FlareSolverr and a MetaTube server (see
+  # organizer/README.md). Provide them here or point the env vars above at
+  # existing instances, e.g.:
+  #
+  # flaresolverr:
+  #   image: ghcr.io/flaresolverr/flaresolverr:latest
+  # metatube:
+  #   image: ghcr.io/metatube-community/metatube-server:latest
+
+volumes:
+  pgdata:
