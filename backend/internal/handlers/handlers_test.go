@@ -20,6 +20,7 @@ import (
 	"github.com/autoget-project/autoget/backend/downloaders"
 	"github.com/autoget-project/autoget/backend/indexers"
 	"github.com/autoget-project/autoget/backend/internal/db"
+	"github.com/autoget-project/autoget/backend/internal/db/dbtest"
 	"github.com/autoget-project/autoget/backend/internal/errors"
 	"github.com/autoget-project/autoget/backend/internal/helpers"
 	"github.com/autoget-project/autoget/backend/organizer"
@@ -95,7 +96,7 @@ func testSetup(t *testing.T) (*Service, *gin.Engine, *indexerMock, *gorm.DB) {
 	t.Helper()
 
 	gin.SetMode(gin.TestMode)
-	testDB, err := db.SqliteForTest()
+	testDB, err := dbtest.SqliteForTest()
 	require.NoError(t, err)
 
 	m := &indexerMock{

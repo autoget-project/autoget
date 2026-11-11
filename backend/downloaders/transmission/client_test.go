@@ -21,6 +21,7 @@ import (
 
 	"github.com/autoget-project/autoget/backend/downloaders/config"
 	"github.com/autoget-project/autoget/backend/internal/db"
+	"github.com/autoget-project/autoget/backend/internal/db/dbtest"
 	"github.com/autoget-project/autoget/backend/organizer"
 )
 
@@ -98,7 +99,7 @@ func TestCheckDailySeeding(t *testing.T) {
 		serv.Close()
 	})
 
-	d, err := db.SqliteForTest()
+	d, err := dbtest.SqliteForTest()
 	require.NoError(t, err)
 
 	conf := &config.DownloaderConfig{
@@ -266,7 +267,7 @@ func TestProgressChecker(t *testing.T) {
 		serv.Close()
 	})
 
-	d, err := db.SqliteForTest()
+	d, err := dbtest.SqliteForTest()
 	require.NoError(t, err)
 
 	tmpDir, err := os.MkdirTemp("", "autoget-test")
@@ -450,7 +451,7 @@ func TestProgressChecker(t *testing.T) {
 }
 
 func TestCreateOrganizerPlan(t *testing.T) {
-	d, err := db.SqliteForTest()
+	d, err := dbtest.SqliteForTest()
 	require.NoError(t, err)
 
 	// Create fake organizer server
@@ -593,7 +594,7 @@ func TestClient_HTTPUploadMode(t *testing.T) {
 	orgClient, err := organizer.NewClient(ts.URL, ts.Client())
 	require.NoError(t, err)
 
-	d, err := db.SqliteForTest()
+	d, err := dbtest.SqliteForTest()
 	require.NoError(t, err)
 
 	cfg := &config.DownloaderConfig{

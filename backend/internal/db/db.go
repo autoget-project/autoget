@@ -5,7 +5,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/glebarez/sqlite"
 	zlog "github.com/rs/zerolog/log"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -48,7 +47,7 @@ func Pg(dsn string) (*gorm.DB, error) {
 		return nil, err
 	}
 	configurePool(sqlDB)
-	if err := migrate(db); err != nil {
+	if err := Migrate(db); err != nil {
 		return nil, err
 	}
 	return db, nil
@@ -62,25 +61,14 @@ func configurePool(sqlDB *sql.DB) {
 	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
 }
 
-func SqliteForTest() (*gorm.DB, error) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), gormConfig)
-	if err != nil {
-		return nil, err
-	}
-	// ":memory:" is per-connection; pin one connection so background
-	// goroutines see the same database as the test.
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-	sqlDB.SetMaxOpenConns(1)
-	if err := migrate(db); err != nil {
-		return nil, err
-	}
-	return db, nil
+// Config returns the shared gorm configuration, for callers that open their
+// own dialector (e.g. the dbtest package).
+func Config() *gorm.Config {
+	return gormConfig
 }
 
-func migrate(db *gorm.DB) error {
+// Migrate creates or updates all tables.
+func Migrate(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&DownloadStatus{},
 		&RSSSearch{},

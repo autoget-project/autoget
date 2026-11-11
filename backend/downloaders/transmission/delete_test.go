@@ -16,12 +16,13 @@ import (
 
 	"github.com/autoget-project/autoget/backend/downloaders/config"
 	"github.com/autoget-project/autoget/backend/internal/db"
+	"github.com/autoget-project/autoget/backend/internal/db/dbtest"
 	"github.com/autoget-project/autoget/backend/organizer"
 )
 
 func deleteTestClient(t *testing.T, fake *fakeTransmission, status *db.DownloadStatus) *Client {
 	t.Helper()
-	d, err := db.SqliteForTest()
+	d, err := dbtest.SqliteForTest()
 	require.NoError(t, err)
 	if status != nil {
 		require.NoError(t, d.Create(status).Error)

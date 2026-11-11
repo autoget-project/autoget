@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/autoget-project/autoget/backend/indexers"
-	"github.com/autoget-project/autoget/backend/internal/db"
+	"github.com/autoget-project/autoget/backend/internal/db/dbtest"
 )
 
 var (
@@ -173,7 +173,7 @@ func TestDownload(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	d, err := db.SqliteForTest()
+	d, err := dbtest.SqliteForTest()
 	require.NoError(t, err)
 	m := NewMTeam(&Config{
 		APIKey: apiKey,

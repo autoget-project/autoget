@@ -20,6 +20,7 @@ import (
 
 	"github.com/autoget-project/autoget/backend/downloaders/config"
 	"github.com/autoget-project/autoget/backend/internal/db"
+	"github.com/autoget-project/autoget/backend/internal/db/dbtest"
 	"github.com/autoget-project/autoget/backend/internal/notify"
 	"github.com/autoget-project/autoget/backend/organizer"
 )
@@ -37,7 +38,7 @@ func TestToTorrentsByHash_SkipsNilHash(t *testing.T) {
 }
 
 func TestStopTorrents_NilFields(t *testing.T) {
-	testDB, err := db.SqliteForTest()
+	testDB, err := dbtest.SqliteForTest()
 	require.NoError(t, err)
 	c := &Client{name: "t", db: testDB}
 	status := transmissionrpc.TorrentStatusSeed
@@ -47,7 +48,7 @@ func TestStopTorrents_NilFields(t *testing.T) {
 }
 
 func TestUpdateDownloadProgress_NilFields(t *testing.T) {
-	testDB, err := db.SqliteForTest()
+	testDB, err := dbtest.SqliteForTest()
 	require.NoError(t, err)
 	require.NoError(t, db.SaveDownloadStatus(testDB, &db.DownloadStatus{ID: "a", Downloader: "t", State: db.DownloadStarted}))
 	c := &Client{name: "t", db: testDB}
@@ -92,7 +93,7 @@ func newFakeClient(t *testing.T, fake *fakeTransmission, d *gorm.DB, conf *confi
 }
 
 func TestProgressChecker_SessionStatsError(t *testing.T) {
-	d, err := db.SqliteForTest()
+	d, err := dbtest.SqliteForTest()
 	require.NoError(t, err)
 
 	tmpDir := t.TempDir()
@@ -138,7 +139,7 @@ func TestProgressChecker_SessionStatsError(t *testing.T) {
 }
 
 func TestStopTorrents_DBError(t *testing.T) {
-	d, err := db.SqliteForTest()
+	d, err := dbtest.SqliteForTest()
 	require.NoError(t, err)
 
 	fake := &fakeTransmission{}
@@ -211,7 +212,7 @@ func TestCopyFileAtomic_FailureLeavesNothing(t *testing.T) {
 }
 
 func TestCopyFinishedDownloads_RejectsUnsafePath(t *testing.T) {
-	d, err := db.SqliteForTest()
+	d, err := dbtest.SqliteForTest()
 	require.NoError(t, err)
 	tmp := t.TempDir()
 	downloadDir := filepath.Join(tmp, "download")
@@ -236,7 +237,7 @@ func TestCopyFinishedDownloads_RejectsUnsafePath(t *testing.T) {
 }
 
 func TestCopyFinishedDownloads_LocalIsAsyncAndDeduped(t *testing.T) {
-	d, err := db.SqliteForTest()
+	d, err := dbtest.SqliteForTest()
 	require.NoError(t, err)
 	tmp := t.TempDir()
 	downloadDir := filepath.Join(tmp, "download")
@@ -275,7 +276,7 @@ func TestCopyFinishedDownloads_LocalIsAsyncAndDeduped(t *testing.T) {
 }
 
 func TestShutdown_CancelsQueuedCopy(t *testing.T) {
-	d, err := db.SqliteForTest()
+	d, err := dbtest.SqliteForTest()
 	require.NoError(t, err)
 	tmp := t.TempDir()
 	downloadDir := filepath.Join(tmp, "download")
@@ -336,7 +337,7 @@ func TestTransferBackoff(t *testing.T) {
 }
 
 func newDispatchClient(t *testing.T, n notify.INotifier, clock *time.Time) *Client {
-	d, err := db.SqliteForTest()
+	d, err := dbtest.SqliteForTest()
 	require.NoError(t, err)
 	require.NoError(t, d.Create(&db.DownloadStatus{ID: "h", Downloader: "t", State: db.DownloadSeeding, MoveState: db.UnMoved}).Error)
 	return &Client{name: "t", db: d, notifier: n,
@@ -427,7 +428,7 @@ func TestDispatch_NilNotifier(t *testing.T) {
 }
 
 func TestDeleteTorrent_ClearsFailureState(t *testing.T) {
-	d, err := db.SqliteForTest()
+	d, err := dbtest.SqliteForTest()
 	require.NoError(t, err)
 	require.NoError(t, d.Create(&db.DownloadStatus{ID: "h", Downloader: "test", State: db.DownloadSeeding, MoveState: db.UnMoved}).Error)
 

@@ -12,6 +12,7 @@ import (
 
 	"github.com/autoget-project/autoget/backend/indexers"
 	"github.com/autoget-project/autoget/backend/internal/db"
+	"github.com/autoget-project/autoget/backend/internal/db/dbtest"
 )
 
 func TestCategories(t *testing.T) {
@@ -192,7 +193,7 @@ func TestDownload(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	d, err := db.SqliteForTest()
+	d, err := dbtest.SqliteForTest()
 	require.NoError(t, err)
 	n := NewClient(&Config{UseProxy: true}, dir, d, nil)
 	got, err := n.Download("1980585", nil)
@@ -245,7 +246,7 @@ func TestSearchRSS(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	d, err := db.SqliteForTest()
+	d, err := dbtest.SqliteForTest()
 	require.NoError(t, err)
 	notifier := &fakeNotifier{}
 	n := NewClient(&Config{UseProxy: true}, dir, d, notifier)

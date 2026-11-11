@@ -17,6 +17,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/autoget-project/autoget/backend/internal/db"
+	"github.com/autoget-project/autoget/backend/internal/db/dbtest"
 )
 
 func TestDownloadTorrentFileFromURL_TooLarge(t *testing.T) {
@@ -68,7 +69,7 @@ func dirEntries(t *testing.T, dir string) []string {
 
 func TestDownloadTorrentFileFromURL_Success(t *testing.T) {
 	srv := torrentServer(t)
-	d, err := db.SqliteForTest()
+	d, err := dbtest.SqliteForTest()
 	require.NoError(t, err)
 	dir := t.TempDir()
 	dest := filepath.Join(dir, "a.torrent")
@@ -87,7 +88,7 @@ func TestDownloadTorrentFileFromURL_Success(t *testing.T) {
 
 func TestDownloadTorrentFileFromURL_HookError(t *testing.T) {
 	srv := torrentServer(t)
-	d, err := db.SqliteForTest()
+	d, err := dbtest.SqliteForTest()
 	require.NoError(t, err)
 	dir := t.TempDir()
 	_, _, err = DownloadTorrentFileFromURL(srv.Client(), srv.URL, filepath.Join(dir, "a.torrent"), d, func(string) error {
@@ -101,7 +102,7 @@ func TestDownloadTorrentFileFromURL_HookError(t *testing.T) {
 
 func TestDownloadTorrentFileFromURL_Duplicate(t *testing.T) {
 	srv := torrentServer(t)
-	d, err := db.SqliteForTest()
+	d, err := dbtest.SqliteForTest()
 	require.NoError(t, err)
 	m, err := metainfo.Load(bytes.NewReader(torrentBytes(t)))
 	require.NoError(t, err)
@@ -114,7 +115,7 @@ func TestDownloadTorrentFileFromURL_Duplicate(t *testing.T) {
 
 func TestDownloadTorrentFileFromURL_RenameFailure(t *testing.T) {
 	srv := torrentServer(t)
-	d, err := db.SqliteForTest()
+	d, err := dbtest.SqliteForTest()
 	require.NoError(t, err)
 	dir := t.TempDir()
 	// dest is an existing non-empty directory, so rename fails.
