@@ -119,7 +119,7 @@ func GetFinishedUnmovedDownloadStatusByDownloader(db *gorm.DB, downloader string
 
 func GetStoppedMovedDownloadStatusByDownloader(db *gorm.DB, downloader string) ([]DownloadStatus, error) {
 	var ss []DownloadStatus
-	err := db.Where("downloader = ?", downloader).Where("state = ?", DownloadStopped).Where("move_state >= ?", Moved).Find(&ss).Error
+	err := db.Where("downloader = ?", downloader).Where("state = ?", DownloadStopped).Where("move_state IN ?", []MoveState{Moved}).Find(&ss).Error
 	return ss, err
 }
 

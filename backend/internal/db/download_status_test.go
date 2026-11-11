@@ -321,3 +321,23 @@ func TestGetDownloadStatuses_OrderAndInQuery(t *testing.T) {
 	require.Len(t, single, 1)
 	assert.Equal(t, "d-planned", single[0].ID)
 }
+
+func TestGetStoppedMovedDownloadStatusByDownloader_ExcludesMoving(t *testing.T) {
+	d, err := SqliteForTest()
+	require.NoError(t, err)
+	rows := []*DownloadStatus{
+		{ID: "moved", Downloader: "dl", State: DownloadStopped, MoveState: Moved},
+		{ID: "moving", Downloader: "dl", State: DownloadStopped, MoveState: Moving},
+		{ID: "unmoved", Downloader: "dl", State: DownloadStopped, MoveState: UnMoved},
+		{ID: "seeding", Downloader: "dl", State: DownloadSeeding, MoveState: Moved},
+		{ID: "other", Downloader: "other", State: DownloadStopped, MoveState: Moved},
+	}
+	for _, r := range rows {
+		require.NoError(t, d.Create(r).Error)
+	}
+
+	got, err := GetStoppedMovedDownloadStatusByDownloader(d, "dl")
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "moved", got[0].ID)
+}
