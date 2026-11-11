@@ -18,6 +18,7 @@ import {
 import { renderError } from "../components/error_alert.ts";
 import { formatBytes } from "../utils/format.ts";
 import { externalLink } from "../utils/links.ts";
+import { createVisibilityPoller } from "../utils/polling";
 
 @customElement("downloader-view")
 export class DownloaderView extends LitElement {
@@ -65,7 +66,9 @@ export class DownloaderView extends LitElement {
   @state()
   private processingActions: Set<string> = new Set(); // Track in-flight actions per download ID to prevent double submission
 
-  private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private poller = createVisibilityPoller(() => {
+    this.loadDownloadItems();
+  }, this.refreshInterval * 1000);
 
   private readonly tabs = [
     { id: "downloading", label: "Downloading" },
@@ -77,12 +80,14 @@ export class DownloaderView extends LitElement {
 
   protected async firstUpdated() {
     await this.loadDownloadItems();
-    this.startRefreshTimer();
+    if (this.isConnected) {
+      this.poller.start();
+    }
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    this.stopRefreshTimer();
+    this.poller.stop();
   }
 
   protected async updated(changedProperties: Map<string, unknown>) {
@@ -322,24 +327,10 @@ export class DownloaderView extends LitElement {
     }
   }
 
-  private startRefreshTimer() {
-    this.stopRefreshTimer(); // Clear any existing timer
-    this.refreshTimer = setInterval(() => {
-      this.loadDownloadItems();
-    }, this.refreshInterval * 1000);
-  }
-
-  private stopRefreshTimer() {
-    if (this.refreshTimer !== null) {
-      clearInterval(this.refreshTimer);
-      this.refreshTimer = null;
-    }
-  }
-
   private handleRefreshIntervalChange(event: Event) {
     const select = event.target as HTMLSelectElement;
     this.refreshInterval = parseInt(select.value);
-    this.startRefreshTimer(); // Restart timer with new interval
+    this.poller.setInterval(this.refreshInterval * 1000);
   }
 
   private renderOrganizePlans(organizePlans: PlanResponse | null, downloadId: string) {

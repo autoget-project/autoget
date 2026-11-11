@@ -8,6 +8,7 @@ import {
   logout,
   type DownloaderInfo,
 } from "../utils/api";
+import { createVisibilityPoller } from "../utils/polling";
 import "./theme_controller.ts";
 import globalStyles from "/src/index.css?inline";
 
@@ -36,8 +37,10 @@ export class AppNavbar extends LitElement {
     );
   }
 
-  private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private readonly refreshInterval = 20000; // 20 seconds
+  private poller = createVisibilityPoller(() => {
+    this.loadDownloaders();
+  }, this.refreshInterval);
 
   async connectedCallback() {
     super.connectedCallback();
@@ -48,27 +51,15 @@ export class AppNavbar extends LitElement {
       console.warn("Failed to load indexers:", error);
     }
     await this.loadDownloaders();
-    this.startRefreshTimer();
+    if (this.isConnected) {
+      this.poller.start();
+    }
     this.requestUpdate();
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    this.stopRefreshTimer();
-  }
-
-  private startRefreshTimer() {
-    this.stopRefreshTimer(); // Clear any existing timer
-    this.refreshTimer = setInterval(() => {
-      this.loadDownloaders();
-    }, this.refreshInterval);
-  }
-
-  private stopRefreshTimer() {
-    if (this.refreshTimer !== null) {
-      clearInterval(this.refreshTimer);
-      this.refreshTimer = null;
-    }
+    this.poller.stop();
   }
 
   private async loadDownloaders() {

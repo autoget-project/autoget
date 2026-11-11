@@ -9,6 +9,10 @@ const TAB_LOCK_KEY = "autoget_auth_refresh_lock";
 // this, so a crashed holder cannot deadlock every other tab forever. It must
 // comfortably exceed the time a single refresh takes.
 const TAB_LOCK_TTL_MS = 10_000;
+// Upper bound for the refresh request. It runs while holding the cross-tab
+// lock, so it must stay below TAB_LOCK_TTL_MS or the fallback lock could expire
+// under a live holder.
+const REFRESH_FETCH_TIMEOUT_MS = 8_000;
 // How long a contender waits for the current holder before refreshing itself.
 const TAB_LOCK_WAIT_MS = 10_000;
 // Settle time before a contender confirms it won the lock; concurrent writers
@@ -38,16 +42,24 @@ function getTokens(): StoredTokens | null {
   }
 }
 
-function broadcastSessionUpdate(tokens: StoredTokens): void {
+// Identifies this page so it can ignore its own broadcasts: separate
+// BroadcastChannel instances in one page do receive each other's messages.
+const TAB_ID = randomId();
+
+function postAuthMessage(message: { type: string; tokens?: StoredTokens }): void {
   try {
     if (typeof BroadcastChannel !== "undefined") {
       const channel = new BroadcastChannel(AUTH_CHANNEL_NAME);
-      channel.postMessage({ type: "session_updated", tokens });
+      channel.postMessage({ ...message, sender: TAB_ID });
       channel.close();
     }
   } catch {
     /* BroadcastChannel not available or failed */
   }
+}
+
+function broadcastSessionUpdate(tokens: StoredTokens): void {
+  postAuthMessage({ type: "session_updated", tokens });
 }
 
 function setTokens(tokens: StoredTokens): void {
@@ -63,8 +75,23 @@ export function isAuthenticated(): boolean {
 
 export function logout(): void {
   localStorage.removeItem(AUTH_STORAGE_KEY);
+  // Tell the other tabs; the storage event covers browsers without
+  // BroadcastChannel.
+  postAuthMessage({ type: "session_cleared" });
   // Reloading drops back to the login flow via the 401 handling below.
   window.location.href = "/";
+}
+
+function refreshSignal(): AbortSignal | undefined {
+  if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
+    return AbortSignal.timeout(REFRESH_FETCH_TIMEOUT_MS);
+  }
+  if (typeof AbortController === "undefined") {
+    return undefined;
+  }
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), REFRESH_FETCH_TIMEOUT_MS);
+  return controller.signal;
 }
 
 type RefreshResult = "ok" | "expired" | "unavailable";
@@ -83,18 +110,26 @@ async function refreshTokens(): Promise<RefreshResult> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: tokens.refresh_token }),
+      signal: refreshSignal(),
     });
   } catch {
-    // Network failure: the tokens may still be valid, so keep the session.
+    // Network failure or timeout: the tokens may still be valid, so keep the
+    // session.
     return "unavailable";
   }
 
   if (response.ok) {
-    setTokens((await response.json()) as StoredTokens);
+    try {
+      setTokens((await response.json()) as StoredTokens);
+    } catch {
+      // Malformed body: nothing was stored, so the old session is untouched.
+      return "unavailable";
+    }
     return "ok";
   }
-  if (response.status === 400 || response.status === 401) {
-    // The refresh token is gone; the user has to log in again.
+  if (response.status === 401) {
+    // The refresh token is gone; the user has to log in again. A 400 means the
+    // request itself was malformed, which says nothing about the session.
     return "expired";
   }
   // Provider outage (5xx/429): do not log the user out.
@@ -308,6 +343,85 @@ function never(): Promise<Response> {
   return new Promise(() => {});
 }
 
+const sharedNever = never();
+
+// deferLoginRedirect completes the login redirect once the user looks at this
+// tab. Only one visibilitychange listener is ever attached, however many
+// requests were deferred; the oldest session stamp is kept for the recovery
+// check.
+let deferredLoginBefore: SessionStamp | null = null;
+let visibilityListenerAttached = false;
+
+function deferLoginRedirect(before: SessionStamp): void {
+  deferredLoginBefore ??= before;
+  if (visibilityListenerAttached) {
+    return;
+  }
+  visibilityListenerAttached = true;
+  const onVisible = (): void => {
+    if (document.visibilityState !== "visible") {
+      return;
+    }
+    document.removeEventListener("visibilitychange", onVisible);
+    visibilityListenerAttached = false;
+    const stamp = deferredLoginBefore;
+    deferredLoginBefore = null;
+    // Another tab may have published a valid session after our handoff
+    // timeout expired; do not kick the user to login if the session recovered.
+    const now = sessionStamp();
+    if (stamp && !!now.access && (now.access !== stamp.access || now.refresh !== stamp.refresh)) {
+      return;
+    }
+    redirectToLogin();
+  };
+  document.addEventListener("visibilitychange", onVisible);
+}
+
+// Another tab logged out: leave this one too, deferring while it is hidden so
+// an inactive tab does not start an OAuth flow.
+function onSessionClearedElsewhere(): void {
+  if (getTokens()) {
+    // A session exists again (e.g. logged back in); nothing to do.
+    return;
+  }
+  if (document.visibilityState === "hidden") {
+    deferLoginRedirect({ access: undefined, refresh: undefined });
+    return;
+  }
+  window.location.href = "/";
+}
+
+let authSyncStarted = false;
+
+// initAuthSync listens for logouts in other tabs. A tab's own BroadcastChannel
+// never receives its own messages and the storage event only fires in other
+// tabs, so a tab never reacts to its own logout.
+function initAuthSync(): void {
+  if (authSyncStarted || typeof window === "undefined") {
+    return;
+  }
+  authSyncStarted = true;
+  try {
+    if (typeof BroadcastChannel !== "undefined") {
+      const channel = new BroadcastChannel(AUTH_CHANNEL_NAME);
+      channel.onmessage = (event: MessageEvent) => {
+        if (event.data?.type === "session_cleared" && event.data.sender !== TAB_ID) {
+          onSessionClearedElsewhere();
+        }
+      };
+    }
+  } catch {
+    /* BroadcastChannel not available */
+  }
+  window.addEventListener("storage", (event: StorageEvent) => {
+    if (event.key === AUTH_STORAGE_KEY && event.newValue === null) {
+      onSessionClearedElsewhere();
+    }
+  });
+}
+
+initAuthSync();
+
 export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const applyAuth = (init?: RequestInit): RequestInit => {
     const tokens = getTokens();
@@ -346,26 +460,8 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
         // once the user actually looks at this tab, unless another tab has
         // since restored a healthy session.
         if (typeof document !== "undefined" && document.visibilityState === "hidden") {
-          document.addEventListener(
-            "visibilitychange",
-            () => {
-              if (document.visibilityState !== "visible") {
-                return;
-              }
-              // Another tab may have published a valid session after our handoff
-              // timeout expired; do not kick the user to login if the session recovered.
-              const now = sessionStamp();
-              if (
-                !!now.access &&
-                (now.access !== before.access || now.refresh !== before.refresh)
-              ) {
-                return;
-              }
-              redirectToLogin();
-            },
-            { once: true },
-          );
-          return never();
+          deferLoginRedirect(before);
+          return sharedNever;
         }
         // No valid, renewable session; start the OAuth login flow, returning to
         // the current page afterwards.

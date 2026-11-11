@@ -415,6 +415,120 @@ describe("apiFetch auth handling", () => {
   });
 });
 
+describe("refresh edge cases", () => {
+  it("keeps the session when refresh answers 400", async () => {
+    localStorage.setItem(KEY, JSON.stringify({ access_token: "old", refresh_token: "r1" }));
+    apiResponses = [401];
+    refreshResponse = () => res(400, { error: "bad request" });
+    installFetchMock();
+
+    const response = await apiFetch("/api/v1/indexers");
+
+    expect(response.status).toBe(401);
+    expect(window.location.href).not.toContain("/auth/login");
+    expect(localStorage.getItem(KEY)).not.toBeNull();
+  });
+
+  it("times out a hung refresh fetch and keeps the session", async () => {
+    localStorage.setItem(KEY, JSON.stringify({ access_token: "old", refresh_token: "r1" }));
+    const controller = new AbortController();
+    vi.spyOn(AbortSignal, "timeout").mockReturnValue(controller.signal);
+    const mock = vi.fn<typeof fetch>((input, init) => {
+      if (String(input) !== "/auth/refresh") {
+        return Promise.resolve(res(401));
+      }
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+      });
+    });
+    vi.stubGlobal("fetch", mock);
+
+    const pending = apiFetch("/api/v1/indexers");
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    controller.abort();
+    const response = await pending;
+
+    expect(response.status).toBe(401);
+    expect(window.location.href).not.toContain("/auth/login");
+    expect(localStorage.getItem(KEY)).not.toBeNull();
+    const refreshCall = mock.mock.calls.find((c) => String(c[0]) === "/auth/refresh");
+    expect(refreshCall?.[1]?.signal).toBe(controller.signal);
+  });
+
+  it("attaches a single visibilitychange listener for concurrent deferred 401s", async () => {
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    localStorage.setItem(KEY, JSON.stringify({ access_token: "old", refresh_token: "r1" }));
+    apiResponses = [401, 401, 401];
+    refreshResponse = () => res(401, { error: "invalid_grant" });
+    installFetchMock();
+    const add = vi.spyOn(document, "addEventListener");
+
+    void apiFetch("/api/v1/a");
+    void apiFetch("/api/v1/b");
+    void apiFetch("/api/v1/c");
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+
+    expect(add.mock.calls.filter((c) => c[0] === "visibilitychange")).toHaveLength(1);
+    expect(window.location.href).not.toContain("/auth/login");
+
+    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(window.location.href).toContain("/auth/login?redirect=");
+  }, 10_000);
+});
+
+describe("cross-tab logout", () => {
+  const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 30));
+
+  function otherTabClears(): void {
+    const channel = new BroadcastChannel("autoget_auth_channel");
+    channel.postMessage({ type: "session_cleared", sender: "other-tab" });
+    channel.close();
+  }
+
+  it("broadcasts session_cleared on logout", async () => {
+    const received: unknown[] = [];
+    const listener = new BroadcastChannel("autoget_auth_channel");
+    listener.onmessage = (event) => received.push(event.data);
+    localStorage.setItem(KEY, JSON.stringify({ access_token: "tok" }));
+
+    logout();
+    await settle();
+    listener.close();
+
+    expect(received).toEqual([expect.objectContaining({ type: "session_cleared" })]);
+  });
+
+  it("does not react to its own logout", async () => {
+    logout();
+    window.location.href = "http://localhost/own";
+    await settle();
+    expect(window.location.href).toBe("http://localhost/own");
+  });
+
+  it("leaves a visible tab when another tab logs out", async () => {
+    otherTabClears();
+    await settle();
+    expect(window.location.href).toBe("/");
+  });
+
+  it("reacts to a storage clear from another tab", () => {
+    window.dispatchEvent(new StorageEvent("storage", { key: KEY, newValue: null }));
+    expect(window.location.href).toBe("/");
+  });
+
+  it("defers leaving a hidden tab until it becomes visible", async () => {
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    otherTabClears();
+    await settle();
+    expect(window.location.href).toBe("http://localhost/indexers/mteam");
+
+    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(window.location.href).toContain("/auth/login?redirect=");
+  });
+});
+
 describe("session helpers", () => {
   it("reports whether a session is stored", () => {
     expect(isAuthenticated()).toBe(false);
