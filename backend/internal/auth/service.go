@@ -509,6 +509,16 @@ func sanitizeRedirect(v string) string {
 	if v == "" || len(v) > maxRedirectLength || v[0] != '/' || (len(v) > 1 && v[1] == '/') {
 		return "/"
 	}
+	// Browsers treat "\" like "/" and strip tabs/newlines, so "/\evil.com" or
+	// "/\t/evil.com" would become a protocol-relative URL.
+	if strings.IndexFunc(v, func(r rune) bool { return r < 0x20 || r == 0x7f || r == '\\' }) >= 0 {
+		return "/"
+	}
+	u, err := url.Parse(v)
+	if err != nil || u.Scheme != "" || u.Host != "" || u.User != nil ||
+		!strings.HasPrefix(u.Path, "/") || strings.HasPrefix(u.Path, "//") {
+		return "/"
+	}
 	return v
 }
 

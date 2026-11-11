@@ -13,5 +13,21 @@
   } catch {
     /* fall through: go to the redirect target regardless */
   }
-  window.location.replace(el.dataset.redirect || "/");
+  // Re-validate on the client: only ever navigate to a same-origin path.
+  var target = "/";
+  try {
+    var raw_target = el.dataset.redirect || "/";
+    var u = new URL(raw_target, window.location.origin);
+    if (
+      raw_target.charAt(0) === "/" &&
+      raw_target.charAt(1) !== "/" &&
+      raw_target.indexOf("\\") === -1 &&
+      u.origin === window.location.origin
+    ) {
+      target = u.pathname + u.search + u.hash;
+    }
+  } catch {
+    target = "/";
+  }
+  window.location.replace(target);
 })();

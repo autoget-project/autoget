@@ -324,6 +324,24 @@ func TestLoginRedirectsToProviderAndSetsCookie(t *testing.T) {
 	assert.Contains(t, loc, "state="+cookie.Value)
 }
 
+func TestLoginSanitizesBackslashRedirect(t *testing.T) {
+	s := testService(t)
+	router := gin.New()
+	s.SetupRouter(router)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/auth/login?redirect=%2F%5Cevil.com", nil)
+	router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusFound, w.Code)
+
+	s.svc.statesMu.Lock()
+	defer s.svc.statesMu.Unlock()
+	require.Len(t, s.svc.states, 1)
+	for _, e := range s.svc.states {
+		assert.Equal(t, "/", e.redirect)
+	}
+}
+
 func TestCallbackWithoutCookieIsRejected(t *testing.T) {
 	s := testService(t)
 	s.svc.addState("known-state", "/")
@@ -575,6 +593,7 @@ func TestCallbackScriptIsServed(t *testing.T) {
 	assert.Equal(t, "no-cache", w.Header().Get("Cache-Control"))
 	assert.Contains(t, w.Header().Get("Content-Type"), "javascript")
 	assert.Contains(t, w.Body.String(), "autoget_auth")
+	assert.Contains(t, w.Body.String(), "window.location.origin")
 }
 
 func TestRefreshSuccessRotating(t *testing.T) {
@@ -699,6 +718,17 @@ func TestSanitizeRedirect(t *testing.T) {
 	// Oversized paths fall back rather than being stored.
 	assert.Equal(t, "/", sanitizeRedirect("/"+strings.Repeat("A", maxRedirectLength)))
 	assert.Equal(t, "/search?q=foo", sanitizeRedirect("/search?q=foo"))
+
+	// Backslash, control characters and schemes are open-redirect vectors.
+	for _, bad := range []string{
+		"/\\evil.com", "/\\\\evil.com", "/\t/evil.com", "/\n/evil.com", "/\r/evil.com",
+		"/ok\\path", "/a\x00b", "/\x7f", "javascript:alert(1)",
+	} {
+		assert.Equal(t, "/", sanitizeRedirect(bad), "%q", bad)
+	}
+	for _, ok := range []string{"/", "/search?q=foo", "/a/b#frag", "/%5Cevil.com"} {
+		assert.Equal(t, ok, sanitizeRedirect(ok))
+	}
 }
 
 func TestBearerToken(t *testing.T) {
