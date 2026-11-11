@@ -195,7 +195,7 @@ func TestDownload(t *testing.T) {
 	d, err := db.SqliteForTest()
 	require.NoError(t, err)
 	n := NewClient(&Config{UseProxy: true}, dir, d, nil)
-	got, err := n.Download("1980585")
+	got, err := n.Download("1980585", nil)
 	require.Nil(t, err)
 	assert.NotEmpty(t, got.TorrentFilePath)
 	assert.FileExists(t, got.TorrentFilePath)

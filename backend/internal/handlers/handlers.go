@@ -47,8 +47,8 @@ func (s *Service) SetupRouter(router *gin.RouterGroup) {
 	router.GET("/indexers/:indexer/categories", s.indexerCategories)
 	router.GET("/indexers/:indexer/resources", s.indexerListResources)
 	router.GET("/indexers/:indexer/resources/:resource", s.indexerResourceDetail)
-	router.GET("/indexers/:indexer/resources/:resource/download", s.indexerDownload)
-	router.GET("/indexers/:indexer/registerSearch", s.indexerRegisterSearch)
+	router.POST("/indexers/:indexer/resources/:resource/download", s.indexerDownload)
+	router.POST("/indexers/:indexer/registerSearch", s.indexerRegisterSearch)
 
 	router.GET("/downloaders", s.listDownloaders)
 	router.GET("/downloaders/:downloader", s.getDownloaderStatuses)
@@ -159,19 +159,12 @@ func (s *Service) indexerDownload(c *gin.Context) {
 		return
 	}
 
-	res, err := indexer.Download(resourceID)
-	if err != nil {
-		c.JSON(err.Code, gin.H{"error": err.Message})
-		return
-	}
-
 	files := []string{}
 	for _, file := range detail.Files {
 		files = append(files, file.Name)
 	}
 
 	downloadStatus := &db.DownloadStatus{
-		ID:         res.TorrentHash,
 		Downloader: indexer.DownloaderName(),
 		State:      db.DownloadStarted,
 		ResTitle:   detail.Title,
@@ -182,8 +175,26 @@ func (s *Service) indexerDownload(c *gin.Context) {
 		FileList:   files,
 		Metadata:   detail.Metadata,
 	}
-	if err := s.db.Create(downloadStatus).Error; err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+
+	// The row is inserted right before the torrent file is placed, so a DB failure
+	// never leaves an untracked torrent in the watch dir.
+	created := false
+	_, err = indexer.Download(resourceID, func(hash string) error {
+		downloadStatus.ID = hash
+		if err := s.db.Create(downloadStatus).Error; err != nil {
+			return err
+		}
+		created = true
+		return nil
+	})
+	if err != nil {
+		if created {
+			// Placing the file failed after the row was inserted: roll back.
+			if delErr := s.db.Delete(&db.DownloadStatus{}, "id = ?", downloadStatus.ID).Error; delErr != nil {
+				log.Error().Err(delErr).Str("id", downloadStatus.ID).Msg("failed to roll back download status")
+			}
+		}
+		c.JSON(err.Code, gin.H{"error": err.Message})
 		return
 	}
 
@@ -222,6 +233,8 @@ func (s *Service) indexerRegisterSearch(c *gin.Context) {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
+
+	c.JSON(200, gin.H{"status": "ok"})
 }
 
 type DownloaderInfoResponse struct {

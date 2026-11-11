@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 func TestStoreSeedingStatus(t *testing.T) {
@@ -280,4 +281,12 @@ func TestGetAllDownloadersStateCounts(t *testing.T) {
 	emptyResult, err := GetAllDownloadersStateCounts(emptyDB)
 	require.NoError(t, err)
 	assert.Len(t, emptyResult, 0)
+}
+
+func TestDownloadStatus_DuplicateCreateTranslatesError(t *testing.T) {
+	d, err := SqliteForTest()
+	require.NoError(t, err)
+	require.NoError(t, d.Create(&DownloadStatus{ID: "dup"}).Error)
+	err = d.Create(&DownloadStatus{ID: "dup"}).Error
+	assert.ErrorIs(t, err, gorm.ErrDuplicatedKey)
 }

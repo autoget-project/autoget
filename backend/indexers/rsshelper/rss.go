@@ -80,7 +80,7 @@ func SearchRSS(index indexers.IIndexer, d *gorm.DB, notify notify.INotifier, ite
 				}
 
 				if search.Action == "download" {
-					_, err := index.Download(search.ResID)
+					_, err := index.Download(search.ResID, nil)
 					if err != nil {
 						logger.Error().Err(err).Msg("Failed to download torrent")
 						continue

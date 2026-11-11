@@ -20,7 +20,8 @@ type IIndexer interface {
 	Detail(id string, fileList bool) (*ResourceDetail, *errors.HTTPStatusError)
 
 	// Download the torrent file to given dir or return the magnet link.
-	Download(id string) (*DownloadResult, *errors.HTTPStatusError)
+	// beforePlace (may be nil) is called with the torrent hash right before the file is placed.
+	Download(id string, beforePlace BeforePlaceFunc) (*DownloadResult, *errors.HTTPStatusError)
 
 	// RegisterRSSCronjob
 	RegisterRSSCronjob(cron *cron.Cron)
@@ -160,3 +161,7 @@ type RSSItem struct {
 	Catergory string `json:"catergory"`
 	URL       string `json:"url"`
 }
+
+// BeforePlaceFunc is called with the torrent hash after the torrent is fetched and validated,
+// but before the torrent file becomes visible to the downloader.
+type BeforePlaceFunc func(hash string) error

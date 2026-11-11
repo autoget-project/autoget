@@ -180,7 +180,7 @@ func TestDownload(t *testing.T) {
 	}, MTeamTypeNormal, dir, d, nil)
 	require.NotNil(t, m)
 
-	res, err := m.Download("913855")
+	res, err := m.Download("913855", nil)
 	require.Nil(t, err)
 
 	assert.NotEmpty(t, res.TorrentFilePath)

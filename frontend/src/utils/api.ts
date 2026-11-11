@@ -611,7 +611,7 @@ export async function downloadResource(indexerId: string, resourceId: string): P
     const response = await apiFetch(
       `/api/v1/indexers/${indexerId}/resources/${resourceId}/download`,
       {
-        method: "GET",
+        method: "POST",
       },
     );
     if (!response.ok) {

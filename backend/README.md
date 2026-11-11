@@ -141,8 +141,10 @@ GET /indexers/{indexer}/resources/{resource_id}
 
 #### Download Resource
 ```http
-GET /indexers/{indexer}/resources/{resource_id}/download
+POST /indexers/{indexer}/resources/{resource_id}/download
 ```
+
+Returns `409 Conflict` if the resource has already been downloaded (duplicate).
 
 ### Downloader Endpoints
 

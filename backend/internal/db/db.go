@@ -25,7 +25,8 @@ var (
 				Colorful:                  false,
 			},
 		),
-		PrepareStmt: true,
+		PrepareStmt:    true,
+		TranslateError: true,
 	}
 )
 

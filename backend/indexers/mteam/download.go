@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/autoget-project/autoget/backend/indexers"
@@ -21,7 +20,7 @@ type genDownloadLinkResponse struct {
 	Data    string      `json:"data"`
 }
 
-func (m *MTeam) Download(id string) (*indexers.DownloadResult, *errors.HTTPStatusError) {
+func (m *MTeam) Download(id string, beforePlace indexers.BeforePlaceFunc) (*indexers.DownloadResult, *errors.HTTPStatusError) {
 	_, err := strconv.ParseUint(id, 10, 64)
 	if err != nil {
 		return nil, errors.NewHTTPStatusError(http.StatusBadRequest, "invalid id")
@@ -42,13 +41,9 @@ func (m *MTeam) Download(id string) (*indexers.DownloadResult, *errors.HTTPStatu
 
 	destFilePath := filepath.Join(m.torrentsDir, name+"."+id+".torrent")
 
-	me, _, err := helpers.DownloadTorrentFileFromURL(downloadClient, resp.Data, destFilePath, m.db)
+	me, _, err := helpers.DownloadTorrentFileFromURL(downloadClient, resp.Data, destFilePath, m.db, beforePlace)
 	if err != nil {
-		// Check if this is a duplicate download error
-		if strings.Contains(err.Error(), "duplicate download:") {
-			return nil, errors.NewHTTPStatusError(http.StatusConflict, err.Error())
-		}
-		return nil, errors.NewHTTPStatusError(http.StatusInternalServerError, err.Error())
+		return nil, helpers.DownloadHTTPError(err)
 	}
 
 	return &indexers.DownloadResult{

@@ -19,6 +19,7 @@ import (
 	"github.com/autoget-project/autoget/backend/indexers"
 	"github.com/autoget-project/autoget/backend/internal/db"
 	"github.com/autoget-project/autoget/backend/internal/errors"
+	"github.com/autoget-project/autoget/backend/internal/helpers"
 	"github.com/autoget-project/autoget/backend/organizer"
 )
 
@@ -32,6 +33,7 @@ type indexerMock struct {
 	mockDetailErr      *errors.HTTPStatusError
 	mockDownloadResult *indexers.DownloadResult
 	mockDownloadErr    *errors.HTTPStatusError
+	downloadFn         func(id string, beforePlace indexers.BeforePlaceFunc) (*indexers.DownloadResult, *errors.HTTPStatusError)
 }
 
 func (i *indexerMock) Name() string {
@@ -50,7 +52,15 @@ func (i *indexerMock) Detail(id string, fileList bool) (*indexers.ResourceDetail
 	return i.mockDetailResult, i.mockDetailErr
 }
 
-func (i *indexerMock) Download(id string) (*indexers.DownloadResult, *errors.HTTPStatusError) {
+func (i *indexerMock) Download(id string, beforePlace indexers.BeforePlaceFunc) (*indexers.DownloadResult, *errors.HTTPStatusError) {
+	if i.downloadFn != nil {
+		return i.downloadFn(id, beforePlace)
+	}
+	if i.mockDownloadErr == nil && i.mockDownloadResult != nil && beforePlace != nil {
+		if err := beforePlace(i.mockDownloadResult.TorrentHash); err != nil {
+			return nil, helpers.DownloadHTTPError(err)
+		}
+	}
 	return i.mockDownloadResult, i.mockDownloadErr
 }
 
@@ -369,7 +379,7 @@ func TestService_indexerRegisterSearch(t *testing.T) {
 
 		w := httptest.NewRecorder()
 		reqBody := `{"text": "test search", "action": "download"}`
-		req := httptest.NewRequest("GET", "/indexers/mock/registerSearch", strings.NewReader(reqBody))
+		req := httptest.NewRequest("POST", "/indexers/mock/registerSearch", strings.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, req)
 
@@ -389,7 +399,7 @@ func TestService_indexerRegisterSearch(t *testing.T) {
 
 		w := httptest.NewRecorder()
 		reqBody := `{"text": "another search", "action": "notification"}`
-		req := httptest.NewRequest("GET", "/indexers/mock/registerSearch", strings.NewReader(reqBody))
+		req := httptest.NewRequest("POST", "/indexers/mock/registerSearch", strings.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, req)
 
@@ -409,7 +419,7 @@ func TestService_indexerRegisterSearch(t *testing.T) {
 
 		w := httptest.NewRecorder()
 		reqBody := `{"text": "test", "action": "download"}`
-		req := httptest.NewRequest("GET", "/indexers/nonexistent/registerSearch", strings.NewReader(reqBody))
+		req := httptest.NewRequest("POST", "/indexers/nonexistent/registerSearch", strings.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, req)
 
@@ -452,7 +462,7 @@ func TestService_indexerRegisterSearch(t *testing.T) {
 				_, router, _, _ := testSetup(t)
 
 				w := httptest.NewRecorder()
-				req := httptest.NewRequest("GET", "/indexers/mock/registerSearch", strings.NewReader(tt.reqBody))
+				req := httptest.NewRequest("POST", "/indexers/mock/registerSearch", strings.NewReader(tt.reqBody))
 				req.Header.Set("Content-Type", "application/json")
 				router.ServeHTTP(w, req)
 
@@ -469,7 +479,7 @@ func TestService_indexerRegisterSearch(t *testing.T) {
 
 		w := httptest.NewRecorder()
 		reqBody := `{"text": "test", "action": "invalid_action"}`
-		req := httptest.NewRequest("GET", "/indexers/mock/registerSearch", strings.NewReader(reqBody))
+		req := httptest.NewRequest("POST", "/indexers/mock/registerSearch", strings.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, req)
 
@@ -1066,4 +1076,83 @@ func TestService_handleRePlan_EmptyUserHint_UsesReplan(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, db.Planed, updatedStatus.OrganizeState)
 	assert.NotNil(t, updatedStatus.OrganizePlans)
+}
+
+func TestService_indexerDownload(t *testing.T) {
+	detail := &indexers.ResourceDetail{
+		Title:    "t1",
+		Category: "c",
+		Files:    []indexers.File{{Name: "f1"}},
+	}
+	post := func(router *gin.Engine) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest("POST", "/indexers/mock/resources/1/download", nil))
+		return w
+	}
+	count := func(t *testing.T, d *gorm.DB) int64 {
+		var n int64
+		require.NoError(t, d.Model(&db.DownloadStatus{}).Count(&n).Error)
+		return n
+	}
+
+	t.Run("success", func(t *testing.T) {
+		_, router, m, testDB := testSetup(t)
+		m.mockDetailResult = detail
+		m.mockDownloadResult = &indexers.DownloadResult{TorrentHash: "h1"}
+		w := post(router)
+		assert.Equal(t, http.StatusOK, w.Code)
+		var ds db.DownloadStatus
+		require.NoError(t, testDB.First(&ds, "id = ?", "h1").Error)
+		assert.Equal(t, "t1", ds.ResTitle)
+		assert.Equal(t, []string{"f1"}, []string(ds.FileList))
+	})
+
+	t.Run("GET not allowed", func(t *testing.T) {
+		_, router, _, _ := testSetup(t)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest("GET", "/indexers/mock/resources/1/download", nil))
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("detail error", func(t *testing.T) {
+		_, router, m, testDB := testSetup(t)
+		m.mockDetailErr = errors.NewHTTPStatusError(502, "bad")
+		assert.Equal(t, 502, post(router).Code)
+		assert.EqualValues(t, 0, count(t, testDB))
+	})
+
+	t.Run("download error", func(t *testing.T) {
+		_, router, m, testDB := testSetup(t)
+		m.mockDetailResult = detail
+		m.mockDownloadErr = errors.NewHTTPStatusError(500, "bad")
+		assert.Equal(t, 500, post(router).Code)
+		assert.EqualValues(t, 0, count(t, testDB))
+	})
+
+	t.Run("duplicate row gives 409", func(t *testing.T) {
+		_, router, m, testDB := testSetup(t)
+		m.mockDetailResult = detail
+		m.mockDownloadResult = &indexers.DownloadResult{TorrentHash: "h1"}
+		require.NoError(t, testDB.Create(&db.DownloadStatus{ID: "h1"}).Error)
+		assert.Equal(t, http.StatusConflict, post(router).Code)
+		assert.EqualValues(t, 1, count(t, testDB))
+	})
+
+	t.Run("rename failure rolls back row", func(t *testing.T) {
+		_, router, m, testDB := testSetup(t)
+		m.mockDetailResult = detail
+		m.downloadFn = func(id string, hook indexers.BeforePlaceFunc) (*indexers.DownloadResult, *errors.HTTPStatusError) {
+			require.NoError(t, hook("h2"))
+			return nil, errors.NewHTTPStatusError(500, "rename failed")
+		}
+		assert.Equal(t, 500, post(router).Code)
+		assert.EqualValues(t, 0, count(t, testDB))
+	})
+}
+
+func TestService_indexerRegisterSearch_GETNotAllowed(t *testing.T) {
+	_, router, _, _ := testSetup(t)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest("GET", "/indexers/mock/registerSearch", nil))
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
