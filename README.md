@@ -62,6 +62,10 @@ columns, so any such change would need a manual migration. Back up the
 PostgreSQL database before upgrading to a new image version.
 There is no versioned migration tooling.
 
+The backend uses GORM prepared statements (`PrepareStmt`), which are not
+compatible with PgBouncer in transaction pooling mode. If you put PgBouncer in
+front of PostgreSQL, use session pooling mode.
+
 ## Details
 
 For detailed setup and API documentation, see:

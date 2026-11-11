@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql"
 	"os"
 	"time"
 
@@ -42,10 +43,23 @@ func Pg(dsn string) (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
+	configurePool(sqlDB)
 	if err := migrate(db); err != nil {
 		return nil, err
 	}
 	return db, nil
+}
+
+// configurePool sets connection pool limits suited to a single-user app.
+func configurePool(sqlDB *sql.DB) {
+	sqlDB.SetMaxOpenConns(25)
+	sqlDB.SetMaxIdleConns(5)
+	sqlDB.SetConnMaxLifetime(30 * time.Minute)
+	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
 }
 
 func SqliteForTest() (*gorm.DB, error) {
