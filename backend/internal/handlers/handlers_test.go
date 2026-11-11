@@ -166,7 +166,7 @@ func TestService_indexerCategories(t *testing.T) {
 				indexerName:  "mock",
 				mockErr:      errors.NewHTTPStatusError(http.StatusInternalServerError, "mock error"),
 				expectedCode: http.StatusInternalServerError,
-				expectedMsg:  "mock error",
+				expectedMsg:  "internal error",
 			},
 		}
 
@@ -263,7 +263,7 @@ func TestService_indexerResourceDetail(t *testing.T) {
 				resourceID:   "some-id",
 				mockErr:      errors.NewHTTPStatusError(http.StatusInternalServerError, "mock detail error"),
 				expectedCode: http.StatusInternalServerError,
-				expectedMsg:  "mock detail error",
+				expectedMsg:  "internal error",
 			},
 		}
 
@@ -343,7 +343,7 @@ func TestService_indexerListResources(t *testing.T) {
 				queryParams:  "page=abc", // Invalid page parameter
 				mockErr:      nil,
 				expectedCode: http.StatusBadRequest,
-				expectedMsg:  "strconv.ParseUint: parsing \"abc\": invalid syntax", // Gin's default error message for invalid uint
+				expectedMsg:  "invalid request",
 			},
 			{
 				name:         "mock indexer returns error",
@@ -351,7 +351,7 @@ func TestService_indexerListResources(t *testing.T) {
 				queryParams:  "",
 				mockErr:      errors.NewHTTPStatusError(http.StatusInternalServerError, "mock list error"),
 				expectedCode: http.StatusInternalServerError,
-				expectedMsg:  "mock list error",
+				expectedMsg:  "internal error",
 			},
 		}
 
@@ -441,22 +441,22 @@ func TestService_indexerRegisterSearch(t *testing.T) {
 			{
 				name:        "missing text",
 				reqBody:     `{"action": "download"}`,
-				expectedMsg: "Key: 'indexerRegisterSearchReq.Text' Error:Field validation for 'Text' failed on the 'required' tag",
+				expectedMsg: "invalid request",
 			},
 			{
 				name:        "missing action",
 				reqBody:     `{"text": "test"}`,
-				expectedMsg: "Key: 'indexerRegisterSearchReq.Action' Error:Field validation for 'Action' failed on the 'required' tag",
+				expectedMsg: "invalid request",
 			},
 			{
 				name:        "empty body",
 				reqBody:     `{}`,
-				expectedMsg: "Key: 'indexerRegisterSearchReq.Text' Error:Field validation for 'Text' failed on the 'required' tag",
+				expectedMsg: "invalid request",
 			},
 			{
 				name:        "invalid json",
 				reqBody:     `invalid json`,
-				expectedMsg: "invalid character 'i' looking for beginning of value",
+				expectedMsg: "invalid request",
 			},
 		}
 
@@ -920,7 +920,7 @@ func TestService_handleRePlan_OrganizerError(t *testing.T) {
 	var response map[string]string
 	err = json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.Contains(t, response["error"], "organizer service error")
+	assert.Equal(t, "failed to re-plan download", response["error"])
 }
 
 func TestService_handleRePlan_WithUserHint_Success(t *testing.T) {
@@ -1037,7 +1037,7 @@ func TestService_handleRePlan_WithUserHint_Error(t *testing.T) {
 	var response map[string]string
 	err = json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.Contains(t, response["error"], "replan with hint failed")
+	assert.Equal(t, "failed to re-plan download", response["error"])
 
 	// Verify the database was updated with CreatePlanFailed status
 	var updatedStatus db.DownloadStatus
@@ -1185,4 +1185,22 @@ func TestService_indexerRegisterSearch_GETNotAllowed(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest("GET", "/indexers/mock/registerSearch", nil))
 	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestService_DBErrorDoesNotLeak(t *testing.T) {
+	serv, router, _, testDB := testSetup(t)
+	_ = serv
+	sqlDB, err := testDB.DB()
+	require.NoError(t, err)
+	require.NoError(t, sqlDB.Close())
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("DELETE", "/download/some-id", nil)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	var resp map[string]string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "failed to load download", resp["error"])
+	assert.NotContains(t, w.Body.String(), "closed")
 }

@@ -596,14 +596,16 @@ components:
         application/json:
           schema: {$ref: '#/components/schemas/Error'}
     InternalError:
-      description: Internal error.
+      description: Internal error. The body carries only a generic message (for example `failed to list downloads`); details are logged server-side.
       content:
         application/json:
           schema: {$ref: '#/components/schemas/Error'}
     Error:
       description: |
         Error reported by the indexer; the status code is whatever the indexer
-        chose (typically 4xx, 5xx or 502 for upstream failures).
+        chose (typically 4xx, 5xx or 502 for upstream failures). Messages of
+        4xx errors are passed through; 5xx errors carry a generic
+        `internal error` message and the details are logged server-side.
       content:
         application/json:
           schema: {$ref: '#/components/schemas/Error'}
@@ -612,7 +614,7 @@ components:
       type: object
       required: [error]
       properties:
-        error: {type: string}
+        error: {type: string, description: Public error message. Never contains internal error text for 5xx responses; request validation failures are reported as `invalid request`.}
     Category:
       type: object
       required: [id, name]

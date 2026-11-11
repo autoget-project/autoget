@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/anacrolix/torrent/metainfo"
+	"github.com/rs/zerolog/log"
 	"gorm.io/gorm"
 
 	"github.com/autoget-project/autoget/backend/internal/db"
@@ -26,9 +27,10 @@ var ErrDuplicateDownload = errors.New("duplicate download")
 // returned by its beforePlace hook) to an HTTP status error: duplicates become 409.
 func DownloadHTTPError(err error) *herrors.HTTPStatusError {
 	if errors.Is(err, ErrDuplicateDownload) || errors.Is(err, gorm.ErrDuplicatedKey) {
-		return herrors.NewHTTPStatusError(http.StatusConflict, err.Error())
+		return herrors.NewHTTPStatusError(http.StatusConflict, "duplicate download")
 	}
-	return herrors.NewHTTPStatusError(http.StatusInternalServerError, err.Error())
+	log.Error().Err(err).Msg("download failed")
+	return herrors.NewHTTPStatusError(http.StatusInternalServerError, "failed to download torrent")
 }
 
 // DownloadTorrentFileFromURL downloads a torrent from a given URL and atomically places it at dest,

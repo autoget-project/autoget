@@ -77,7 +77,7 @@ func (s *Service) indexerCategories(c *gin.Context) {
 
 	categories, err := indexer.Categories()
 	if err != nil {
-		c.JSON(err.Code, gin.H{"error": err.Message})
+		respondIndexerError(c, err)
 		return
 	}
 
@@ -103,7 +103,7 @@ func (s *Service) indexerListResources(c *gin.Context) {
 
 	req := &ListRequest{}
 	if err := c.ShouldBindQuery(req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		respondError(c, 400, "invalid request", err)
 		return
 	}
 
@@ -118,7 +118,7 @@ func (s *Service) indexerListResources(c *gin.Context) {
 
 	listResult, err := indexer.List(lreq)
 	if err != nil {
-		c.JSON(err.Code, gin.H{"error": err.Message})
+		respondIndexerError(c, err)
 		return
 	}
 
@@ -136,7 +136,7 @@ func (s *Service) indexerResourceDetail(c *gin.Context) {
 	resourceID := c.Param("resource")
 	detail, err := indexer.Detail(resourceID, true)
 	if err != nil {
-		c.JSON(err.Code, gin.H{"error": err.Message})
+		respondIndexerError(c, err)
 		return
 	}
 
@@ -155,7 +155,7 @@ func (s *Service) indexerDownload(c *gin.Context) {
 
 	detail, err := indexer.Detail(resourceID, true)
 	if err != nil {
-		c.JSON(err.Code, gin.H{"error": err.Message})
+		respondIndexerError(c, err)
 		return
 	}
 
@@ -194,7 +194,7 @@ func (s *Service) indexerDownload(c *gin.Context) {
 				log.Error().Err(delErr).Str("id", downloadStatus.ID).Msg("failed to roll back download status")
 			}
 		}
-		c.JSON(err.Code, gin.H{"error": err.Message})
+		respondIndexerError(c, err)
 		return
 	}
 
@@ -215,7 +215,7 @@ func (s *Service) indexerRegisterSearch(c *gin.Context) {
 
 	req := &indexerRegisterSearchReq{}
 	if err := c.ShouldBindJSON(req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		respondError(c, 400, "invalid request", err)
 		return
 	}
 
@@ -230,7 +230,7 @@ func (s *Service) indexerRegisterSearch(c *gin.Context) {
 		Text:    req.Text,
 		Action:  req.Action,
 	}); err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		respondError(c, 500, "failed to register search", err)
 		return
 	}
 
@@ -254,7 +254,7 @@ func (s *Service) listDownloaders(c *gin.Context) {
 	// Get state counts for all configured downloaders
 	downloadersState, err := db.GetAllDownloadersStateCountsWithNames(s.db, downloaderNames)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		respondError(c, 500, "failed to list downloaders", err)
 		return
 	}
 
@@ -327,14 +327,14 @@ func (s *Service) getDownloaderStatuses(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		respondError(c, 500, "failed to list downloads", err)
 		return
 	}
 
 	// Get state counts for this downloader
 	stateCounts, err := db.GetDownloaderStateCounts(s.db, downloaderName)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		respondError(c, 500, "failed to list downloads", err)
 		return
 	}
 
@@ -447,10 +447,10 @@ func (s *Service) organizeDownload(c *gin.Context) {
 	// Get the download status
 	downloadStatus, err := db.GetDownloadStatusByID(s.db, downloadID)
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(404, gin.H{"error": "Download not found"})
 		} else {
-			c.JSON(500, gin.H{"error": err.Error()})
+			respondError(c, 500, "failed to load download", err)
 		}
 		return
 	}
@@ -458,7 +458,7 @@ func (s *Service) organizeDownload(c *gin.Context) {
 	// Parse the action parameter
 	req := &organizeDownloadReq{}
 	if err := c.ShouldBindQuery(req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		respondError(c, 400, "invalid request", err)
 		return
 	}
 
@@ -488,7 +488,7 @@ func (s *Service) handleAcceptPlan(c *gin.Context, downloadStatus *db.DownloadSt
 
 	success, failedResp, err := s.organizerClient.Execute(executeReq)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		respondError(c, 500, "failed to execute organize plan", err)
 		return
 	}
 
@@ -501,7 +501,7 @@ func (s *Service) handleAcceptPlan(c *gin.Context, downloadStatus *db.DownloadSt
 
 	// Update the download status
 	if err := db.SaveDownloadStatus(s.db, downloadStatus); err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		respondError(c, 500, "failed to save download status", err)
 		return
 	}
 
@@ -521,7 +521,7 @@ func (s *Service) handleManualOrganized(c *gin.Context, downloadStatus *db.Downl
 
 	// Update the download status
 	if err := db.SaveDownloadStatus(s.db, downloadStatus); err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		respondError(c, 500, "failed to save download status", err)
 		return
 	}
 
@@ -547,10 +547,10 @@ func (s *Service) handleRePlan(c *gin.Context, downloadStatus *db.DownloadStatus
 		// Update the state to CreatePlanFailed when re-planning fails
 		downloadStatus.OrganizeState = db.CreatePlanFailed
 		if saveErr := db.SaveDownloadStatus(s.db, downloadStatus); saveErr != nil {
-			c.JSON(500, gin.H{"error": saveErr.Error()})
+			respondError(c, 500, "failed to save download status", saveErr)
 			return
 		}
-		c.JSON(500, gin.H{"error": err.Error()})
+		respondError(c, 500, "failed to re-plan download", err)
 		return
 	}
 
@@ -560,7 +560,7 @@ func (s *Service) handleRePlan(c *gin.Context, downloadStatus *db.DownloadStatus
 
 	// Update the download status
 	if err := db.SaveDownloadStatus(s.db, downloadStatus); err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		respondError(c, 500, "failed to save download status", err)
 		return
 	}
 
@@ -576,10 +576,10 @@ func (s *Service) deleteDownload(c *gin.Context) {
 	// Get the download status to find which downloader to use
 	downloadStatus, err := db.GetDownloadStatusByID(s.db, downloadID)
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(404, gin.H{"error": "Download not found"})
 		} else {
-			c.JSON(500, gin.H{"error": err.Error()})
+			respondError(c, 500, "failed to load download", err)
 		}
 		return
 	}
@@ -593,7 +593,7 @@ func (s *Service) deleteDownload(c *gin.Context) {
 
 	// Delete the torrent
 	if err := downloader.DeleteTorrent(downloadID); err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		respondError(c, 500, "failed to delete download", err)
 		return
 	}
 

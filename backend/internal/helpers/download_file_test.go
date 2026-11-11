@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"bytes"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -94,6 +95,7 @@ func TestDownloadTorrentFileFromURL_HookError(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Equal(t, 409, DownloadHTTPError(err).Code)
+	assert.Equal(t, "duplicate download", DownloadHTTPError(err).Message)
 	assert.Empty(t, dirEntries(t, dir))
 }
 
@@ -123,4 +125,10 @@ func TestDownloadTorrentFileFromURL_RenameFailure(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, hooked)
 	assert.Equal(t, []string{"dest"}, dirEntries(t, dir))
+}
+
+func TestDownloadHTTPError_HidesInternalError(t *testing.T) {
+	e := DownloadHTTPError(errors.New("open /secret/path: permission denied"))
+	assert.Equal(t, 500, e.Code)
+	assert.NotContains(t, e.Message, "/secret/path")
 }
