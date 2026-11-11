@@ -19,7 +19,7 @@ afterEach(() => {
 
 describe("createVisibilityPoller", () => {
   it("ticks while visible, pauses while hidden, refreshes on return", () => {
-    const fn = vi.fn();
+    const fn = vi.fn<() => void>();
     const poller = createVisibilityPoller(fn, 1000);
     poller.start();
     vi.advanceTimersByTime(2500);
@@ -39,7 +39,7 @@ describe("createVisibilityPoller", () => {
   it("registers one listener, removes it on stop, and honours setInterval", () => {
     const add = vi.spyOn(document, "addEventListener");
     const remove = vi.spyOn(document, "removeEventListener");
-    const fn = vi.fn();
+    const fn = vi.fn<() => void>();
     const poller = createVisibilityPoller(fn, 1000);
     poller.start();
     poller.start();
@@ -60,7 +60,7 @@ describe("createVisibilityPoller", () => {
 
   it("does not tick when started while hidden", () => {
     setVisibility("hidden");
-    const fn = vi.fn();
+    const fn = vi.fn<() => void>();
     const poller = createVisibilityPoller(fn, 1000);
     poller.start();
     vi.advanceTimersByTime(5000);
