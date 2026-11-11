@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/robfig/cron/v3"
 	"github.com/rs/zerolog/log"
+	"gorm.io/gorm"
 
 	"github.com/autoget-project/autoget/backend/downloaders"
 	"github.com/autoget-project/autoget/backend/indexers"
@@ -24,6 +26,7 @@ import (
 	"github.com/autoget-project/autoget/backend/internal/config"
 	"github.com/autoget-project/autoget/backend/internal/db"
 	"github.com/autoget-project/autoget/backend/internal/handlers"
+	"github.com/autoget-project/autoget/backend/internal/notify"
 	"github.com/autoget-project/autoget/backend/internal/notify/telegram"
 	"github.com/autoget-project/autoget/backend/organizer"
 )
@@ -47,6 +50,61 @@ func hstsEnabled(cfg *auth.Config) bool {
 	}
 	u, err := url.Parse(cfg.RedirectBaseURL)
 	return err == nil && u.Scheme == "https"
+}
+
+// torrentsDir returns the torrents dir of the named downloader, or an error if
+// no such downloader exists (config.Validate normally guarantees it does).
+func torrentsDir(downloaderMap map[string]downloaders.IDownloader, indexer, name string) (string, error) {
+	d, ok := downloaderMap[name]
+	if !ok || d == nil {
+		return "", fmt.Errorf("%s: unknown downloader %q", indexer, name)
+	}
+	return d.TorrentsDir(), nil
+}
+
+// buildIndexers creates the configured indexers and registers their RSS cron
+// jobs. Indexers whose config section is nil are skipped.
+func buildIndexers(
+	cfg *config.Config,
+	downloaderMap map[string]downloaders.IDownloader,
+	db *gorm.DB,
+	tg notify.INotifier,
+	cronjob *cron.Cron,
+) (map[string]indexers.IIndexer, error) {
+	indexerMap := map[string]indexers.IIndexer{}
+	if cfg.MTeam != nil {
+		dir, err := torrentsDir(downloaderMap, "m-team", cfg.MTeam.Downloader)
+		if err != nil {
+			return nil, err
+		}
+		normal := mteam.NewMTeam(cfg.MTeam, mteam.MTeamTypeNormal, dir, db, tg)
+		normal.RegisterRSSCronjob(cronjob)
+		indexerMap[normal.Name()] = normal
+
+		// The adult variant is search-only: both variants share one RSS config,
+		// so registering it again would pull the same feed twice.
+		adult := mteam.NewMTeam(cfg.MTeam, mteam.MTeamTypeAdult, dir, db, tg)
+		indexerMap[adult.Name()] = adult
+	}
+	if cfg.Nyaa != nil {
+		dir, err := torrentsDir(downloaderMap, "nyaa", cfg.Nyaa.Downloader)
+		if err != nil {
+			return nil, err
+		}
+		i := nyaa.NewClient(cfg.Nyaa, dir, db, tg)
+		i.RegisterRSSCronjob(cronjob)
+		indexerMap[i.Name()] = i
+	}
+	if cfg.Sukebei != nil {
+		dir, err := torrentsDir(downloaderMap, "sukebei", cfg.Sukebei.Downloader)
+		if err != nil {
+			return nil, err
+		}
+		i := sukebei.NewClient(cfg.Sukebei, dir, db, tg)
+		i.RegisterRSSCronjob(cronjob)
+		indexerMap[i.Name()] = i
+	}
+	return indexerMap, nil
 }
 
 func main() {
@@ -93,24 +151,9 @@ func main() {
 		downloader.RegisterCronjobs(ctx, cronjob)
 	}
 
-	indexerMap := map[string]indexers.IIndexer{}
-	if cfg.MTeam != nil {
-		normal := mteam.NewMTeam(cfg.MTeam, mteam.MTeamTypeNormal, downloaderMap[cfg.MTeam.Downloader].TorrentsDir(), db, tg)
-		normal.RegisterRSSCronjob(cronjob)
-		indexerMap[normal.Name()] = normal
-
-		adult := mteam.NewMTeam(cfg.MTeam, mteam.MTeamTypeAdult, downloaderMap[cfg.MTeam.Downloader].TorrentsDir(), db, tg)
-		indexerMap[adult.Name()] = adult
-	}
-	if cfg.Nyaa != nil {
-		i := nyaa.NewClient(cfg.Nyaa, downloaderMap[cfg.Nyaa.Downloader].TorrentsDir(), db, tg)
-		i.RegisterRSSCronjob(cronjob)
-		indexerMap[i.Name()] = i
-	}
-	if cfg.Sukebei != nil {
-		i := sukebei.NewClient(cfg.Sukebei, downloaderMap[cfg.Sukebei.Downloader].TorrentsDir(), db, tg)
-		i.RegisterRSSCronjob(cronjob)
-		indexerMap[i.Name()] = i
+	indexerMap, err := buildIndexers(cfg, downloaderMap, db, tg, cronjob)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to create indexers")
 	}
 
 	service := handlers.NewService(cfg, db, indexerMap, downloaderMap, oc)

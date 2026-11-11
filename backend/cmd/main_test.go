@@ -8,10 +8,15 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/robfig/cron/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/autoget-project/autoget/backend/downloaders"
+	"github.com/autoget-project/autoget/backend/indexers/mteam"
+	"github.com/autoget-project/autoget/backend/indexers/nyaa"
 	"github.com/autoget-project/autoget/backend/internal/auth"
+	"github.com/autoget-project/autoget/backend/internal/config"
 )
 
 // setupRouter must guard only the API. The SPA shell and its assets are
@@ -114,4 +119,34 @@ func TestHSTSEnabled(t *testing.T) {
 	assert.False(t, hstsEnabled(&auth.Config{Disabled: true, RedirectBaseURL: "https://a.example.com"}))
 	assert.False(t, hstsEnabled(&auth.Config{RedirectBaseURL: "http://a.example.com"}))
 	assert.True(t, hstsEnabled(&auth.Config{RedirectBaseURL: "https://a.example.com"}))
+}
+
+type fakeDownloader struct {
+	downloaders.IDownloader
+}
+
+func (fakeDownloader) TorrentsDir() string { return "/tmp/torrents" }
+
+func TestBuildIndexers(t *testing.T) {
+	dls := map[string]downloaders.IDownloader{"dl": fakeDownloader{}}
+
+	t.Run("nil sections give empty map", func(t *testing.T) {
+		m, err := buildIndexers(&config.Config{}, dls, nil, nil, cron.New())
+		require.NoError(t, err)
+		assert.Empty(t, m)
+	})
+
+	t.Run("unknown downloader returns error", func(t *testing.T) {
+		m, err := buildIndexers(&config.Config{Nyaa: &nyaa.Config{Downloader: "nope"}}, dls, nil, nil, cron.New())
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `unknown downloader "nope"`)
+		assert.Nil(t, m)
+	})
+
+	t.Run("mteam gives normal and adult indexers", func(t *testing.T) {
+		cfg := &config.Config{MTeam: &mteam.Config{APIKey: "k", Downloader: "dl"}}
+		m, err := buildIndexers(cfg, dls, nil, nil, cron.New())
+		require.NoError(t, err)
+		assert.Len(t, m, 2)
+	})
 }
