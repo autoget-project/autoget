@@ -111,7 +111,7 @@ func TestCheckDailySeeding(t *testing.T) {
 		},
 	}
 
-	client, err := New("test", conf, d, nil)
+	client, err := New("test", conf, d, nil, nil)
 	require.NoError(t, err)
 
 	today := time.Now().Format("2006-01-02")
@@ -316,7 +316,7 @@ func TestProgressChecker(t *testing.T) {
 	organizerClient, err := organizer.NewClient(organizerServ.URL, nil)
 	require.NoError(t, err)
 
-	client, err := New("test", conf, d, organizerClient)
+	client, err := New("test", conf, d, organizerClient, nil)
 	require.NoError(t, err)
 
 	// r1 is downloading
@@ -480,7 +480,7 @@ func TestCreateOrganizerPlan(t *testing.T) {
 	conf := &config.DownloaderConfig{
 		Transmission: &config.TransmissionConfig{},
 	}
-	client, err := New("test", conf, d, organizerClient)
+	client, err := New("test", conf, d, organizerClient, nil)
 	require.NoError(t, err)
 
 	t.Run("successful plan creation", func(t *testing.T) {
@@ -528,7 +528,7 @@ func TestCreateOrganizerPlan(t *testing.T) {
 		failingClient, err := organizer.NewClient(failingServ.URL, nil)
 		require.NoError(t, err)
 
-		clientWithFailingOrganizer, err := New("test", conf, d, failingClient)
+		clientWithFailingOrganizer, err := New("test", conf, d, failingClient, nil)
 		require.NoError(t, err)
 
 		// Create a download status that needs planning

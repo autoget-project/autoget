@@ -22,6 +22,7 @@ import (
 
 	"github.com/autoget-project/autoget/backend/downloaders/config"
 	"github.com/autoget-project/autoget/backend/internal/db"
+	"github.com/autoget-project/autoget/backend/internal/notify"
 	"github.com/autoget-project/autoget/backend/organizer"
 )
 
@@ -46,11 +47,101 @@ type Client struct {
 	inFlightMu      sync.Mutex
 	inFlight        map[string]bool
 	uploadSem       chan struct{}
+	notifier        notify.INotifier // optional; nil disables failure alerts
+
+	// failures tracks consecutive transfer failures per torrent ID for retry
+	// backoff. In memory only; guarded by inFlightMu.
+	failures map[string]*transferFailure
+	// now is the clock; nil means time.Now. Injected by tests.
+	now func() time.Time
 
 	// ctx is cancelled at shutdown; set by RegisterCronjobs before any
 	// background goroutine starts. nil means c.context().
 	ctx context.Context
 	wg  sync.WaitGroup
+}
+
+// transferFailure is the retry state of one torrent whose transfer keeps failing.
+type transferFailure struct {
+	count int
+	next  time.Time // do not retry before this instant
+}
+
+const (
+	// transferAlertThreshold is the number of consecutive failures after which
+	// one alert is sent.
+	transferAlertThreshold = 5
+	transferBackoffBase    = time.Minute
+	transferBackoffMax     = time.Hour
+)
+
+// transferBackoff returns the delay before retrying after n consecutive
+// failures: 1m, 2m, 4m, ... capped at 1h.
+func transferBackoff(n int) time.Duration {
+	if n < 1 {
+		return 0
+	}
+	if n > 12 { // avoid shift overflow; already far above the cap
+		return transferBackoffMax
+	}
+	d := transferBackoffBase << (n - 1)
+	if d > transferBackoffMax {
+		return transferBackoffMax
+	}
+	return d
+}
+
+func (c *Client) clock() time.Time {
+	if c.now == nil {
+		return time.Now()
+	}
+	return c.now()
+}
+
+// clearFailures drops the backoff state of deleted torrents so it does not leak.
+func (c *Client) clearFailures(ids ...string) {
+	c.inFlightMu.Lock()
+	defer c.inFlightMu.Unlock()
+	for _, id := range ids {
+		delete(c.failures, id)
+	}
+}
+
+// recordTransferResult updates the backoff state for id after a transfer
+// attempt. On success the state is cleared. On failure the retry is delayed
+// exponentially and, on reaching transferAlertThreshold consecutive failures,
+// a single alert is sent (not repeated for further failures).
+func (c *Client) recordTransferResult(id string, err error) {
+	c.inFlightMu.Lock()
+	if err == nil {
+		delete(c.failures, id)
+		c.inFlightMu.Unlock()
+		return
+	}
+	if c.failures == nil {
+		c.failures = make(map[string]*transferFailure)
+	}
+	f := c.failures[id]
+	if f == nil {
+		f = &transferFailure{}
+		c.failures[id] = f
+	}
+	f.count++
+	delay := transferBackoff(f.count)
+	f.next = c.clock().Add(delay)
+	count := f.count
+	c.inFlightMu.Unlock()
+
+	logger.Error().Err(err).Str("name", c.name).Str("id", id).Int("failures", count).
+		Dur("retry_in", delay).Msg("transfer failed; backing off")
+
+	if count == transferAlertThreshold && c.notifier != nil {
+		msg := fmt.Sprintf("autoget: transfer of torrent %s on downloader %s failed %d times in a row; retrying with backoff up to %s. Last error: %v",
+			id, c.name, count, transferBackoffMax, err)
+		if nerr := c.notifier.SendMessage(msg); nerr != nil {
+			logger.Error().Err(nerr).Str("name", c.name).Str("id", id).Msg("failed to send transfer failure alert")
+		}
+	}
 }
 
 // progressInterval is how often the progress checker runs.
@@ -91,7 +182,8 @@ func (c *Client) Shutdown(ctx context.Context) error {
 	}
 }
 
-func New(name string, cfg *config.DownloaderConfig, db *gorm.DB, organizerClient *organizer.Client) (*Client, error) {
+// notifier may be nil, in which case no failure alerts are sent.
+func New(name string, cfg *config.DownloaderConfig, db *gorm.DB, organizerClient *organizer.Client, notifier notify.INotifier) (*Client, error) {
 	u, err := url.Parse(cfg.Transmission.URL)
 	if err != nil {
 		return nil, err
@@ -133,6 +225,8 @@ func New(name string, cfg *config.DownloaderConfig, db *gorm.DB, organizerClient
 		uploader:        uploader,
 		inFlight:        make(map[string]bool),
 		uploadSem:       make(chan struct{}, concurrency),
+		notifier:        notifier,
+		failures:        make(map[string]*transferFailure),
 	}, nil
 }
 
@@ -266,9 +360,15 @@ func (c *Client) copyFinishedDownloads(torrentsByHash map[string]*transmissionrp
 // dispatch runs work for one torrent on a background worker, bounded by
 // uploadSem and deduplicated by torrent ID via inFlight. The status is marked
 // Moving first so an interrupted transfer is picked up again after a restart.
-func (c *Client) dispatch(t *transmissionrpc.Torrent, s db.DownloadStatus, work func(*transmissionrpc.Torrent, *db.DownloadStatus)) {
+// A torrent whose transfer failed is skipped until its exponential backoff
+// elapses; see recordTransferResult.
+func (c *Client) dispatch(t *transmissionrpc.Torrent, s db.DownloadStatus, work func(*transmissionrpc.Torrent, *db.DownloadStatus) error) {
 	c.inFlightMu.Lock()
 	if c.inFlight[s.ID] {
+		c.inFlightMu.Unlock()
+		return
+	}
+	if f := c.failures[s.ID]; f != nil && c.clock().Before(f.next) {
 		c.inFlightMu.Unlock()
 		return
 	}
@@ -299,7 +399,9 @@ func (c *Client) dispatch(t *transmissionrpc.Torrent, s db.DownloadStatus, work 
 			return
 		}
 
-		c.safely("transfer", func() { work(torrent, &status) })
+		c.safely("transfer", func() {
+			c.recordTransferResult(status.ID, work(torrent, &status))
+		})
 	}(t, s)
 }
 
@@ -320,13 +422,13 @@ func validateTorrentPaths(t *transmissionrpc.Torrent) error {
 	return nil
 }
 
-func (c *Client) uploadTorrentFiles(t *transmissionrpc.Torrent, s *db.DownloadStatus) {
+func (c *Client) uploadTorrentFiles(t *transmissionrpc.Torrent, s *db.DownloadStatus) error {
 	files := make([]string, 0, len(t.Files))
 	ctx := c.context()
 
 	if err := validateTorrentPaths(t); err != nil {
 		logger.Error().Err(err).Str("name", c.name).Str("id", s.ID).Msg("rejecting torrent upload")
-		return
+		return err
 	}
 
 	for _, f := range t.Files {
@@ -334,7 +436,7 @@ func (c *Client) uploadTorrentFiles(t *transmissionrpc.Torrent, s *db.DownloadSt
 		fi, err := os.Stat(srcPath)
 		if err != nil {
 			logger.Error().Err(err).Str("name", c.name).Str("file", f.Name).Msg("failed to stat source file for upload; parking")
-			return
+			return err
 		}
 
 		initReq := &protocol.UploadInitRequest{
@@ -346,7 +448,7 @@ func (c *Client) uploadTorrentFiles(t *transmissionrpc.Torrent, s *db.DownloadSt
 
 		if err := c.uploader.UploadFile(ctx, srcPath, initReq, nil); err != nil {
 			logger.Error().Err(err).Str("name", c.name).Str("file", f.Name).Msg("failed to upload torrent file; parking for next tick")
-			return
+			return err
 		}
 
 		files = append(files, f.Name)
@@ -357,19 +459,20 @@ func (c *Client) uploadTorrentFiles(t *transmissionrpc.Torrent, s *db.DownloadSt
 	s.MoveState = db.Moved
 	if err := db.SaveDownloadStatus(c.db, s); err != nil {
 		logger.Error().Err(err).Str("name", c.name).Str("id", s.ID).Msg("failed to save download status after upload")
-		return
+		return err
 	}
 
 	logger.Info().Str("name", c.name).Str("id", s.ID).Int("files", len(files)).Msg("successfully uploaded torrent files via HTTP")
+	return nil
 }
 
 // copyTorrentFiles copies every file of t into FinishedDir/<id>/ and, once all
 // succeeded, marks the status Moved. On failure the status stays Moving and is
 // retried on a later tick.
-func (c *Client) copyTorrentFiles(t *transmissionrpc.Torrent, s *db.DownloadStatus) {
+func (c *Client) copyTorrentFiles(t *transmissionrpc.Torrent, s *db.DownloadStatus) error {
 	if err := validateTorrentPaths(t); err != nil {
 		logger.Error().Err(err).Str("name", c.name).Str("id", s.ID).Msg("rejecting torrent copy")
-		return
+		return err
 	}
 
 	ctx := c.context()
@@ -380,7 +483,7 @@ func (c *Client) copyTorrentFiles(t *transmissionrpc.Torrent, s *db.DownloadStat
 
 		if err := copyFileAtomic(ctx, from, target); err != nil {
 			logger.Error().Err(err).Str("name", c.name).Str("id", s.ID).Str("file", f.Name).Msg("failed to copy torrent file; will retry")
-			return
+			return err
 		}
 
 		files = append(files, f.Name)
@@ -391,7 +494,9 @@ func (c *Client) copyTorrentFiles(t *transmissionrpc.Torrent, s *db.DownloadStat
 	s.MoveState = db.Moved
 	if err := db.SaveDownloadStatus(c.db, s); err != nil {
 		logger.Error().Err(err).Str("name", c.name).Str("id", s.ID).Msg("failed to save download status after copy")
+		return err
 	}
+	return nil
 }
 
 // ctxReader aborts reads once ctx is cancelled so shutdown is not held up by
@@ -620,6 +725,7 @@ func (c *Client) removeTorrents(torrentsByHash map[string]*transmissionrpc.Torre
 		return
 	}
 
+	c.clearFailures(deleteStatusIDs...)
 	if err := db.UpdateDownloadStateForStatuses(c.db, deleteStatusIDs, db.DownloadDeleted); err != nil {
 		logger.Error().Err(err).Str("name", c.name).Msg("failed to update download status")
 	}
@@ -672,6 +778,7 @@ func (c *Client) DeleteTorrent(hash string) error {
 	}
 
 	// Update the download status in database
+	c.clearFailures(hash)
 	if err := db.UpdateDownloadStateForStatuses(c.db, []string{hash}, db.DownloadDeleted); err != nil {
 		logger.Error().Err(err).Str("name", c.name).Str("hash", hash).Msg("failed to update download status")
 		return err

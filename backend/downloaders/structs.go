@@ -9,6 +9,7 @@ import (
 
 	"github.com/autoget-project/autoget/backend/downloaders/config"
 	"github.com/autoget-project/autoget/backend/downloaders/transmission"
+	"github.com/autoget-project/autoget/backend/internal/notify"
 	"github.com/autoget-project/autoget/backend/organizer"
 )
 
@@ -22,10 +23,10 @@ type IDownloader interface {
 	DeleteTorrent(hash string) error
 }
 
-func New(name string, cfg *config.DownloaderConfig, db *gorm.DB, organizerClient *organizer.Client) (IDownloader, error) {
+func New(name string, cfg *config.DownloaderConfig, db *gorm.DB, organizerClient *organizer.Client, notifier notify.INotifier) (IDownloader, error) {
 	if cfg.Transmission == nil {
 		return nil, fmt.Errorf("unknown downloader %s", name)
 	}
 
-	return transmission.New(name, cfg, db, organizerClient)
+	return transmission.New(name, cfg, db, organizerClient, notifier)
 }

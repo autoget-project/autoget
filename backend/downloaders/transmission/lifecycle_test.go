@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,6 +20,7 @@ import (
 
 	"github.com/autoget-project/autoget/backend/downloaders/config"
 	"github.com/autoget-project/autoget/backend/internal/db"
+	"github.com/autoget-project/autoget/backend/internal/notify"
 	"github.com/autoget-project/autoget/backend/organizer"
 )
 
@@ -83,7 +86,7 @@ func newFakeClient(t *testing.T, fake *fakeTransmission, d *gorm.DB, conf *confi
 		serv.Close()
 	})
 	conf.Transmission.URL = serv.URL
-	c, err := New("test", conf, d, nil)
+	c, err := New("test", conf, d, nil, nil)
 	require.NoError(t, err)
 	return c
 }
@@ -301,4 +304,148 @@ func TestShutdown_CancelsQueuedCopy(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, db.Moving, got.MoveState)
 	assert.NoFileExists(t, filepath.Join(finishedDir, "h", "f.txt"))
+}
+
+type fakeNotifier struct {
+	mu   sync.Mutex
+	msgs []string
+}
+
+func (f *fakeNotifier) SendMessage(m string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.msgs = append(f.msgs, m)
+	return nil
+}
+
+func (f *fakeNotifier) SendMarkdownMessage(m string) error { return f.SendMessage(m) }
+
+func (f *fakeNotifier) count() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.msgs)
+}
+
+func TestTransferBackoff(t *testing.T) {
+	assert.Equal(t, time.Duration(0), transferBackoff(0))
+	assert.Equal(t, time.Minute, transferBackoff(1))
+	assert.Equal(t, 2*time.Minute, transferBackoff(2))
+	assert.Equal(t, 16*time.Minute, transferBackoff(5))
+	assert.Equal(t, time.Hour, transferBackoff(7))
+	assert.Equal(t, time.Hour, transferBackoff(1000))
+}
+
+func newDispatchClient(t *testing.T, n notify.INotifier, clock *time.Time) *Client {
+	d, err := db.SqliteForTest()
+	require.NoError(t, err)
+	require.NoError(t, d.Create(&db.DownloadStatus{ID: "h", Downloader: "t", State: db.DownloadSeeding, MoveState: db.UnMoved}).Error)
+	return &Client{name: "t", db: d, notifier: n,
+		inFlight: map[string]bool{}, uploadSem: make(chan struct{}, 1),
+		now: func() time.Time { return *clock }}
+}
+
+func TestDispatch_BackoffResetAndAlert(t *testing.T) {
+	clock := time.Unix(1_000_000, 0)
+	n := &fakeNotifier{}
+	c := newDispatchClient(t, n, &clock)
+
+	calls := 0
+	var fail atomic.Bool
+	fail.Store(true)
+	work := func(*transmissionrpc.Torrent, *db.DownloadStatus) error {
+		calls++
+		if fail.Load() {
+			return errors.New("boom")
+		}
+		return nil
+	}
+	run := func() {
+		c.dispatch(&transmissionrpc.Torrent{}, db.DownloadStatus{ID: "h"}, work)
+		c.wg.Wait()
+	}
+
+	run()
+	assert.Equal(t, 1, calls)
+
+	// within the 1m backoff: skipped
+	clock = clock.Add(30 * time.Second)
+	run()
+	assert.Equal(t, 1, calls)
+
+	// after backoff: retried, next delay doubles to 2m
+	clock = clock.Add(31 * time.Second)
+	run()
+	assert.Equal(t, 2, calls)
+	clock = clock.Add(90 * time.Second)
+	run()
+	assert.Equal(t, 2, calls)
+
+	// failures 3..4: no alert yet
+	for i := 0; i < 2; i++ {
+		clock = clock.Add(time.Hour)
+		run()
+	}
+	assert.Equal(t, 4, calls)
+	assert.Equal(t, 0, n.count())
+
+	// 5th failure alerts; 6th does not alert again
+	clock = clock.Add(time.Hour)
+	run()
+	assert.Equal(t, 5, calls)
+	assert.Equal(t, 1, n.count())
+	clock = clock.Add(time.Hour)
+	run()
+	assert.Equal(t, 6, calls)
+	assert.Equal(t, 1, n.count())
+
+	// success clears state; a later failure starts again from 1m
+	fail.Store(false)
+	clock = clock.Add(time.Hour)
+	run()
+	assert.Equal(t, 7, calls)
+	c.inFlightMu.Lock()
+	assert.Empty(t, c.failures)
+	c.inFlightMu.Unlock()
+
+	fail.Store(true)
+	run()
+	assert.Equal(t, 8, calls)
+	clock = clock.Add(61 * time.Second)
+	run()
+	assert.Equal(t, 9, calls)
+}
+
+func TestDispatch_NilNotifier(t *testing.T) {
+	clock := time.Unix(1_000_000, 0)
+	c := newDispatchClient(t, nil, &clock)
+	for i := 0; i < transferAlertThreshold+1; i++ {
+		c.dispatch(&transmissionrpc.Torrent{}, db.DownloadStatus{ID: "h"},
+			func(*transmissionrpc.Torrent, *db.DownloadStatus) error { return errors.New("boom") })
+		c.wg.Wait()
+		clock = clock.Add(2 * time.Hour)
+	}
+}
+
+func TestDeleteTorrent_ClearsFailureState(t *testing.T) {
+	d, err := db.SqliteForTest()
+	require.NoError(t, err)
+	require.NoError(t, d.Create(&db.DownloadStatus{ID: "h", Downloader: "test", State: db.DownloadSeeding, MoveState: db.UnMoved}).Error)
+
+	tor := newTorrent(1, "h", transmissionrpc.TorrentStatusSeed, 0)
+	fake := &fakeTransmission{resp: []any{
+		map[string]any{"torrents": []transmissionrpc.Torrent{tor}}, // torrent-get
+		map[string]any{}, // torrent-remove
+	}}
+	c := newFakeClient(t, fake, d, &config.DownloaderConfig{Transmission: &config.TransmissionConfig{}})
+
+	c.recordTransferResult("h", errors.New("boom"))
+	c.recordTransferResult("other", errors.New("boom"))
+	require.Len(t, c.failures, 2)
+
+	require.NoError(t, c.DeleteTorrent("h"))
+
+	c.inFlightMu.Lock()
+	defer c.inFlightMu.Unlock()
+	assert.NotContains(t, c.failures, "h")
+	assert.Contains(t, c.failures, "other")
 }

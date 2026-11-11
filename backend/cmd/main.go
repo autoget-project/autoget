@@ -72,7 +72,7 @@ func main() {
 
 	downloaderMap := map[string]downloaders.IDownloader{}
 	for name, dlCfg := range cfg.Downloaders {
-		downloader, err := downloaders.New(name, dlCfg, db, oc)
+		downloader, err := downloaders.New(name, dlCfg, db, oc, tg)
 		if err != nil {
 			log.Fatal().Err(err).Msg("failed to create downloader")
 		}
