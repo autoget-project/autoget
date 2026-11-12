@@ -95,8 +95,20 @@ describe("matching", () => {
     const { router } = setup();
     await router.goto("/%E0%A4%A");
     expect(router.outlet()).toBe("404");
+  });
+
+  it("decodes percent-encoded params", async () => {
+    const { router } = setup();
     await router.goto("/a/%2F%20x");
-    expect(router.outlet()).toBe("a:%2F%20x");
+    expect(router.outlet()).toBe("a:/ x");
+    await router.goto("/a/m-team%3Aadult");
+    expect(router.outlet()).toBe("a:m-team:adult");
+  });
+
+  it("keeps malformed percent-encoding as-is", async () => {
+    const { router } = setup();
+    await router.goto("/a/100%");
+    expect(router.outlet()).toBe("a:100%");
   });
 
   it("throws when no route matches", async () => {

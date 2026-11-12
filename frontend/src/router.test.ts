@@ -58,6 +58,22 @@ describe("app-router", () => {
     await vi.waitFor(() => expect(window.location.pathname).toBe("/indexers/a/c"));
   });
 
+  it("loads an indexer whose name needs URL encoding (m-team:adult)", async () => {
+    vi.mocked(api.fetchIndexers).mockResolvedValue(["m-team", "m-team:adult"]);
+    vi.mocked(api.fetchIndexerCategories).mockResolvedValue([
+      { id: "c", name: "C", subCategories: [] } as never,
+    ]);
+    const el = await mount("/indexers/m-team%3Aadult");
+    await vi.waitFor(() => expect(window.location.pathname).toBe("/indexers/m-team%3Aadult/c"));
+    expect(vi.mocked(api.fetchIndexerCategories)).toHaveBeenCalledWith("m-team:adult");
+    await vi.waitFor(() => expect(el.shadowRoot?.querySelector("indexer-view")).not.toBeNull());
+    const rendered = el.shadowRoot?.querySelector("indexer-view") as Element & {
+      indexerId?: string;
+    };
+    expect(rendered.indexerId).toBe("m-team:adult");
+    expect(el.shadowRoot?.querySelector("not-found-view")).toBeNull();
+  });
+
   it("shows an error with retry when the categories fetch fails", async () => {
     vi.mocked(api.fetchIndexers).mockResolvedValue(["a"]);
     vi.mocked(api.fetchIndexerCategories).mockRejectedValue(new Error("boom"));

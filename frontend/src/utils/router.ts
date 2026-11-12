@@ -9,6 +9,24 @@ export interface RouteConfig {
   enter?: (params: Params) => boolean | Promise<boolean>;
 }
 
+// URLPattern groups keep percent-encoding; routes expect decoded values
+// (e.g. "m-team%3Aadult" must match the indexer "m-team:adult").
+function decodeParams(groups: Params): Params {
+  const out: Params = {};
+  for (const [k, v] of Object.entries(groups)) {
+    if (v === undefined) {
+      out[k] = v;
+      continue;
+    }
+    try {
+      out[k] = decodeURIComponent(v);
+    } catch {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
 // Minimal client-side router on native URLPattern (polyfilled on demand by app.ts).
 // Patterns are compiled lazily on the first goto so load order cannot break it.
 export class Router implements ReactiveController {
@@ -44,7 +62,7 @@ export class Router implements ReactiveController {
       throw new Error(`No route found for ${pathname}`);
     }
     const route = this.routes[index];
-    const params: Params = this.patterns[index].exec({ pathname })?.pathname.groups ?? {};
+    const params = decodeParams(this.patterns[index].exec({ pathname })?.pathname.groups ?? {});
     if (route.enter) {
       const ok = await route.enter(params);
       if (ok === false || id !== this.navId) {
