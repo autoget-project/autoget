@@ -6,7 +6,7 @@
 # the resulting image stays well below 30MB.
 
 ARG GO_VERSION=1.27.4
-ARG ALPINE_VERSION=3.22
+ARG ALPINE_VERSION=3.24
 ARG UID=99
 ARG GID=100
 

@@ -20,7 +20,7 @@ runs `goimports -local` with that prefix per module.
 ## Tooling
 
 Versions used in CI (`.github/workflows/ci.yml`): Go 1.27.4, Node 26, pnpm
-12.18.0, goimports v0.49.0, golangci-lint v2.15.0, govulncheck v1.9.0.
+12.21.0, goimports v0.52.0, golangci-lint v2.15.0, govulncheck v1.9.0.
 
 ## Commands
 

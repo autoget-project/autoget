@@ -1,7 +1,7 @@
 # Stage 1: Build frontend
 FROM node:26-alpine AS frontend-builder
 
-RUN npm install -g pnpm@12.18.0
+RUN npm install -g pnpm@12.21.0
 
 WORKDIR /frontend
 
@@ -38,7 +38,7 @@ WORKDIR /src/backend
 RUN CGO_ENABLED=0 GOOS=linux go build -o autoget ./cmd/main.go
 
 # Stage 3: Deploy image
-FROM alpine:3.22 AS deploy
+FROM alpine:3.24 AS deploy
 
 # Install runtime dependencies
 RUN apk --no-cache add ca-certificates tzdata

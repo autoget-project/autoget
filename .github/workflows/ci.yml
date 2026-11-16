@@ -13,11 +13,11 @@ permissions:
 
 env:
   GO_VERSION: '1.27.4'
-  GOIMPORTS_VERSION: v0.49.0
+  GOIMPORTS_VERSION: v0.52.0
   GOLANGCI_LINT_VERSION: v2.15.0
   GOVULNCHECK_VERSION: v1.9.0
   NODE_VERSION: '26'
-  PNPM_VERSION: '12.18.0'
+  PNPM_VERSION: '12.21.0'
 
 jobs:
   go:
@@ -90,7 +90,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up pnpm
-        uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
+        uses: pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1 # v3.2.0
         with:
           version: ${{ env.PNPM_VERSION }}
           runtime: node@${{ env.NODE_VERSION }}
