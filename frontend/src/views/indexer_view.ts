@@ -47,6 +47,16 @@ export class IndexerView extends LitElement {
   private sidebarVisible: boolean = true;
 
   @state()
+  private isDesktop: boolean = true;
+
+  private desktopQuery: MediaQueryList | null = null;
+
+  private handleDesktopChange = (e: MediaQueryListEvent) => {
+    this.isDesktop = e.matches;
+    this.sidebarVisible = e.matches;
+  };
+
+  @state()
   private sidebarWidth: number = 256;
 
   @state()
@@ -134,8 +144,13 @@ export class IndexerView extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    if (typeof window !== "undefined" && window.innerWidth < 1024) {
-      this.sidebarVisible = false;
+    if (typeof window !== "undefined") {
+      this.desktopQuery = window.matchMedia?.("(min-width: 1024px)") ?? null;
+      this.isDesktop = this.desktopQuery?.matches ?? window.innerWidth >= 1024;
+      this.desktopQuery?.addEventListener("change", this.handleDesktopChange);
+      if (!this.isDesktop) {
+        this.sidebarVisible = false;
+      }
     }
     const saved = localStorage.getItem(this.sidebarWidthStorageKey);
     if (saved) {
@@ -144,6 +159,12 @@ export class IndexerView extends LitElement {
         this.sidebarWidth = this.clampSidebarWidth(parsed);
       }
     }
+  }
+
+  disconnectedCallback() {
+    this.desktopQuery?.removeEventListener("change", this.handleDesktopChange);
+    this.desktopQuery = null;
+    super.disconnectedCallback();
   }
 
   private findCategoryName(id: string, categories: Category[]): string | null {
@@ -199,7 +220,7 @@ export class IndexerView extends LitElement {
   }
 
   render() {
-    const isDesktop = typeof window !== "undefined" && window.innerWidth >= 1024;
+    const isDesktop = this.isDesktop;
     const sidebarDesktopStyle = this.sidebarVisible
       ? `width: ${this.sidebarWidth}px;`
       : "width: 0;";

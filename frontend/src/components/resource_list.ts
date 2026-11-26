@@ -52,7 +52,7 @@ export class ResourceList extends LitElement {
   @state()
   private isLoading: boolean = false;
 
-  private mediaQueryList: MediaQueryList | null = null;
+  private mediaQueryLists: MediaQueryList[] = [];
   private handleMediaChange = () => {
     this.columnCount = this.loadStoredColumnCount();
     this.requestUpdate();
@@ -61,17 +61,22 @@ export class ResourceList extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     if (typeof window !== "undefined") {
-      this.mediaQueryList = window.matchMedia("(max-width: 640px)");
-      this.mediaQueryList.addEventListener("change", this.handleMediaChange);
+      this.mediaQueryLists = ["(max-width: 640px)", "(max-width: 1023px)"].map((q) =>
+        window.matchMedia(q),
+      );
+      for (const mql of this.mediaQueryLists) {
+        mql.addEventListener("change", this.handleMediaChange);
+      }
     }
     this.columnCount = this.loadStoredColumnCount();
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    if (this.mediaQueryList) {
-      this.mediaQueryList.removeEventListener("change", this.handleMediaChange);
+    for (const mql of this.mediaQueryLists) {
+      mql.removeEventListener("change", this.handleMediaChange);
     }
+    this.mediaQueryLists = [];
   }
 
   private getMaxColumnsForCurrentViewport(): number {

@@ -128,4 +128,32 @@ describe("indexer-view", () => {
     expect(fetchCategories).toHaveBeenCalledTimes(2);
     expect(fetchCategories).toHaveBeenLastCalledWith("nyaa");
   });
+
+  it("reacts to viewport breakpoint changes", async () => {
+    fetchCategories.mockResolvedValue([] as Category[]);
+    let listener: ((e: MediaQueryListEvent) => void) | undefined;
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn<(q: string) => MediaQueryList>().mockReturnValue({
+        matches: false,
+        addEventListener: (_: string, l: (e: MediaQueryListEvent) => void) => (listener = l),
+        removeEventListener: vi.fn<() => void>(),
+      } as unknown as MediaQueryList),
+    );
+    const el = await mount();
+    const root = el.shadowRoot as ShadowRoot;
+    const panel = () => root.getElementById("left-panel-categories") as HTMLElement;
+    expect(root.querySelector(".fixed.inset-0")).toBeNull();
+    // Open the mobile drawer: backdrop appears.
+    root.querySelector("div")?.dispatchEvent(new CustomEvent("sidebar-toggle"));
+    await el.updateComplete;
+    expect(root.querySelector(".fixed.inset-0")).not.toBeNull();
+    expect(panel().getAttribute("style")).toContain("width: 280px");
+    // Crossing into desktop drops the backdrop and uses the resizable width.
+    listener?.({ matches: true } as MediaQueryListEvent);
+    await el.updateComplete;
+    expect(root.querySelector(".fixed.inset-0")).toBeNull();
+    expect(panel().getAttribute("style")).toContain("width: 256px");
+    vi.unstubAllGlobals();
+  });
 });

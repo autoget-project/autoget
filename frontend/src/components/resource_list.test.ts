@@ -196,4 +196,28 @@ describe("resource-list", () => {
       ?.click();
     expect(localStorage.getItem("resource-list-column-count")).toBe("3");
   });
+
+  it("clamps the column count when the viewport shrinks past 1024px", async () => {
+    fetchRes.mockResolvedValue(response([]));
+    const listeners: Record<string, () => void> = {};
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn<(q: string) => MediaQueryList>().mockImplementation(
+        (q: string) =>
+          ({
+            addEventListener: (_: string, l: () => void) => (listeners[q] = l),
+            removeEventListener: vi.fn<() => void>(),
+          }) as unknown as MediaQueryList,
+      ),
+    );
+    vi.stubGlobal("innerWidth", 1400);
+    localStorage.setItem("resource-list-column-count", "8");
+    const el = await mount();
+    const cols = () => (el as unknown as { columnCount: number }).columnCount;
+    expect(cols()).toBe(8);
+    vi.stubGlobal("innerWidth", 800);
+    listeners["(max-width: 1023px)"]?.();
+    await settle(el);
+    expect(cols()).toBe(4);
+  });
 });
