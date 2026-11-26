@@ -581,6 +581,58 @@ describe("request building and error handling", () => {
     expect(urlOf(mock, 2).searchParams.get("action")).toBe("re_plan");
   });
 
+  it("uses the server error message for failed requests", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () => res(400, { error: "No organize plan available" })),
+    );
+    const err = await organizeDownload("id", "accept_plan").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).message).toBe("No organize plan available");
+    expect((err as ApiError).status).toBe(400);
+  });
+
+  it("prefers the server message over the generic 409 text", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () => res(409, { error: "download is not in planned state" })),
+    );
+    const err = await organizeDownload("id", "accept_plan").catch((e: unknown) => e);
+    expect(errorMessage(err)).toBe("download is not in planned state");
+  });
+
+  it("falls back to HTTP error N for non-JSON bodies", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(
+        async () =>
+          ({
+            status: 500,
+            ok: false,
+            json: async () => {
+              throw new SyntaxError("bad json");
+            },
+          }) as unknown as Response,
+      ),
+    );
+    await expect(organizeDownload("id", "accept_plan")).rejects.toMatchObject({
+      message: "HTTP error 500",
+      status: 500,
+    });
+  });
+
+  it("organizeDownload returns failed moves", async () => {
+    const body = {
+      status: "partial",
+      failed: { failed_move: [{ file: "a.mkv", action: "move", reason: "exists" }] },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () => res(200, body)),
+    );
+    await expect(organizeDownload("id", "accept_plan")).resolves.toEqual(body);
+  });
+
   it("omits empty query values", () => {
     expect(buildUrl("/p", { a: "", b: undefined, c: 1 })).toBe("/p?c=1");
   });

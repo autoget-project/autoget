@@ -185,7 +185,16 @@ export class DownloaderView extends LitElement {
 
     try {
       this.actionError = null;
-      await organizeDownload(downloadId, action, userHint);
+      const result = await organizeDownload(downloadId, action, userHint);
+      const failedMoves = result?.failed?.failed_move ?? [];
+      if (failedMoves.length > 0) {
+        const shown = failedMoves
+          .slice(0, 5)
+          .map((f) => `${f.file}: ${f.reason}`)
+          .join("; ");
+        const more = failedMoves.length > 5 ? "; …" : "";
+        this.actionError = `Plan partially executed; ${failedMoves.length} move(s) failed: ${shown}${more}`;
+      }
       // Clear the user hint for this download if the action was successful
       if (userHint) {
         this.userHints.delete(downloadId);
@@ -241,7 +250,7 @@ export class DownloaderView extends LitElement {
   }
 
   private renderOrganizePlans(organizePlans: PlanResponse | null, downloadId: string) {
-    if (!organizePlans || !organizePlans.plan || organizePlans.plan.length === 0) {
+    if (!organizePlans) {
       return html``;
     }
 
@@ -252,6 +261,10 @@ export class DownloaderView extends LitElement {
           <span>Plan Error: ${organizePlans.error}</span>
         </div>
       `;
+    }
+
+    if (!organizePlans.plan || organizePlans.plan.length === 0) {
+      return html``;
     }
 
     const currentUserHint = this.userHints.get(downloadId) || "";

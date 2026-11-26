@@ -78,6 +78,7 @@ describe("state labels", () => {
   it("getMoveStateLabel", () => {
     expect(getMoveStateLabel(0)).toEqual({ label: "Unmoved", color: "warning" });
     expect(getMoveStateLabel(1)).toEqual({ label: "Moved", color: "success" });
+    expect(getMoveStateLabel(2)).toEqual({ label: "Moving", color: "info" });
     expect(getMoveStateLabel(9)).toEqual({ label: "Unknown", color: "neutral" });
   });
   it("getOrganizeStateLabel", () => {

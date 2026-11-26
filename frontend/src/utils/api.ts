@@ -476,15 +476,18 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
 
 export class ApiError extends Error {
   status?: number;
-  constructor(message: string, status?: number) {
+  // fromServer is true when message is the server's own {error} text.
+  fromServer: boolean;
+  constructor(message: string, status?: number, fromServer = false) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.fromServer = fromServer;
   }
 }
 
 export function errorMessage(e: unknown): string {
-  if (e instanceof ApiError && e.status === 409) {
+  if (e instanceof ApiError && e.status === 409 && !e.fromServer) {
     return "Already exists.";
   }
   return e instanceof Error && e.message ? e.message : "Unexpected error";
@@ -519,6 +522,14 @@ async function request(url: string, init?: RequestInit): Promise<Response> {
     throw new ApiError("Network error");
   }
   if (!response.ok) {
+    let serverMessage = "";
+    try {
+      const body = (await response.json()) as { error?: unknown } | null;
+      if (typeof body?.error === "string") serverMessage = body.error;
+    } catch {
+      // empty or non-JSON body
+    }
+    if (serverMessage) throw new ApiError(serverMessage, response.status, true);
     throw new ApiError(`HTTP error ${response.status}`, response.status);
   }
   return response;
@@ -673,20 +684,37 @@ export interface PlanResponse {
   error?: string;
 }
 
+export interface PlanFailed {
+  file: string;
+  action: string;
+  target?: string;
+  reason: string;
+}
+
+export interface OrganizeResult {
+  status: string;
+  failed?: { failed_move: PlanFailed[] };
+}
+
 export type OrganizeAction = "accept_plan" | "manual_organized" | "re_plan";
 
 export async function organizeDownload(
   downloadId: string,
   action: OrganizeAction,
   userHint?: string,
-): Promise<void> {
-  await request(
+): Promise<OrganizeResult> {
+  const response = await request(
     buildUrl(`/api/v1/download/${seg(downloadId)}/organize`, {
       action,
       user_hint: action === "re_plan" ? userHint : undefined,
     }),
     { method: "POST" },
   );
+  try {
+    return (await response.json()) as OrganizeResult;
+  } catch {
+    throw new ApiError("Invalid response from server");
+  }
 }
 
 export async function deleteDownload(downloadId: string): Promise<void> {

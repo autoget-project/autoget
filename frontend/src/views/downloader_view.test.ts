@@ -12,7 +12,8 @@ vi.mock("../utils/api.ts", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../utils/api.ts")>()),
   fetchDownloaderItems:
     vi.fn<(name: string, state: DownloadState) => Promise<DownloaderStatusResponse>>(),
-  organizeDownload: vi.fn<(id: string, action: OrganizeAction, hint?: string) => Promise<void>>(),
+  organizeDownload:
+    vi.fn<(id: string, action: OrganizeAction, hint?: string) => Promise<api.OrganizeResult>>(),
   deleteDownload: vi.fn<(id: string) => Promise<void>>(),
 }));
 vi.mock("../components/navbar.ts", () => ({}));
@@ -27,6 +28,7 @@ type View = HTMLElement & {
 };
 
 const fetchItems = vi.mocked(api.fetchDownloaderItems);
+const organize = vi.mocked(api.organizeDownload);
 const deleteDownload = vi.mocked(api.deleteDownload);
 
 function item(over: Partial<DownloadItem> = {}): DownloadItem {
@@ -149,6 +151,25 @@ describe("downloader-view", () => {
     await settle(el);
     expect(el.shadowRoot?.querySelector('[role="alert"]')).toBeNull();
     vi.unstubAllGlobals();
+  });
+
+  it("shows failed moves of a partially executed plan", async () => {
+    fetchItems.mockResolvedValue(status([item()]));
+    organize.mockResolvedValue({
+      status: "partial",
+      failed: { failed_move: [{ file: "a.mkv", action: "move", reason: "target exists" }] },
+    });
+    const el = await mount("planned");
+    el.shadowRoot?.querySelector<HTMLButtonElement>("button.btn-success")?.click();
+    await settle(el);
+    const alert = el.shadowRoot?.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("1 move(s) failed: a.mkv: target exists");
+  });
+
+  it("shows the plan error even when the plan is empty", async () => {
+    fetchItems.mockResolvedValue(status([item({ organize_plans: { plan: [], error: "x" } })]));
+    const el = await mount();
+    expect(el.shadowRoot?.textContent).toContain("Plan Error: x");
   });
 
   it("does not delete when the confirmation is declined", async () => {

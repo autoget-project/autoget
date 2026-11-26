@@ -80,6 +80,8 @@ export function getMoveStateLabel(moveState: number): StateLabel {
       return { label: "Unmoved", color: "warning" };
     case 1: // Moved
       return { label: "Moved", color: "success" };
+    case 2: // Moving
+      return { label: "Moving", color: "info" };
     default:
       return { label: "Unknown", color: "neutral" };
   }
