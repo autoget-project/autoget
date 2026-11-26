@@ -636,6 +636,12 @@ describe("request building and error handling", () => {
     await expect(organizeDownload("id", "accept_plan")).resolves.toEqual(body);
   });
 
+  it("repeats array params and skips false", () => {
+    expect(buildUrl("/p", { s: ["4K", "1080p"], free: true, off: false })).toBe(
+      "/p?s=4K&s=1080p&free=true",
+    );
+  });
+
   it("omits empty query values", () => {
     expect(buildUrl("/p", { a: "", b: undefined, c: 1 })).toBe("/p?c=1");
   });

@@ -562,14 +562,19 @@ export function seg(value: string): string {
   return encodeURIComponent(value);
 }
 
-// buildUrl appends query parameters with proper encoding, skipping empty values.
+// buildUrl appends query parameters with proper encoding, skipping empty values
+// and false. Arrays become repeated parameters.
 export function buildUrl(
   path: string,
-  params?: Record<string, string | number | undefined>,
+  params?: Record<string, string | number | boolean | string[] | undefined>,
 ): string {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params ?? {})) {
-    if (value !== undefined && value !== "") {
+    if (Array.isArray(value)) {
+      for (const v of value) {
+        if (v !== "") query.append(key, v);
+      }
+    } else if (value !== undefined && value !== "" && value !== false) {
       query.set(key, String(value));
     }
   }
@@ -675,15 +680,28 @@ export interface ResourcesResponse {
   resources: Resource[];
 }
 
+export interface ResourceFilters {
+  free?: boolean;
+  standards?: string[];
+}
+
 export async function fetchIndexerResources(
   indexer: string,
   category: string,
   keyword: string,
   page: number,
   pageSize: number = 100,
+  filters: ResourceFilters = {},
 ): Promise<ResourcesResponse> {
   return getJSON<ResourcesResponse>(
-    buildUrl(`/api/v1/indexers/${seg(indexer)}/resources`, { category, keyword, page, pageSize }),
+    buildUrl(`/api/v1/indexers/${seg(indexer)}/resources`, {
+      category,
+      keyword,
+      page,
+      pageSize,
+      free: filters.free,
+      standards: filters.standards,
+    }),
   );
 }
 

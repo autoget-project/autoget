@@ -13,6 +13,7 @@ vi.mock("../utils/api", async (importOriginal) => ({
         keyword: string,
         page: number,
         pageSize?: number,
+        filters?: { free?: boolean; standards?: string[] },
       ) => Promise<ResourcesResponse>
     >(),
 }));
@@ -98,7 +99,7 @@ describe("resource-list", () => {
       response([resource({ id: "1", title: "Alpha" }), resource({ id: "2", title: "Beta" })]),
     );
     const el = await mount();
-    expect(fetchRes).toHaveBeenCalledWith("idx", "", "", 1);
+    expect(fetchRes).toHaveBeenCalledWith("idx", "", "", 1, undefined, {});
     const titles = [...(el.shadowRoot?.querySelectorAll("h3") ?? [])].map((h) =>
       h.textContent?.trim(),
     );
@@ -115,6 +116,28 @@ describe("resource-list", () => {
     dialog.open = vi.fn<(indexerId: string, resource: Resource) => void>();
     el.shadowRoot?.querySelector<HTMLButtonElement>('button[aria-label^="Show details"]')?.click();
     expect(dialog.open).toHaveBeenCalledWith("idx", expect.objectContaining({ id: "7" }));
+  });
+
+  it("sends the Free filter, persists it and hides chips for nyaa", async () => {
+    fetchRes.mockResolvedValue(response([resource()]));
+    const el = await mount({ indexerId: "mteam" });
+    const chip = [...(el.shadowRoot?.querySelectorAll("button[aria-pressed]") ?? [])].find(
+      (b) => b.textContent?.trim() === "Free",
+    ) as HTMLButtonElement;
+    chip.click();
+    await settle(el);
+    expect(fetchRes).toHaveBeenLastCalledWith("mteam", "", "", 1, undefined, {
+      free: true,
+      standards: [],
+    });
+    expect(JSON.parse(localStorage.getItem("resource-list-filters") ?? "{}")).toEqual({
+      free: true,
+      standards: [],
+    });
+
+    const nyaa = await mount({ indexerId: "nyaa" });
+    expect(nyaa.shadowRoot?.querySelector("button[aria-pressed]")).toBeNull();
+    expect(fetchRes).toHaveBeenLastCalledWith("nyaa", "", "", 1, undefined, {});
   });
 
   it("shows the empty state", async () => {
@@ -147,7 +170,7 @@ describe("resource-list", () => {
     const el = await mount();
     el.page = 2;
     await settle(el);
-    expect(fetchRes).toHaveBeenLastCalledWith("idx", "", "", 2);
+    expect(fetchRes).toHaveBeenLastCalledWith("idx", "", "", 2, undefined, {});
     expect(fetchRes).toHaveBeenCalledTimes(2);
   });
 

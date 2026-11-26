@@ -15,6 +15,7 @@ import {
   errorMessage,
   fetchIndexerResources,
   type Resource,
+  type ResourceFilters,
   type ResourcesResponse,
 } from "../utils/api";
 import { renderError } from "./error_alert";
@@ -61,6 +62,16 @@ export class ResourceList extends LitElement {
   private static readonly COLUMNS_STORAGE_KEY = "resource-list-column-count";
 
   @state()
+  private free: boolean = false;
+
+  @state()
+  private standards: string[] = [];
+
+  private static readonly FILTERS_STORAGE_KEY = "resource-list-filters";
+
+  private static readonly STANDARD_CHIPS = ["4K", "1080p", "720p", "SD"];
+
+  @state()
   private isLoading: boolean = false;
 
   @query("resource-detail-dialog")
@@ -87,6 +98,7 @@ export class ResourceList extends LitElement {
       }
     }
     this.columnCount = this.loadStoredColumnCount();
+    this.loadStoredFilters();
   }
 
   disconnectedCallback() {
@@ -130,6 +142,41 @@ export class ResourceList extends LitElement {
     return this.getDefaultColumnCountForViewport();
   }
 
+  private loadStoredFilters() {
+    try {
+      const raw = localStorage.getItem(ResourceList.FILTERS_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as ResourceFilters | null;
+      this.free = parsed?.free === true;
+      this.standards = Array.isArray(parsed?.standards)
+        ? parsed.standards.filter((s): s is string => typeof s === "string")
+        : [];
+    } catch {
+      // ignore corrupt or unavailable storage
+    }
+  }
+
+  private setFilters(free: boolean, standards: string[]) {
+    this.free = free;
+    this.standards = standards;
+    try {
+      localStorage.setItem(ResourceList.FILTERS_STORAGE_KEY, JSON.stringify({ free, standards }));
+    } catch {
+      // storage unavailable; the filter still applies for this session
+    }
+    // Back to page 1; handlePageChange updates the URL, which changes `page`.
+    if (this.page !== 1) {
+      this.handlePageChange(1, true);
+    }
+  }
+
+  private toggleStandard(standard: string) {
+    const next = this.standards.includes(standard)
+      ? this.standards.filter((s) => s !== standard)
+      : [...this.standards, standard];
+    this.setFilters(this.free, next);
+  }
+
   private handleColumnCountChange(delta: number) {
     const maxCols = this.getMaxColumnsForCurrentViewport();
     const next = Math.min(maxCols, Math.max(ResourceList.MIN_COLUMNS, this.columnCount + delta));
@@ -144,7 +191,9 @@ export class ResourceList extends LitElement {
       changedProperties.has("indexerId") ||
       changedProperties.has("category") ||
       changedProperties.has("keyword") ||
-      changedProperties.has("page")
+      changedProperties.has("page") ||
+      changedProperties.has("free") ||
+      changedProperties.has("standards")
     ) {
       await this.fetchIndexerResources();
     }
@@ -167,6 +216,8 @@ export class ResourceList extends LitElement {
           this.category,
           this.keyword,
           this.page,
+          undefined,
+          this.activeFilters(),
         );
         if (seq !== this.requestSeq) return; // a newer request superseded this one
         this.resources = response;
@@ -187,8 +238,47 @@ export class ResourceList extends LitElement {
     }
   }
 
-  private handlePageChange(page: number) {
-    if (page >= 1 && page <= this.totalPages) {
+  // Only mteam honours these filters (see backend mteam/list_resources.go);
+  // nyaa and sukebei ignore them.
+  private supportsListFilters(): boolean {
+    return this.indexerId.startsWith("mteam");
+  }
+
+  private activeFilters(): ResourceFilters {
+    if (!this.supportsListFilters()) return {};
+    return { free: this.free, standards: this.standards };
+  }
+
+  private renderFilterChips(): TemplateResult {
+    if (!this.supportsListFilters()) return html`<div></div>`;
+    const chip = (label: string, on: boolean, toggle: () => void) => html`
+      <button
+        class="btn btn-xs ${on ? "btn-primary" : "btn-outline"}"
+        aria-pressed=${on ? "true" : "false"}
+        @click=${toggle}
+      >
+        ${label}
+      </button>
+    `;
+    return html`
+      <div class="flex flex-wrap gap-1" role="group" aria-label="Filters">
+        ${chip("Free", this.free, () => this.setFilters(!this.free, this.standards))}
+        ${ResourceList.STANDARD_CHIPS.map((s) =>
+          chip(s, this.standards.includes(s), () => this.toggleStandard(s)),
+        )}
+        ${
+          this.free || this.standards.length > 0
+            ? html`<button class="btn btn-xs btn-ghost" @click=${() => this.setFilters(false, [])}>
+                Clear
+              </button>`
+            : nothing
+        }
+      </div>
+    `;
+  }
+
+  private handlePageChange(page: number, force = false) {
+    if (force || (page >= 1 && page <= this.totalPages)) {
       const url = new URL(window.location.href);
       url.searchParams.set("page", page.toString());
       window.history.pushState({}, "", url.toString());
@@ -342,6 +432,52 @@ export class ResourceList extends LitElement {
     `;
   }
 
+  private renderToolbar(): TemplateResult | typeof nothing {
+    if (!this.indexerId) return nothing;
+    const maxCols = this.getMaxColumnsForCurrentViewport();
+    return html`
+      <div class="mb-2 flex items-center justify-between gap-1">
+        ${this.renderFilterChips()}
+        <div class="flex items-center gap-1">
+          <!--
+          Zoom controls for resource grid:
+          - The minus (-) button zooms out (makes cards smaller by INCREASING the column count).
+          - The plus (+) button zooms in (makes cards larger by DECREASING the column count).
+        -->
+          <button
+            class="btn btn-xs btn-square btn-ghost"
+            title="Zoom out (increase columns)"
+            aria-label="Zoom out (increase columns)"
+            ?disabled=${this.columnCount >= maxCols}
+            @click=${() => this.handleColumnCountChange(1)}
+          >
+            <span
+              class="icon-[akar-icons--circle-minus]"
+              style="width: 1.2em; height: 1.2em;"
+            ></span>
+          </button>
+          <span
+            class="icon-[f7--rectangle-grid-3x2-fill] text-base-content/60"
+            style="width: 1.2em; height: 1.2em;"
+            title="${this.columnCount} columns"
+          ></span>
+          <button
+            class="btn btn-xs btn-square btn-ghost"
+            title="Zoom in (decrease columns)"
+            aria-label="Zoom in (decrease columns)"
+            ?disabled=${this.columnCount <= ResourceList.MIN_COLUMNS}
+            @click=${() => this.handleColumnCountChange(-1)}
+          >
+            <span
+              class="icon-[akar-icons--circle-plus]"
+              style="width: 1.2em; height: 1.2em;"
+            ></span>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
   private renderColumns(): TemplateResult {
     // Show loading spinner when fetching data
     if (this.isLoading) {
@@ -372,39 +508,7 @@ export class ResourceList extends LitElement {
       columns[columnIndex].push(resource);
     });
 
-    const maxCols = this.getMaxColumnsForCurrentViewport();
-
     return html`
-      <div class="mb-2 flex items-center justify-end gap-1">
-        <!--
-          Zoom controls for resource grid:
-          - The minus (-) button zooms out (makes cards smaller by INCREASING the column count).
-          - The plus (+) button zooms in (makes cards larger by DECREASING the column count).
-        -->
-        <button
-          class="btn btn-xs btn-square btn-ghost"
-          title="Zoom out (increase columns)"
-          aria-label="Zoom out (increase columns)"
-          ?disabled=${this.columnCount >= maxCols}
-          @click=${() => this.handleColumnCountChange(1)}
-        >
-          <span class="icon-[akar-icons--circle-minus]" style="width: 1.2em; height: 1.2em;"></span>
-        </button>
-        <span
-          class="icon-[f7--rectangle-grid-3x2-fill] text-base-content/60"
-          style="width: 1.2em; height: 1.2em;"
-          title="${this.columnCount} columns"
-        ></span>
-        <button
-          class="btn btn-xs btn-square btn-ghost"
-          title="Zoom in (decrease columns)"
-          aria-label="Zoom in (decrease columns)"
-          ?disabled=${this.columnCount <= ResourceList.MIN_COLUMNS}
-          @click=${() => this.handleColumnCountChange(-1)}
-        >
-          <span class="icon-[akar-icons--circle-plus]" style="width: 1.2em; height: 1.2em;"></span>
-        </button>
-      </div>
       <div class="flex items-start gap-2">
         ${columns.map(
           (colItems) =>
@@ -499,7 +603,7 @@ export class ResourceList extends LitElement {
 
   render() {
     return html`
-      ${this.renderPagination()}
+      ${this.renderPagination()} ${this.renderToolbar()}
       <div id="masonry-container">${this.renderColumns()}</div>
       ${this.renderPagination()}
       <resource-detail-dialog></resource-detail-dialog>
