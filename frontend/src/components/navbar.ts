@@ -100,6 +100,7 @@ export class AppNavbar extends LitElement {
     const isIndexerPage = this.indexers.includes(this.activePage);
     const isDownloaderPage = this.downloaders.some((d) => d.name === this.activePage);
     const isSearchPage = this.activePage === "search";
+    const isRssPage = this.activePage === "rss";
     const summaryBadgeColor = this.getSummaryBadgeColor();
     const authenticated = isAuthenticated();
 
@@ -222,6 +223,12 @@ export class AppNavbar extends LitElement {
               aria-current=${isSearchPage ? "page" : nothing}
               >Search</a
             >
+            <a
+              href="/rss"
+              class="btn btn-ghost btn-sm ${isRssPage ? "btn-active" : ""}"
+              aria-current=${isRssPage ? "page" : nothing}
+              >RSS</a
+            >
             <theme-controller></theme-controller>
             ${logoutButton}
           </div>
@@ -294,6 +301,17 @@ export class AppNavbar extends LitElement {
               aria-current=${isSearchPage ? "page" : nothing}
             >
               <span class="icon-[akar-icons--search] w-5 h-5"></span>
+            </a>
+
+            <!-- RSS Icon -->
+            <a
+              href="/rss"
+              class="btn btn-ghost btn-sm btn-square ${isRssPage ? "btn-active text-primary" : ""}"
+              title="RSS searches"
+              aria-label="RSS searches"
+              aria-current=${isRssPage ? "page" : nothing}
+            >
+              <span class="icon-[mdi--rss] w-5 h-5"></span>
             </a>
 
             <!-- Theme controller -->

@@ -796,6 +796,37 @@ export async function organizeDownload(
   }
 }
 
+export interface RSSSearch {
+  id: number;
+  indexer: string;
+  text: string;
+  action: "download" | "notification";
+  created_at: string;
+  res_id?: string; // set once a notification search matched
+  title?: string;
+  url?: string;
+}
+
+export async function fetchSearches(): Promise<RSSSearch[]> {
+  return (await getJSON<RSSSearch[] | null>("/api/v1/searches")) ?? [];
+}
+
+export async function deleteSearch(id: number): Promise<void> {
+  await request(`/api/v1/searches/${seg(String(id))}`, { method: "DELETE" });
+}
+
+export async function registerSearch(
+  indexer: string,
+  text: string,
+  action: RSSSearch["action"],
+): Promise<void> {
+  await request(`/api/v1/indexers/${seg(indexer)}/registerSearch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, action }),
+  });
+}
+
 export async function deleteDownload(downloadId: string): Promise<void> {
   await request(`/api/v1/download/${seg(downloadId)}`, { method: "DELETE" });
 }

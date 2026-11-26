@@ -83,6 +83,14 @@ describe("app-navbar", () => {
     expect(cur("/search")).not.toContain("page");
   });
 
+  it("links to the RSS page and marks it active", async () => {
+    const el = await mount("rss");
+    const links = [...(el.shadowRoot?.querySelectorAll('a[href="/rss"]') ?? [])];
+    expect(links.length).toBe(2);
+    expect(links.every((a) => a.getAttribute("aria-current") === "page")).toBe(true);
+    expect(el.shadowRoot?.querySelector('a[aria-label="RSS searches"]')).not.toBeNull();
+  });
+
   it("highlights the active downloader link", async () => {
     const el = await mount("tr");
     const link = el.shadowRoot?.querySelector('a[href="/downloaders/tr"].btn-active');

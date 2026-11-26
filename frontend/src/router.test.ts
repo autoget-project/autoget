@@ -8,6 +8,7 @@ vi.mock("./utils/api.ts", () => ({
   seg: (v: string) => encodeURIComponent(v),
 }));
 vi.mock("./views/search_view", () => ({}));
+vi.mock("./views/rss_view", () => ({}));
 vi.mock("./views/indexer_view", () => ({}));
 vi.mock("./views/downloader_view", () => ({}));
 vi.mock("./views/404_view", () => ({}));

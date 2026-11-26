@@ -11,6 +11,7 @@ import { defaultCategoryId, resolveIndexers } from "./utils/router_helpers.ts";
 import { Router } from "./utils/router.ts";
 
 import "./views/search_view";
+import "./views/rss_view";
 import "./views/indexer_view";
 import "./views/downloader_view";
 import "./views/404_view";
@@ -101,6 +102,7 @@ export class AppRouter extends LitElement {
       },
     },
     { path: "/search", render: () => html`<search-view></search-view>` },
+    { path: "/rss", render: () => html`<rss-view></rss-view>` },
     {
       path: "/indexers/:id",
       render: ({ id }) => {
