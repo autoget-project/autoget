@@ -246,3 +246,34 @@ func TestStore_CancelIdempotent(t *testing.T) {
 	// Cancel again (idempotent)
 	require.NoError(t, store.Cancel(resp.UploadID))
 }
+
+func TestStore_InvalidUploadID(t *testing.T) {
+	store, completedDir, uploadDir := setupTestStore(t)
+
+	// Sentinel that "../victim" would resolve to: <uploadDir>/../victim.json.
+	victim := filepath.Join(completedDir, "victim.json")
+	require.NoError(t, os.WriteFile(victim, []byte("{}"), 0o644))
+	require.Equal(t, completedDir, filepath.Dir(uploadDir))
+
+	ids := []string{"../victim", "../x", "up_ABC", "", "up_" + "0123456789abcdef01234567"}
+	for _, id := range ids {
+		_, err := store.Get(id)
+		assert.ErrorIs(t, err, upload.ErrNotFound, "Get %q", id)
+
+		_, err = store.AppendChunk(id, 0, bytes.NewReader([]byte("x")), 1, "")
+		assert.ErrorIs(t, err, upload.ErrNotFound, "AppendChunk %q", id)
+
+		err = store.Finish(id, &protocol.UploadFinishRequest{})
+		assert.ErrorIs(t, err, upload.ErrNotFound, "Finish %q", id)
+
+		err = store.Cancel(id)
+		if validFormat := id == "up_0123456789abcdef01234567"; validFormat {
+			assert.NoError(t, err, "Cancel is idempotent for valid-format ids: %q", id)
+		} else {
+			assert.ErrorIs(t, err, upload.ErrNotFound, "Cancel %q", id)
+		}
+	}
+
+	_, err := os.Stat(victim)
+	assert.NoError(t, err, "victim file must survive")
+}

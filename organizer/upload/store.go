@@ -28,6 +28,10 @@ var (
 	ErrChecksumFailed = errors.New("checksum mismatch")
 )
 
+var uploadIDRegex = regexp.MustCompile(`^up_[0-9a-f]{24}$`)
+
+func validUploadID(id string) bool { return uploadIDRegex.MatchString(id) }
+
 var torrentIDRegex = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 
 // ErrOffsetConflict indicates that the requested chunk offset does not match the server's last_offset.
@@ -349,6 +353,10 @@ func (s *Store) Init(req *protocol.UploadInitRequest) (*protocol.UploadStatusRes
 
 // Get returns the current status and triggers truncation self-healing if needed.
 func (s *Store) Get(uploadID string) (*protocol.UploadStatusResponse, error) {
+	if !validUploadID(uploadID) {
+		return nil, ErrNotFound
+	}
+
 	lock := s.getLock(uploadID)
 	lock.Lock()
 	defer lock.Unlock()
@@ -369,6 +377,10 @@ func (s *Store) Get(uploadID string) (*protocol.UploadStatusResponse, error) {
 // AppendChunk writes n bytes from r into .part at the specified offset.
 // If expectedChecksum is non-empty, chunk bytes are verified on the fly against it.
 func (s *Store) AppendChunk(uploadID string, offset int64, r io.Reader, n int64, expectedChecksum string) (int64, error) {
+	if !validUploadID(uploadID) {
+		return 0, ErrNotFound
+	}
+
 	lock := s.getLock(uploadID)
 	lock.Lock()
 	defer lock.Unlock()
@@ -442,6 +454,10 @@ func (s *Store) AppendChunk(uploadID string, offset int64, r io.Reader, n int64,
 
 // Finish verifies total size, performs atomic rename to destination, sets modify time, and deletes metadata.
 func (s *Store) Finish(uploadID string, req *protocol.UploadFinishRequest) error {
+	if !validUploadID(uploadID) {
+		return ErrNotFound
+	}
+
 	lock := s.getLock(uploadID)
 	lock.Lock()
 	defer lock.Unlock()
@@ -502,6 +518,10 @@ func (s *Store) Finish(uploadID string, req *protocol.UploadFinishRequest) error
 
 // Cancel removes part and meta files. Operation is idempotent.
 func (s *Store) Cancel(uploadID string) error {
+	if !validUploadID(uploadID) {
+		return ErrNotFound
+	}
+
 	lock := s.getLock(uploadID)
 	lock.Lock()
 	defer lock.Unlock()

@@ -192,3 +192,27 @@ func TestHandler_DeleteCancelsUpload(t *testing.T) {
 	defer func() { _ = getResp.Body.Close() }()
 	assert.Equal(t, http.StatusNotFound, getResp.StatusCode)
 }
+
+func TestHandler_InvalidIDDoesNotTouchOutsideFiles(t *testing.T) {
+	ts, _, completedDir := setupTestServer(t)
+	client := ts.Client()
+
+	// <uploadDir>/../victim.json == <completedDir>/victim.json
+	victim := filepath.Join(completedDir, "victim.json")
+	require.NoError(t, os.WriteFile(victim, []byte("{}"), 0o644))
+
+	delReq, err := http.NewRequest(http.MethodDelete, ts.URL+"/v1/upload/..%2Fvictim", nil)
+	require.NoError(t, err)
+	delResp, err := client.Do(delReq)
+	require.NoError(t, err)
+	defer func() { _ = delResp.Body.Close() }()
+	assert.Equal(t, http.StatusNoContent, delResp.StatusCode)
+
+	_, err = os.Stat(victim)
+	assert.NoError(t, err, "victim file must survive")
+
+	getResp, err := client.Get(ts.URL + "/v1/upload/..%2Fvictim")
+	require.NoError(t, err)
+	defer func() { _ = getResp.Body.Close() }()
+	assert.Equal(t, http.StatusNotFound, getResp.StatusCode)
+}
