@@ -645,6 +645,24 @@ export interface Resource {
   detailsUrl?: string;
 }
 
+export interface ResourceFile {
+  name: string;
+  size: number;
+}
+
+export interface ResourceDetail extends Resource {
+  mediainfo?: string;
+  description?: string;
+  files?: ResourceFile[];
+}
+
+export async function fetchResourceDetail(
+  indexer: string,
+  resourceId: string,
+): Promise<ResourceDetail> {
+  return getJSON<ResourceDetail>(`/api/v1/indexers/${seg(indexer)}/resources/${seg(resourceId)}`);
+}
+
 export interface Pagination {
   page: number;
   totalPages: number;

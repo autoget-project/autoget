@@ -7,7 +7,7 @@ import {
   type TemplateResult,
   type PropertyValues,
 } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { customElement, property, query, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 import { DateTime } from "luxon";
 
@@ -23,6 +23,8 @@ import { externalLink } from "../utils/links";
 import { safeExternalUrl } from "../utils/url";
 import globalStyles from "/src/index.css?inline";
 import "./download_button.js";
+import "./resource_detail_dialog.js";
+import type { ResourceDetailDialog } from "./resource_detail_dialog.js";
 
 @customElement("resource-list")
 export class ResourceList extends LitElement {
@@ -60,6 +62,13 @@ export class ResourceList extends LitElement {
 
   @state()
   private isLoading: boolean = false;
+
+  @query("resource-detail-dialog")
+  private detailDialog!: ResourceDetailDialog;
+
+  private openDetail(resource: Resource) {
+    this.detailDialog.open(this.indexerId, resource);
+  }
 
   private mediaQueryLists: MediaQueryList[] = [];
   private handleMediaChange = () => {
@@ -206,7 +215,12 @@ export class ResourceList extends LitElement {
           <h3
             class="text-base-content font-medium line-clamp-4 text-balance break-all border-b border-base-300"
           >
-            ${resource.title || "Untitled Resource"}
+            <button
+              class="text-left hover:underline break-all"
+              @click=${() => this.openDetail(resource)}
+            >
+              ${resource.title || "Untitled Resource"}
+            </button>
           </h3>
           ${
             resource.title2
@@ -295,19 +309,29 @@ export class ResourceList extends LitElement {
               : ""
           }
           <div class="flex flex-row basis-full justify-between items-center mt-1">
-            ${
-              externalLink({
-                url: resource.detailsUrl,
-                class: "btn btn-xs btn-ghost gap-1 text-base-content/70 hover:text-base-content",
-                title: "Open on indexer",
-                label: `Open details for ${resource.title || "Untitled Resource"} on the indexer`,
-                content: html`<span
-                    class="icon-[ph--arrow-square-out-bold]"
-                    style="width: 1.1em; height: 1.1em;"
-                  ></span>
-                  <span>Details</span>`,
-              }) ?? html`<div></div>`
-            }
+            <div class="flex gap-1">
+              <button
+                class="btn btn-xs btn-ghost gap-1 text-base-content/70 hover:text-base-content"
+                aria-label="Show details for ${resource.title || "Untitled Resource"}"
+                @click=${() => this.openDetail(resource)}
+              >
+                <span class="icon-[ph--info-bold]" style="width: 1.1em; height: 1.1em;"></span>
+                <span>Info</span>
+              </button>
+              ${
+                externalLink({
+                  url: resource.detailsUrl,
+                  class: "btn btn-xs btn-ghost gap-1 text-base-content/70 hover:text-base-content",
+                  title: "Open on indexer",
+                  label: `Open details for ${resource.title || "Untitled Resource"} on the indexer`,
+                  content: html`<span
+                      class="icon-[ph--arrow-square-out-bold]"
+                      style="width: 1.1em; height: 1.1em;"
+                    ></span>
+                    <span>Details</span>`,
+                }) ?? nothing
+              }
+            </div>
             <download-button
               indexerId="${this.indexerId}"
               resourceId="${resource.id}"
@@ -478,6 +502,7 @@ export class ResourceList extends LitElement {
       ${this.renderPagination()}
       <div id="masonry-container">${this.renderColumns()}</div>
       ${this.renderPagination()}
+      <resource-detail-dialog></resource-detail-dialog>
     `;
   }
 }

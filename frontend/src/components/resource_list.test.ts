@@ -17,6 +17,7 @@ vi.mock("../utils/api", async (importOriginal) => ({
     >(),
 }));
 vi.mock("./download_button.js", () => ({}));
+vi.mock("./resource_detail_dialog.js", () => ({}));
 
 import * as api from "../utils/api";
 import "./resource_list.ts";
@@ -103,6 +104,17 @@ describe("resource-list", () => {
     );
     expect(titles).toEqual(["Alpha", "Beta"]);
     expect(el.shadowRoot?.querySelectorAll("download-button").length).toBe(2);
+  });
+
+  it("opens the detail dialog from the Info button", async () => {
+    fetchRes.mockResolvedValue(response([resource({ id: "7", title: "Alpha" })]));
+    const el = await mount();
+    const dialog = el.shadowRoot?.querySelector("resource-detail-dialog") as HTMLElement & {
+      open: (indexerId: string, resource: Resource) => void;
+    };
+    dialog.open = vi.fn<(indexerId: string, resource: Resource) => void>();
+    el.shadowRoot?.querySelector<HTMLButtonElement>('button[aria-label^="Show details"]')?.click();
+    expect(dialog.open).toHaveBeenCalledWith("idx", expect.objectContaining({ id: "7" }));
   });
 
   it("shows the empty state", async () => {
