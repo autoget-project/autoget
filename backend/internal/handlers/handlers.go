@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -467,7 +468,7 @@ func (s *Service) handleAcceptPlan(c *gin.Context, downloadStatus *db.DownloadSt
 		Plan: downloadStatus.OrganizePlans.Plan,
 	}
 
-	success, failedResp, err := s.organizerClient.Execute(executeReq)
+	success, failedResp, err := s.organizerClient.Execute(context.WithoutCancel(c.Request.Context()), executeReq)
 	if err != nil {
 		respondError(c, 500, "failed to execute organize plan", err)
 		return
@@ -525,7 +526,7 @@ func (s *Service) handleRePlan(c *gin.Context, downloadStatus *db.DownloadStatus
 	// Both hint and no-hint replans go through the unified replan endpoint: the
 	// previous result is passed in a dedicated field and treated as flawed, so
 	// the organizer re-classifies instead of reproducing the same wrong plan.
-	resp, err := s.organizerClient.Replan(&organizer.ReplanRequest{
+	resp, err := s.organizerClient.Replan(c.Request.Context(), &organizer.ReplanRequest{
 		Dir:            downloadStatus.ID,
 		Files:          downloadStatus.FileList,
 		Metadata:       downloadStatus.Metadata,

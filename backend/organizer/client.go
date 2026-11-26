@@ -68,7 +68,7 @@ func NewClient(baseURL string, httpClient *http.Client) (*Client, error) {
 // Plan sends a request to the /v1/plan endpoint to get an organization plan.
 // 200 OK may still hint to an error and retry would not help.
 // Other error, we may retry.
-func (c *Client) Plan(req *PlanRequest) (*PlanResponse, error) {
+func (c *Client) Plan(ctx context.Context, req *PlanRequest) (*PlanResponse, error) {
 	planURL := c.baseURL.JoinPath("/v1/plan")
 
 	reqBody, err := json.Marshal(req)
@@ -76,7 +76,7 @@ func (c *Client) Plan(req *PlanRequest) (*PlanResponse, error) {
 		return nil, fmt.Errorf("failed to marshal plan request: %w", err)
 	}
 
-	httpReq, err := http.NewRequest(http.MethodPost, planURL.String(), bytes.NewBuffer(reqBody))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, planURL.String(), bytes.NewBuffer(reqBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create plan request: %w", err)
 	}
@@ -102,7 +102,7 @@ func (c *Client) Plan(req *PlanRequest) (*PlanResponse, error) {
 }
 
 // Execute sends a request to the /v1/execute endpoint to execute a plan.
-func (c *Client) Execute(req *ExecuteRequest) (bool, *ExecuteResponse, error) {
+func (c *Client) Execute(ctx context.Context, req *ExecuteRequest) (bool, *ExecuteResponse, error) {
 	executeURL := c.baseURL.JoinPath("/v1/execute")
 
 	reqBody, err := json.Marshal(req)
@@ -110,7 +110,7 @@ func (c *Client) Execute(req *ExecuteRequest) (bool, *ExecuteResponse, error) {
 		return false, nil, fmt.Errorf("failed to marshal execute request: %w", err)
 	}
 
-	httpReq, err := http.NewRequest(http.MethodPost, executeURL.String(), bytes.NewBuffer(reqBody))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, executeURL.String(), bytes.NewBuffer(reqBody))
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to create execute request: %w", err)
 	}
@@ -143,7 +143,7 @@ func (c *Client) Execute(req *ExecuteRequest) (bool, *ExecuteResponse, error) {
 // organization plan. The previous result is carried in a dedicated field and
 // treated as flawed, so the organizer re-runs Stage 1 classification instead
 // of blindly preserving it.
-func (c *Client) Replan(req *ReplanRequest) (*PlanResponse, error) {
+func (c *Client) Replan(ctx context.Context, req *ReplanRequest) (*PlanResponse, error) {
 	replanURL := c.baseURL.JoinPath("/v1/replan")
 
 	reqBody, err := json.Marshal(req)
@@ -151,7 +151,7 @@ func (c *Client) Replan(req *ReplanRequest) (*PlanResponse, error) {
 		return nil, fmt.Errorf("failed to marshal replan request: %w", err)
 	}
 
-	httpReq, err := http.NewRequest(http.MethodPost, replanURL.String(), bytes.NewBuffer(reqBody))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, replanURL.String(), bytes.NewBuffer(reqBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create replan request: %w", err)
 	}

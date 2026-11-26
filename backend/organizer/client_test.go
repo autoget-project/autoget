@@ -73,7 +73,7 @@ func TestClient_Plan(t *testing.T) {
 			Metadata: map[string]interface{}{"key": "value"},
 		}
 
-		resp, err := client.Plan(req)
+		resp, err := client.Plan(context.Background(), req)
 		require.NoError(t, err)
 		require.NotNil(t, resp)
 		assert.Nil(t, resp.Error)
@@ -90,7 +90,7 @@ func TestClient_Plan(t *testing.T) {
 		client, err := NewClient(server.URL, nil)
 		require.NoError(t, err)
 
-		resp, err := client.Plan(&PlanRequest{})
+		resp, err := client.Plan(context.Background(), &PlanRequest{})
 		require.NoError(t, err)
 		require.NotNil(t, resp)
 		require.NotNil(t, resp.Error)
@@ -107,7 +107,7 @@ func TestClient_Plan(t *testing.T) {
 		client, err := NewClient(server.URL, nil)
 		require.NoError(t, err)
 
-		resp, err := client.Plan(&PlanRequest{})
+		resp, err := client.Plan(context.Background(), &PlanRequest{})
 		require.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Contains(t, err.Error(), "plan request failed with status 500: server failure")
@@ -120,7 +120,7 @@ func TestClient_Plan(t *testing.T) {
 		client, err := NewClient(server.URL, nil)
 		require.NoError(t, err)
 
-		resp, err := client.Plan(&PlanRequest{})
+		resp, err := client.Plan(context.Background(), &PlanRequest{})
 		require.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Contains(t, err.Error(), "failed to send plan request")
@@ -136,7 +136,7 @@ func TestClient_Plan(t *testing.T) {
 		client, err := NewClient(server.URL, nil)
 		require.NoError(t, err)
 
-		resp, err := client.Plan(&PlanRequest{})
+		resp, err := client.Plan(context.Background(), &PlanRequest{})
 		require.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Contains(t, err.Error(), "failed to decode plan response")
@@ -168,7 +168,7 @@ func TestClient_Execute(t *testing.T) {
 			Plan: []PlanAction{{File: "file.txt", Action: ActionMove, Target: protocol.StringPtr("new/file.txt")}},
 		}
 
-		success, failedResp, err := client.Execute(req)
+		success, failedResp, err := client.Execute(context.Background(), req)
 		require.NoError(t, err)
 		assert.True(t, success)
 		assert.Nil(t, failedResp)
@@ -201,7 +201,7 @@ func TestClient_Execute(t *testing.T) {
 			},
 		}
 
-		success, failedResp, err := client.Execute(req)
+		success, failedResp, err := client.Execute(context.Background(), req)
 		require.NoError(t, err)
 		assert.False(t, success)
 		require.NotNil(t, failedResp)
@@ -218,7 +218,7 @@ func TestClient_Execute(t *testing.T) {
 		client, err := NewClient(server.URL, nil)
 		require.NoError(t, err)
 
-		success, failedResp, err := client.Execute(&ExecuteRequest{})
+		success, failedResp, err := client.Execute(context.Background(), &ExecuteRequest{})
 		require.Error(t, err)
 		assert.False(t, success)
 		assert.Nil(t, failedResp)
@@ -267,7 +267,7 @@ func TestClient_Replan(t *testing.T) {
 			UserHint:       "move files to documents folder",
 		}
 
-		resp, err := client.Replan(req)
+		resp, err := client.Replan(context.Background(), req)
 		require.NoError(t, err)
 		require.NotNil(t, resp)
 		assert.Nil(t, resp.Error)
@@ -289,7 +289,7 @@ func TestClient_Replan(t *testing.T) {
 			UserHint: "test hint",
 		}
 
-		resp, err := client.Replan(req)
+		resp, err := client.Replan(context.Background(), req)
 		require.NoError(t, err)
 		require.NotNil(t, resp)
 		require.NotNil(t, resp.Error)
@@ -306,7 +306,7 @@ func TestClient_Replan(t *testing.T) {
 		client, err := NewClient(server.URL, nil)
 		require.NoError(t, err)
 
-		resp, err := client.Replan(&ReplanRequest{})
+		resp, err := client.Replan(context.Background(), &ReplanRequest{})
 		require.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Contains(t, err.Error(), "replan request failed with status 500: internal server error")
@@ -319,7 +319,7 @@ func TestClient_Replan(t *testing.T) {
 		client, err := NewClient(server.URL, nil)
 		require.NoError(t, err)
 
-		resp, err := client.Replan(&ReplanRequest{})
+		resp, err := client.Replan(context.Background(), &ReplanRequest{})
 		require.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Contains(t, err.Error(), "failed to send replan request")
@@ -335,7 +335,7 @@ func TestClient_Replan(t *testing.T) {
 		client, err := NewClient(server.URL, nil)
 		require.NoError(t, err)
 
-		resp, err := client.Replan(&ReplanRequest{})
+		resp, err := client.Replan(context.Background(), &ReplanRequest{})
 		require.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Contains(t, err.Error(), "failed to decode replan response")
@@ -423,4 +423,16 @@ func TestClient_UploadEndpoints(t *testing.T) {
 	require.NoError(t, err)
 	err = client.CancelUpload(ctx, initResp2.UploadID)
 	require.NoError(t, err)
+}
+
+func TestPlan_CancelledContext(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer srv.Close()
+	client, err := NewClient(srv.URL, nil)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = client.Plan(ctx, &PlanRequest{})
+	assert.ErrorIs(t, err, context.Canceled)
 }

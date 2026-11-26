@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -531,4 +532,69 @@ func TestCreateOrganizerPlan_DoesNotOverwriteConcurrentChange(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, db.Organized, got.OrganizeState)
 	assert.Nil(t, got.OrganizePlans)
+}
+
+func TestStartPlanning_SingleFlightAndShutdown(t *testing.T) {
+	d, err := dbtest.SqliteForTest()
+	require.NoError(t, err)
+	require.NoError(t, d.Create(&db.DownloadStatus{ID: "h", Downloader: "t", State: db.DownloadSeeding, MoveState: db.Moved, OrganizeState: db.Unplanned}).Error)
+
+	release := make(chan struct{})
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		<-release
+		_ = json.NewEncoder(w).Encode(organizer.PlanResponse{Plan: []organizer.PlanAction{{File: "x", Action: organizer.ActionSkip}}})
+	}))
+	t.Cleanup(srv.Close)
+	oc, err := organizer.NewClient(srv.URL, nil)
+	require.NoError(t, err)
+
+	c := &Client{name: "t", db: d, organizerClient: oc}
+	c.startPlanning()
+	c.startPlanning() // already running: no second pass
+	require.Eventually(t, func() bool { return requests.Load() == 1 }, time.Second, 5*time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
+	assert.EqualValues(t, 1, requests.Load())
+
+	close(release)
+	sctx, scancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer scancel()
+	require.NoError(t, c.Shutdown(sctx))
+
+	got, err := db.GetDownloadStatus(d, "h")
+	require.NoError(t, err)
+	assert.Equal(t, db.Planned, got.OrganizeState)
+}
+
+func TestCreateOrganizerPlan_CancelledLeavesUnplanned(t *testing.T) {
+	d, err := dbtest.SqliteForTest()
+	require.NoError(t, err)
+	require.NoError(t, d.Create(&db.DownloadStatus{ID: "h", Downloader: "t", State: db.DownloadSeeding, MoveState: db.Moved, OrganizeState: db.Unplanned}).Error)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	started := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body) // lets the server notice the client hanging up
+		close(started)
+		<-r.Context().Done()
+	}))
+	t.Cleanup(srv.Close)
+	oc, err := organizer.NewClient(srv.URL, nil)
+	require.NoError(t, err)
+
+	c := &Client{name: "t", db: d, organizerClient: oc, ctx: ctx}
+	done := make(chan struct{})
+	go func() { defer close(done); c.createOrganizerPlan() }()
+	<-started
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("createOrganizerPlan did not return after cancel")
+	}
+
+	got, err := db.GetDownloadStatus(d, "h")
+	require.NoError(t, err)
+	assert.Equal(t, db.Unplanned, got.OrganizeState)
 }

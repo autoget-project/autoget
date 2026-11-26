@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/hekmon/transmissionrpc/v3"
@@ -59,6 +60,9 @@ type Client struct {
 	// background goroutine starts. nil means c.context().
 	ctx context.Context
 	wg  sync.WaitGroup
+
+	// planning is set while a background organizer planning pass runs.
+	planning atomic.Bool
 }
 
 // transferFailure is the retry state of one torrent whose transfer keeps failing.
@@ -288,8 +292,8 @@ func (c *Client) ProgressChecker() {
 	// start copys
 	c.copyFinishedDownloads(torrentsByHash)
 
-	// create organizer plan
-	c.createOrganizerPlan()
+	// plan off the ticker so slow organizer calls do not stall progress updates
+	c.startPlanning()
 }
 
 func (c *Client) updateDownloadProgress(torrentsByHash map[string]*transmissionrpc.Torrent) {
@@ -555,6 +559,18 @@ func copyFileAtomic(ctx context.Context, from, target string) (err error) {
 	return nil
 }
 
+func (c *Client) startPlanning() {
+	if !c.planning.CompareAndSwap(false, true) {
+		return
+	}
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		defer c.planning.Store(false)
+		c.safely("organizer plan", c.createOrganizerPlan)
+	}()
+}
+
 func (c *Client) createOrganizerPlan() {
 	statuses, err := db.GetMovedAndOrganizeStateDownloadStatusByDownloader(c.db, c.name, db.Unplanned)
 	if err != nil {
@@ -563,12 +579,18 @@ func (c *Client) createOrganizerPlan() {
 	}
 
 	for _, st := range statuses {
-		resp, err := c.organizerClient.Plan(&organizer.PlanRequest{
+		if c.context().Err() != nil {
+			return
+		}
+		resp, err := c.organizerClient.Plan(c.context(), &organizer.PlanRequest{
 			Dir:      st.ID,
 			Files:    st.FileList,
 			Metadata: st.Metadata,
 		})
 		if err != nil {
+			if c.context().Err() != nil {
+				return
+			}
 			logger.Error().Err(err).Str("name", c.name).Msg("failed to create organizer plan")
 			st.OrganizeState = db.CreatePlanFailed
 			if _, err := db.UpdateDownloadStatusColumns(c.db, &st, []string{"organize_state"}, "organize_state = ?", db.Unplanned); err != nil {
