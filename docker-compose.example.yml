@@ -16,9 +16,12 @@
 #   /downloads  Transmission download dir. This image defaults to
 #               /downloads/complete (staging in /downloads/incomplete); the backend
 #               uses the path Transmission reports, so only the mount must match.
-#   /finished   backend copies completed downloads here; organizer reads from here
-#   /media      organizer's library root; it refuses to start unless ALL category
-#               sub-directories exist (see the mkdir above / organizer/README.md)
+#   /finished   backend copies completed downloads here (backend mount)
+#   /data       organizer mounts ./data as ONE volume: /data/finished is its
+#               source and /data/media its library root. They must share a single
+#               mount or rename(2) fails with EXDEV; the organizer checks this at
+#               startup. It refuses to start unless ALL category sub-directories
+#               of /data/media exist (see the mkdir above / organizer/README.md)
 #
 # The matching backend config (config/config.yaml) must contain:
 #   port: 8888
@@ -69,12 +72,12 @@ services:
   organizer:
     image: ghcr.io/autoget-project/autoget-organizer:latest
     restart: unless-stopped
-    user: "1000:1000" # must be able to write to /finished and /media
+    user: "1000:1000" # must be able to write to /data/finished and /data/media
     # Listens on 8000 by default (PORT unset); the backend reaches it at http://organizer:8000
     # The image defines its own HEALTHCHECK (GET /healthz on $PORT).
     environment:
-      DOWNLOAD_COMPLETED_DIR: /finished
-      TARGET_DIR: /media
+      DOWNLOAD_COMPLETED_DIR: /data/finished
+      TARGET_DIR: /data/media
       JAV_ACTOR_FILE: /config/actor.json
       FLARESOLVERR_URL: http://flaresolverr:8191
       METATUBE_API_URL: http://metatube:8080
@@ -82,8 +85,7 @@ services:
       MODEL: "gemini:gemini-2.5-flash"
       GEMINI_API_KEY: CHANGE_ME # or XAI_API_KEY with MODEL=xai:grok-4
     volumes:
-      - ./data/finished:/finished
-      - ./data/media:/media
+      - ./data:/data # one common mount for finished/ and media/
       - ./organizer-config:/config
 
   postgres:

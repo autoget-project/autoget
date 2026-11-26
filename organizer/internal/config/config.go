@@ -144,6 +144,11 @@ func StartupCheck(cfg *Config) error {
 		return fmt.Errorf("download completed dir %s check failed: %w", cfg.DownloadCompletedDir, err)
 	}
 
+	// 4b. Fail fast if files cannot be renamed from the download dir into TARGET_DIR.
+	if err := checkRenameWorks(cfg.DownloadCompletedDir, cfg.TargetDir); err != nil {
+		return err
+	}
+
 	// 5. Upload temporary directory validation and same-device check (Fail-fast against EXDEV)
 	if cfg.UploadTempDir != "" {
 		if err := os.MkdirAll(cfg.UploadTempDir, 0o755); err != nil {
@@ -157,6 +162,26 @@ func StartupCheck(cfg *Config) error {
 		}
 	}
 
+	return nil
+}
+
+// checkRenameWorks verifies that a file can be renamed from srcDir into dstDir.
+// rename(2) fails with EXDEV across separate mount points even when they share
+// one filesystem (st_dev is identical for two bind mounts of it), so only an
+// actual rename attempt can detect this.
+func checkRenameWorks(srcDir, dstDir string) error {
+	f, err := os.CreateTemp(srcDir, ".rename-probe-*")
+	if err != nil {
+		return fmt.Errorf("rename probe: create temp file in %s: %w", srcDir, err)
+	}
+	src := f.Name()
+	_ = f.Close()
+	dst := filepath.Join(dstDir, filepath.Base(src))
+	if err := os.Rename(src, dst); err != nil {
+		_ = os.Remove(src)
+		return fmt.Errorf("DOWNLOAD_COMPLETED_DIR and TARGET_DIR must be on the same filesystem AND the same mount; mount a common parent (e.g. -v /data:/data) instead of two separate volumes: %w", err)
+	}
+	_ = os.Remove(dst)
 	return nil
 }
 

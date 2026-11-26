@@ -44,6 +44,8 @@ Configure the following environment variables before starting the service:
 | `XAI_API_KEY` | Conditional | `xai-...` | Required when using Grok models |
 | `TPDB_API_TOKEN` | No | (empty) | ThePornDB API token; when set, the porn category queries real scene names via LLM function calling, otherwise the local naming chain is used |
 
+> **Same mount required**: `DOWNLOAD_COMPLETED_DIR` and `TARGET_DIR` must be on the same filesystem **and** under the same mount, because files are moved with `rename(2)`, which fails with `EXDEV` across separate mount points (even bind mounts of one filesystem). Mount a common parent (e.g. `-v /path/to/data:/data`) rather than two volumes. Startup performs a test rename and exits if it fails.
+
 > **Note**: `TARGET_DIR` must contain required media subdirectories (all of them): `audio_book`, `book`, `music`, `music_video`, `photobook`, `movie`, `anim_movie`, `tv_series`, `anim_tv_series`, `porn`, `porn_vr`, `jav`, `jav_vr`, `madou`. The startup routine validates that every one exists and is writable, and exits otherwise. Create them with `mkdir -p $TARGET_DIR/{audio_book,book,music,music_video,photobook,movie,anim_movie,tv_series,anim_tv_series,porn,porn_vr,jav,jav_vr,madou}`.
 
 ### Building & Running Locally
@@ -72,16 +74,15 @@ just build-images
 docker run -d \
   --name autoget-organizer \
   -p 8000:8000 \
-  -e DOWNLOAD_COMPLETED_DIR=/downloads \
-  -e TARGET_DIR=/media \
+  -e DOWNLOAD_COMPLETED_DIR=/data/downloads \
+  -e TARGET_DIR=/data/media \
   -e JAV_ACTOR_FILE=/config/actor.json \
   -e FLARESOLVERR_URL=http://flaresolverr:8191 \
   -e TMDB_API_KEY=your-tmdb-key \
   -e METATUBE_API_URL=http://metatube:8080 \
   -e MODEL=gemini:gemini-3.5-flash-lite \
   -e GEMINI_API_KEY=your-gemini-key \
-  -v /path/to/downloads:/downloads \
-  -v /path/to/media:/media \
+  -v /path/to/data:/data \
   -v /path/to/config:/config \
   ghcr.io/autoget-project/autoget-organizer:latest
 ```
