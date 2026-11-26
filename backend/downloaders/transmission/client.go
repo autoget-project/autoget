@@ -315,7 +315,7 @@ func (c *Client) updateDownloadProgress(torrentsByHash map[string]*transmissionr
 		if *t.Status == transmissionrpc.TorrentStatusSeed {
 			s.State = db.DownloadSeeding
 		}
-		if err := db.SaveDownloadStatus(c.db, &s); err != nil {
+		if _, err := db.UpdateDownloadStatusColumns(c.db, &s, []string{"download_progress", "size", "state"}, "state = ?", db.DownloadStarted); err != nil {
 			logger.Error().Err(err).Str("name", c.name).Str("id", s.ID).Msg("failed to save download status")
 		}
 	}
@@ -378,7 +378,7 @@ func (c *Client) dispatch(t *transmissionrpc.Torrent, s db.DownloadStatus, work 
 	// Ensure MoveState is set to Moving in database
 	if s.MoveState != db.Moving {
 		s.MoveState = db.Moving
-		if err := db.SaveDownloadStatus(c.db, &s); err != nil {
+		if _, err := db.UpdateDownloadStatusColumns(c.db, &s, []string{"move_state"}); err != nil {
 			logger.Error().Err(err).Str("name", c.name).Str("id", s.ID).Msg("failed to update status to Moving")
 		}
 	}
@@ -457,7 +457,7 @@ func (c *Client) uploadTorrentFiles(t *transmissionrpc.Torrent, s *db.DownloadSt
 	// All files uploaded and finalized successfully
 	s.FileList = files
 	s.MoveState = db.Moved
-	if err := db.SaveDownloadStatus(c.db, s); err != nil {
+	if _, err := db.UpdateDownloadStatusColumns(c.db, s, []string{"file_list", "move_state"}); err != nil {
 		logger.Error().Err(err).Str("name", c.name).Str("id", s.ID).Msg("failed to save download status after upload")
 		return err
 	}
@@ -492,7 +492,7 @@ func (c *Client) copyTorrentFiles(t *transmissionrpc.Torrent, s *db.DownloadStat
 	// add files based on path from transmission.
 	s.FileList = files
 	s.MoveState = db.Moved
-	if err := db.SaveDownloadStatus(c.db, s); err != nil {
+	if _, err := db.UpdateDownloadStatusColumns(c.db, s, []string{"file_list", "move_state"}); err != nil {
 		logger.Error().Err(err).Str("name", c.name).Str("id", s.ID).Msg("failed to save download status after copy")
 		return err
 	}
@@ -569,14 +569,14 @@ func (c *Client) createOrganizerPlan() {
 		if err != nil {
 			logger.Error().Err(err).Str("name", c.name).Msg("failed to create organizer plan")
 			st.OrganizeState = db.CreatePlanFailed
-			if err := db.SaveDownloadStatus(c.db, &st); err != nil {
+			if _, err := db.UpdateDownloadStatusColumns(c.db, &st, []string{"organize_state"}, "organize_state = ?", db.Unplanned); err != nil {
 				logger.Error().Err(err).Str("name", c.name).Str("id", st.ID).Msg("failed to save download status")
 			}
 			continue
 		}
 		st.OrganizePlans = resp
 		st.OrganizeState = db.Planned
-		if err := db.SaveDownloadStatus(c.db, &st); err != nil {
+		if _, err := db.UpdateDownloadStatusColumns(c.db, &st, []string{"organize_plans", "organize_state"}, "organize_state = ?", db.Unplanned); err != nil {
 			logger.Error().Err(err).Str("name", c.name).Str("id", st.ID).Msg("failed to save download status")
 		}
 	}
@@ -644,7 +644,7 @@ func (c *Client) stopTorrents(torrents []transmissionrpc.Torrent) {
 				ss.ResTitle = *t.Name
 			}
 			ss.AddToday(uploaded)
-			if err := db.SaveDownloadStatus(c.db, ss); err != nil {
+			if err := c.db.Create(ss).Error; err != nil {
 				logger.Error().Err(err).Str("name", c.name).Str("id", ss.ID).Msg("failed to save download status")
 			}
 
@@ -656,7 +656,7 @@ func (c *Client) stopTorrents(torrents []transmissionrpc.Torrent) {
 		ss.CleanupHistory()
 		ss.AddToday(uploaded)
 
-		if err := db.SaveDownloadStatus(c.db, ss); err != nil {
+		if _, err := db.UpdateDownloadStatusColumns(c.db, ss, []string{"upload_histories"}); err != nil {
 			logger.Error().Err(err).Str("name", c.name).Str("id", ss.ID).Msg("failed to save download status")
 		}
 

@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
+
+	"github.com/autoget-project/autoget/backend/organizer"
 )
 
 func TestStoreSeedingStatus(t *testing.T) {
@@ -360,4 +362,58 @@ func TestDownloadStatusJSONWire(t *testing.T) {
 	var got DownloadStatus
 	require.NoError(t, json.Unmarshal(b, &got))
 	assert.Equal(t, s, got)
+}
+
+func TestUpdateDownloadStatusColumns(t *testing.T) {
+	gdb, err := SqliteForTest()
+	require.NoError(t, err)
+
+	orig := &DownloadStatus{
+		ID: "1", State: DownloadSeeding, MoveState: Moving, OrganizeState: Planned,
+		UploadHistories: map[string]int64{"2025-06-04": 1},
+		FileList:        []string{"old"},
+		OrganizePlans:   &organizer.PlanResponse{Plan: []organizer.PlanAction{{File: "old"}}},
+	}
+	require.NoError(t, gdb.Create(orig).Error)
+	require.NoError(t, gdb.Model(&DownloadStatus{}).Where("id = ?", "1").Update("updated_at", time.Unix(1000, 0)).Error)
+
+	t.Run("only selected columns, zero values and serializers", func(t *testing.T) {
+		// Stale in-memory row: State differs from the DB's Seeding, and must not be written.
+		stale := &DownloadStatus{ID: "1", State: DownloadStarted, MoveState: UnMoved, FileList: []string{"a", "b"},
+			OrganizePlans: &organizer.PlanResponse{Plan: []organizer.PlanAction{{File: "new"}}}}
+		ok, err := UpdateDownloadStatusColumns(gdb, stale, []string{"move_state", "file_list", "organize_plans"})
+		require.NoError(t, err)
+		assert.True(t, ok)
+
+		got, err := GetDownloadStatus(gdb, "1")
+		require.NoError(t, err)
+		assert.Equal(t, DownloadSeeding, got.State)
+		assert.Equal(t, UnMoved, got.MoveState) // zero value written
+		assert.Equal(t, Planned, got.OrganizeState)
+		assert.Equal(t, []string{"a", "b"}, got.FileList)
+		require.NotNil(t, got.OrganizePlans)
+		assert.Equal(t, "new", got.OrganizePlans.Plan[0].File)
+		assert.Equal(t, map[string]int64{"2025-06-04": 1}, got.UploadHistories)
+		assert.True(t, got.UpdatedAt.After(time.Unix(1000, 0)), "updated_at must be bumped")
+	})
+
+	t.Run("non-matching condition changes nothing", func(t *testing.T) {
+		s := &DownloadStatus{ID: "1", OrganizeState: Organized}
+		ok, err := UpdateDownloadStatusColumns(gdb, s, []string{"organize_state"}, "organize_state = ?", Unplanned)
+		require.NoError(t, err)
+		assert.False(t, ok)
+		got, err := GetDownloadStatus(gdb, "1")
+		require.NoError(t, err)
+		assert.Equal(t, Planned, got.OrganizeState)
+	})
+
+	t.Run("matching condition updates", func(t *testing.T) {
+		s := &DownloadStatus{ID: "1", OrganizeState: Organized}
+		ok, err := UpdateDownloadStatusColumns(gdb, s, []string{"organize_state"}, "organize_state = ?", Planned)
+		require.NoError(t, err)
+		assert.True(t, ok)
+		got, err := GetDownloadStatus(gdb, "1")
+		require.NoError(t, err)
+		assert.Equal(t, Organized, got.OrganizeState)
+	})
 }

@@ -145,6 +145,19 @@ func SaveDownloadStatus(db *gorm.DB, s *DownloadStatus) error {
 	return db.Save(s).Error
 }
 
+// UpdateDownloadStatusColumns writes only cols of s (by primary key), including
+// zero values and serialized columns, and bumps updated_at. An optional
+// condition (query, args...) makes it a conditional transition; it reports
+// whether a row was updated.
+func UpdateDownloadStatusColumns(d *gorm.DB, s *DownloadStatus, cols []string, cond ...any) (bool, error) {
+	q := d.Model(s).Select(cols)
+	if len(cond) > 0 {
+		q = q.Where(cond[0], cond[1:]...)
+	}
+	res := q.Updates(s)
+	return res.RowsAffected > 0, res.Error
+}
+
 func RemoveDownloadStatus(db *gorm.DB, id string) error {
 	return db.Where("id = ?", id).Delete(&DownloadStatus{}).Error
 }

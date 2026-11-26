@@ -2,6 +2,7 @@ package transmission
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -50,7 +51,7 @@ func TestStopTorrents_NilFields(t *testing.T) {
 func TestUpdateDownloadProgress_NilFields(t *testing.T) {
 	testDB, err := dbtest.SqliteForTest()
 	require.NoError(t, err)
-	require.NoError(t, db.SaveDownloadStatus(testDB, &db.DownloadStatus{ID: "a", Downloader: "t", State: db.DownloadStarted}))
+	require.NoError(t, testDB.Create(&db.DownloadStatus{ID: "a", Downloader: "t", State: db.DownloadStarted}).Error)
 	c := &Client{name: "t", db: testDB}
 	assert.NotPanics(t, func() {
 		c.updateDownloadProgress(map[string]*transmissionrpc.Torrent{"a": {}})
@@ -449,4 +450,56 @@ func TestDeleteTorrent_ClearsFailureState(t *testing.T) {
 	defer c.inFlightMu.Unlock()
 	assert.NotContains(t, c.failures, "h")
 	assert.Contains(t, c.failures, "other")
+}
+
+func TestCopyTorrentFiles_DoesNotRevertConcurrentState(t *testing.T) {
+	for _, state := range []db.DownloadState{db.DownloadStopped, db.DownloadDeleted} {
+		d, err := dbtest.SqliteForTest()
+		require.NoError(t, err)
+		tmp := t.TempDir()
+		downloadDir := filepath.Join(tmp, "download")
+		require.NoError(t, os.MkdirAll(downloadDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(downloadDir, "f.txt"), []byte("data"), 0o644))
+
+		// The worker holds a Seeding snapshot while the row was changed meanwhile.
+		stale := db.DownloadStatus{ID: "h", Downloader: "t", State: db.DownloadSeeding, MoveState: db.Moving}
+		require.NoError(t, d.Create(&stale).Error)
+		require.NoError(t, d.Model(&db.DownloadStatus{}).Where("id = ?", "h").Update("state", state).Error)
+
+		c := &Client{name: "t", db: d, cfg: &config.DownloaderConfig{Transmission: &config.TransmissionConfig{FinishedDir: filepath.Join(tmp, "finished")}}}
+		hash := "h"
+		require.NoError(t, c.copyTorrentFiles(&transmissionrpc.Torrent{
+			HashString: &hash, DownloadDir: &downloadDir,
+			Files: []transmissionrpc.TorrentFile{{Name: "f.txt"}},
+		}, &stale))
+
+		got, err := db.GetDownloadStatus(d, "h")
+		require.NoError(t, err)
+		assert.Equal(t, state, got.State)
+		assert.Equal(t, db.Moved, got.MoveState)
+		assert.Equal(t, []string{"f.txt"}, got.FileList)
+	}
+}
+
+func TestCreateOrganizerPlan_DoesNotOverwriteConcurrentChange(t *testing.T) {
+	d, err := dbtest.SqliteForTest()
+	require.NoError(t, err)
+	require.NoError(t, d.Create(&db.DownloadStatus{ID: "h", Downloader: "t", State: db.DownloadSeeding, MoveState: db.Moved, OrganizeState: db.Unplanned}).Error)
+
+	// The row is marked Organized by hand while the planner call is in flight.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.NoError(t, d.Model(&db.DownloadStatus{}).Where("id = ?", "h").Update("organize_state", db.Organized).Error)
+		_ = json.NewEncoder(w).Encode(organizer.PlanResponse{Plan: []organizer.PlanAction{{File: "x", Action: organizer.ActionSkip}}})
+	}))
+	t.Cleanup(srv.Close)
+	oc, err := organizer.NewClient(srv.URL, nil)
+	require.NoError(t, err)
+
+	c := &Client{name: "t", db: d, organizerClient: oc}
+	c.createOrganizerPlan()
+
+	got, err := db.GetDownloadStatus(d, "h")
+	require.NoError(t, err)
+	assert.Equal(t, db.Organized, got.OrganizeState)
+	assert.Nil(t, got.OrganizePlans)
 }
