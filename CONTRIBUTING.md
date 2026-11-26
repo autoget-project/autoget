@@ -12,14 +12,15 @@ The repo is a monorepo of three Go modules and a frontend:
 `go.work` is for local development only. Docker builds do not use it: the
 backend resolves `protocol` and `organizer` through `replace` directives in
 `backend/go.mod`. `go.work.sum` is gitignored. The `go 1.27.1` line in
-`go.work`/`go.mod` is a minimum version; CI and the Dockerfile use Go 1.27.4.
+`go.work`/`go.mod` is a minimum version; CI and the Dockerfiles pin the exact version
+(`.github/workflows/ci.yml`, `Dockerfile*`).
 
 Go import prefix is `github.com/autoget-project/autoget/<module>`; `just fmt`
 runs `goimports -local` with that prefix per module.
 
 ## Tooling
 
-Versions used in CI (`.github/workflows/ci.yml`): Go 1.27.4, Node 26, pnpm
+Versions used in CI (`.github/workflows/ci.yml`): Go (see `GO_VERSION`), Node 26, pnpm
 12.21.0, goimports v0.52.0, golangci-lint v2.15.0, govulncheck v1.9.0.
 
 ## Commands

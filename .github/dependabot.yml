@@ -44,3 +44,12 @@ updates:
       actions-dependencies:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      docker-dependencies:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]

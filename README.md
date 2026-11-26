@@ -47,7 +47,8 @@ The images are `ghcr.io/autoget-project/autoget` (backend + frontend, runs as
 uid 1000, config at `/config/config.yaml`) and
 `ghcr.io/autoget-project/autoget-organizer` (configured purely by environment
 variables, see the [Organizer README](organizer/README.md)). To build them
-yourself run `just build-images`. Go 1.27.4 is used by the Dockerfiles and CI.
+yourself run `just build-images`. The Go version used by CI is in `.github/workflows/ci.yml`; the Dockerfiles pin
+their own base images.
 
 ## Authentication
 
