@@ -64,6 +64,37 @@ func TestUpdateDownloadProgress_NilFields(t *testing.T) {
 	assert.Equal(t, uint64(0), got.Size)
 }
 
+func TestUpdateDownloadProgress_FinishedDetection(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  transmissionrpc.TorrentStatus
+		percent float64
+		want    db.DownloadState
+	}{
+		{"stopped and complete", transmissionrpc.TorrentStatusStopped, 1.0, db.DownloadSeeding},
+		{"seed wait and complete", transmissionrpc.TorrentStatusSeedWait, 1.0, db.DownloadSeeding},
+		{"seeding and complete", transmissionrpc.TorrentStatusSeed, 1.0, db.DownloadSeeding},
+		{"downloading half", transmissionrpc.TorrentStatusDownload, 0.5, db.DownloadStarted},
+		{"verifying with stale progress", transmissionrpc.TorrentStatusCheck, 1.0, db.DownloadStarted},
+		{"queued to verify", transmissionrpc.TorrentStatusCheckWait, 1.0, db.DownloadStarted},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testDB, err := dbtest.SqliteForTest()
+			require.NoError(t, err)
+			require.NoError(t, testDB.Create(&db.DownloadStatus{ID: "a", Downloader: "t", State: db.DownloadStarted}).Error)
+			c := &Client{name: "t", db: testDB}
+			tor := newTorrentWithProgress(1, "a", tt.status, tt.percent, "/d", nil)
+
+			c.updateDownloadProgress(map[string]*transmissionrpc.Torrent{"a": &tor})
+
+			got, err := db.GetDownloadStatus(testDB, "a")
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got.State)
+		})
+	}
+}
+
 func TestRegisterCronjobs_StopsOnContextCancel(t *testing.T) {
 	old := progressInterval
 	progressInterval = 5 * time.Millisecond

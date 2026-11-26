@@ -312,7 +312,9 @@ func (c *Client) updateDownloadProgress(torrentsByHash map[string]*transmissionr
 
 		s.DownloadProgress = uint16(*t.PercentDone * 1000)
 		s.Size = uint64(t.TotalSize.Byte())
-		if *t.Status == transmissionrpc.TorrentStatusSeed {
+		// percentDone covers wanted files only. Verifying torrents briefly report
+		// stale progress, so they are not finished yet.
+		if *t.PercentDone >= 1 && *t.Status != transmissionrpc.TorrentStatusCheck && *t.Status != transmissionrpc.TorrentStatusCheckWait {
 			s.State = db.DownloadSeeding
 		}
 		if _, err := db.UpdateDownloadStatusColumns(c.db, &s, []string{"download_progress", "size", "state"}, "state = ?", db.DownloadStarted); err != nil {
