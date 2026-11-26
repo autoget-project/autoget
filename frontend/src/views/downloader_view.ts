@@ -169,6 +169,22 @@ export class DownloaderView extends LitElement {
     }
   }
 
+  private handleTabKeydown(e: KeyboardEvent) {
+    const ids = this.tabs.map((t) => t.id);
+    const current = ids.indexOf(this.activeTab);
+    let next: number;
+    if (e.key === "ArrowRight") next = (current + 1) % ids.length;
+    else if (e.key === "ArrowLeft") next = (current - 1 + ids.length) % ids.length;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = ids.length - 1;
+    else return;
+    e.preventDefault();
+    this.handleTabChange(ids[next]);
+    void this.updateComplete.then(() =>
+      this.shadowRoot?.getElementById(`tab-${ids[next]}`)?.focus(),
+    );
+  }
+
   private isProcessing(downloadId: string, action: OrganizeAction | "delete"): boolean {
     return this.processingActions.has(`${downloadId}:${action}`);
   }
@@ -628,13 +644,21 @@ export class DownloaderView extends LitElement {
             <div class="bg-base-100 border-b border-base-300">
               <div class="flex items-center justify-between px-2 sm:px-4 gap-2">
                 <div class="overflow-x-auto min-w-0 flex-1 scrollbar-none py-1">
-                  <div role="tablist" class="tabs tabs-border flex-nowrap whitespace-nowrap">
+                  <div
+                    role="tablist"
+                    class="tabs tabs-border flex-nowrap whitespace-nowrap"
+                    @keydown=${this.handleTabKeydown}
+                  >
                     ${this.tabs.map((tab) => {
                       const count = getTabCount(this.downloaderState, tab.id);
                       const badgeColor = getTabBadgeColor(tab.id);
                       return html`
                         <button
                           role="tab"
+                          id="tab-${tab.id}"
+                          aria-selected=${this.activeTab === tab.id}
+                          aria-controls="tabpanel"
+                          tabindex=${this.activeTab === tab.id ? 0 : -1}
                           class="tab tab-sm sm:tab-md ${this.activeTab === tab.id ? "tab-active font-bold" : ""}"
                           @click=${() => this.handleTabChange(tab.id)}
                         >
@@ -672,7 +696,14 @@ export class DownloaderView extends LitElement {
             </div>
 
             <!-- Tab Content -->
-            <div class="flex-1 overflow-y-auto bg-base-200">${this.renderTabContent()}</div>
+            <div
+              role="tabpanel"
+              id="tabpanel"
+              aria-labelledby="tab-${this.activeTab}"
+              class="flex-1 overflow-y-auto bg-base-200"
+            >
+              ${this.renderTabContent()}
+            </div>
           </div>
         </div>
       </div>

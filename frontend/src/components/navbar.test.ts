@@ -63,11 +63,24 @@ describe("app-navbar", () => {
     expect(hrefs).toContain("/search");
   });
 
-  it("highlights the active indexer tab", async () => {
+  it("marks the active indexer link with aria-current inside a nav landmark", async () => {
     const el = await mount("hdsky");
-    const active = el.shadowRoot?.querySelectorAll('[role="tab"].tab-active');
+    expect(el.shadowRoot?.querySelector('nav[aria-label="Indexers"]')).not.toBeNull();
+    expect(el.shadowRoot?.querySelector('[role="tab"], [role="tablist"]')).toBeNull();
+    const active = el.shadowRoot?.querySelectorAll('nav a[aria-current="page"]');
     expect(active?.length).toBe(1);
     expect(active?.[0].textContent?.trim()).toBe("hdsky");
+    expect(el.shadowRoot?.querySelectorAll("nav a:not([aria-current])").length).toBe(1);
+  });
+
+  it("marks the active downloader and search links with aria-current", async () => {
+    const el = await mount("tr");
+    const cur = (href: string) =>
+      [...(el.shadowRoot?.querySelectorAll(`a[href="${href}"]`) ?? [])].map((a) =>
+        a.getAttribute("aria-current"),
+      );
+    expect(cur("/downloaders/tr")).toContain("page");
+    expect(cur("/search")).not.toContain("page");
   });
 
   it("highlights the active downloader link", async () => {

@@ -269,10 +269,12 @@ export class SearchView extends LitElement {
         <div id="category-list-${level}" class="flex flex-col space-y-2">
           ${categories.map(
             (category) => html`
-              <div
-                class="category-item p-2 rounded-lg border border-base-300 text-left font-medium flex items-center justify-between transition-colors bg-base-100 hover:bg-base-200 ${
+              <button
+                type="button"
+                class="w-full category-item p-2 rounded-lg border border-base-300 text-left font-medium flex items-center justify-between transition-colors bg-base-100 hover:bg-base-200 ${
                   selectedIdInLevel === category.id ? "active" : ""
                 }"
+                aria-pressed=${selectedIdInLevel === category.id}
                 @click=${() => this.handleCategoryClick(category, level)}
               >
                 <span>${category.name}</span>
@@ -281,7 +283,7 @@ export class SearchView extends LitElement {
                     ? html`<span class="ml-2 text-base-content/50 font-bold">›</span>`
                     : ""
                 }
-              </div>
+              </button>
             `,
           )}
         </div>
@@ -342,15 +344,17 @@ export class SearchView extends LitElement {
                     <div class="flex flex-col space-y-2">
                       ${this.indexers.map(
                         (indexer) => html`
-                          <div
-                            class="category-item p-2 rounded-lg border border-base-300 text-left font-medium flex items-center justify-between transition-colors bg-base-100 hover:bg-base-200 ${
+                          <button
+                            type="button"
+                            class="w-full category-item p-2 rounded-lg border border-base-300 text-left font-medium flex items-center justify-between transition-colors bg-base-100 hover:bg-base-200 ${
                               this.selectedIndexer === indexer ? "active" : ""
                             }"
+                            aria-pressed=${this.selectedIndexer === indexer}
                             @click=${() => this.handleIndexerChange(indexer)}
                           >
                             <span>${indexer}</span>
                             <span class="ml-2 text-base-content/50 font-bold">›</span>
-                          </div>
+                          </button>
                         `,
                       )}
                     </div>

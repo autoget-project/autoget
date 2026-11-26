@@ -264,4 +264,22 @@ describe("downloader-view", () => {
     expect(btn()?.disabled).toBe(false);
     vi.unstubAllGlobals();
   });
+
+  it("exposes tabs with aria-selected, roving tabindex and a labelled tabpanel", async () => {
+    fetchItems.mockResolvedValue(status([]));
+    const el = await mount("seeding");
+    const tabs = [...(el.shadowRoot?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? [])];
+    const selected = tabs.filter((t) => t.getAttribute("aria-selected") === "true");
+    expect(selected.length).toBe(1);
+    expect(selected[0].id).toBe("tab-seeding");
+    expect(selected[0].tabIndex).toBe(0);
+    expect(tabs.filter((t) => t !== selected[0]).every((t) => t.tabIndex === -1)).toBe(true);
+    const panel = el.shadowRoot?.querySelector('[role="tabpanel"]');
+    expect(panel?.getAttribute("aria-labelledby")).toBe("tab-seeding");
+    expect(selected[0].getAttribute("aria-controls")).toBe(panel?.id);
+
+    selected[0].dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+    await settle(el);
+    expect(el.activeTab).toBe(tabs[0].id.replace("tab-", ""));
+  });
 });

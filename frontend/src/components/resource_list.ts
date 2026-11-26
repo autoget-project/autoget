@@ -1,4 +1,12 @@
-import { html, LitElement, unsafeCSS, css, type TemplateResult, type PropertyValues } from "lit";
+import {
+  html,
+  LitElement,
+  nothing,
+  unsafeCSS,
+  css,
+  type TemplateResult,
+  type PropertyValues,
+} from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 import { DateTime } from "luxon";
@@ -422,7 +430,7 @@ export class ResourceList extends LitElement {
     }
 
     return html`
-      <div class="flex justify-center my-4 px-2">
+      <nav aria-label="Pagination" class="flex justify-center my-4 px-2">
         <div class="join overflow-x-auto max-w-full">
           ${pages.map((page) => {
             const isActive = page === this.page;
@@ -433,6 +441,8 @@ export class ResourceList extends LitElement {
             if (typeof page === "number") {
               return html`<button
                 class="${buttonClass}"
+                aria-label="Page ${page}"
+                aria-current=${isActive ? "page" : nothing}
                 @click=${() => this.handlePageChange(page)}
               >
                 ${page}
@@ -440,6 +450,8 @@ export class ResourceList extends LitElement {
             } else if (page === "<") {
               return html`<button
                 class="${buttonClass}"
+                aria-label="Previous page"
+                ?disabled=${isDisabled}
                 @click=${() => this.handlePageChange(this.page - 1)}
               >
                 &laquo;
@@ -447,6 +459,8 @@ export class ResourceList extends LitElement {
             } else if (page === ">") {
               return html`<button
                 class="${buttonClass}"
+                aria-label="Next page"
+                ?disabled=${isDisabled}
                 @click=${() => this.handlePageChange(this.page + 1)}
               >
                 &raquo;
@@ -455,7 +469,7 @@ export class ResourceList extends LitElement {
             return null;
           })}
         </div>
-      </div>
+      </nav>
     `;
   }
 

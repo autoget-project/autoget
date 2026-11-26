@@ -262,7 +262,11 @@ export class IndexerView extends LitElement {
           >
             <div class="flex items-center justify-between p-3 border-b border-base-300 lg:hidden">
               <span class="font-bold text-sm">Categories</span>
-              <button class="btn btn-ghost btn-xs btn-circle" @click=${this.handleSidebarToggle}>
+              <button
+                class="btn btn-ghost btn-xs btn-circle"
+                aria-label="Close categories"
+                @click=${this.handleSidebarToggle}
+              >
                 ✕
               </button>
             </div>

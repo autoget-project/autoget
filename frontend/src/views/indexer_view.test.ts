@@ -165,4 +165,10 @@ describe("indexer-view", () => {
     const href = el.shadowRoot?.querySelector("#left-panel-categories a")?.getAttribute("href");
     expect(href).toBe("/indexers/m%20x/a%3Ab%2Fc");
   });
+
+  it("labels the close-categories button", async () => {
+    fetchCategories.mockResolvedValue([] as Category[]);
+    const el = await mount();
+    expect(el.shadowRoot?.querySelector('button[aria-label="Close categories"]')).not.toBeNull();
+  });
 });

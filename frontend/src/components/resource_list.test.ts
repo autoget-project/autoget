@@ -248,4 +248,17 @@ describe("resource-list", () => {
     await settle(el);
     expect(pairs().sort()).toEqual(expected);
   });
+
+  it("renders an accessible pager", async () => {
+    fetchRes.mockResolvedValue(response([resource()], 9));
+    const el = await mount({ page: 1 });
+    const nav = el.shadowRoot?.querySelector('nav[aria-label="Pagination"]');
+    expect(nav).not.toBeNull();
+    const current = nav?.querySelector('[aria-current="page"]');
+    expect(current?.getAttribute("aria-label")).toBe("Page 1");
+    expect(nav?.querySelector('button[aria-label="Page 2"]')?.hasAttribute("aria-current")).toBe(
+      false,
+    );
+    expect(nav?.querySelector('button[aria-label="Next page"]')).not.toBeNull();
+  });
 });

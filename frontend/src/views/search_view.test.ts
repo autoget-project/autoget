@@ -133,4 +133,21 @@ describe("search-view", () => {
     await settle(el);
     expect(new URLSearchParams(window.location.search).get("category")).toBe("c2");
   });
+
+  it("renders indexer and category pickers as toggle buttons", async () => {
+    fetchIndexers.mockResolvedValue(["mteam", "hdsky"]);
+    fetchCategories.mockResolvedValue([{ id: "c1", name: "Movies", subCategories: [] }]);
+    const el = await mount("/search?indexer=mteam");
+    const items = [
+      ...(el.shadowRoot?.querySelectorAll<HTMLButtonElement>("button.category-item") ?? []),
+    ];
+    expect(
+      items.map((b) => [b.textContent?.replace(/[›\s]+/g, ""), b.getAttribute("aria-pressed")]),
+    ).toEqual([
+      ["mteam", "true"],
+      ["hdsky", "false"],
+      ["Movies", "false"],
+    ]);
+    expect(items.every((b) => b.type === "button")).toBe(true);
+  });
 });

@@ -1,4 +1,4 @@
-import { LitElement, html, unsafeCSS } from "lit";
+import { LitElement, html, nothing, unsafeCSS } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import {
@@ -150,17 +150,17 @@ export class AppNavbar extends LitElement {
 
           <!-- Desktop Indexers scrollable tabs container -->
           <div class="hidden md:flex overflow-x-auto min-w-0 items-center scrollbar-none">
-            <div role="tablist" class="tabs tabs-border flex-nowrap whitespace-nowrap">
+            <nav aria-label="Indexers" class="tabs tabs-border flex-nowrap whitespace-nowrap">
               ${this.indexers.map((indexer) => {
                 const isActive = this.activePage === indexer;
                 return html`<a
                   href="/indexers/${seg(indexer)}"
                   class="tab tab-sm sm:tab-md ${isActive ? "tab-active font-bold" : ""}"
-                  role="tab"
+                  aria-current=${isActive ? "page" : nothing}
                   >${indexer}</a
                 >`;
               })}
-            </div>
+            </nav>
           </div>
 
           <!-- Mobile Indexers dropdown (aligned to the left) -->
@@ -187,6 +187,7 @@ export class AppNavbar extends LitElement {
                     <a
                       href="/indexers/${seg(indexer)}"
                       class="${isActive ? "menu-active font-bold" : ""}"
+                      aria-current=${isActive ? "page" : nothing}
                     >
                       ${indexer}
                     </a>
@@ -209,12 +210,16 @@ export class AppNavbar extends LitElement {
                 <a
                   href="/downloaders/${seg(downloader.name)}"
                   class="btn btn-ghost btn-sm ${isActive ? "btn-active" : ""} border-2 ${borderColor}"
+                  aria-current=${isActive ? "page" : nothing}
                 >
                   ${downloader.name}
                 </a>
               `;
             })}
-            <a href="/search" class="btn btn-ghost btn-sm ${isSearchPage ? "btn-active" : ""}"
+            <a
+              href="/search"
+              class="btn btn-ghost btn-sm ${isSearchPage ? "btn-active" : ""}"
+              aria-current=${isSearchPage ? "page" : nothing}
               >Search</a
             >
             <theme-controller></theme-controller>
@@ -259,6 +264,7 @@ export class AppNavbar extends LitElement {
                               class="flex items-center justify-between ${
                                 isActive ? "menu-active font-bold" : ""
                               }"
+                              aria-current=${isActive ? "page" : nothing}
                             >
                               <span>${downloader.name}</span>
                               ${
@@ -285,6 +291,7 @@ export class AppNavbar extends LitElement {
               class="btn btn-ghost btn-sm btn-square ${isSearchPage ? "btn-active text-primary" : ""}"
               title="Search"
               aria-label="Search"
+              aria-current=${isSearchPage ? "page" : nothing}
             >
               <span class="icon-[akar-icons--search] w-5 h-5"></span>
             </a>
