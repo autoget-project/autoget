@@ -752,7 +752,11 @@ func (c *Client) DeleteTorrent(hash string) error {
 	}
 
 	if torrentID == 0 {
-		return errors.New("torrent not found")
+		// Removed from Transmission manually: just mark the row deleted so the
+		// UI can clear it. No file list is available, so no upload cancel.
+		logger.Warn().Str("name", c.name).Str("hash", hash).Msg("torrent not found in transmission; marking as deleted")
+		c.clearFailures(hash)
+		return db.UpdateDownloadStateForStatuses(c.db, []string{hash}, db.DownloadDeleted)
 	}
 
 	// If torrent is Moving, attempt to cancel upload sessions with organizer

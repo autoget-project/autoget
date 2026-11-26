@@ -49,11 +49,10 @@ func TestGetters(t *testing.T) {
 func TestDeleteTorrent_NotFound(t *testing.T) {
 	tor := newTorrent(1, "other", transmissionrpc.TorrentStatusSeed, 0)
 	fake := &fakeTransmission{resp: []any{map[string]any{"torrents": []transmissionrpc.Torrent{tor}}}}
-	c := deleteTestClient(t, fake, nil)
+	c := deleteTestClient(t, fake, &db.DownloadStatus{ID: "missing", Downloader: "test", State: db.DownloadSeeding})
 
-	err := c.DeleteTorrent("missing")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "torrent not found")
+	require.NoError(t, c.DeleteTorrent("missing"))
+	assert.Equal(t, db.DownloadDeleted, stateOf(t, c, "missing").State)
 	assert.Len(t, fake.reqs, 1, "no remove may be sent")
 }
 
