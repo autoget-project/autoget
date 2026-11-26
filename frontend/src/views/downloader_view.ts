@@ -4,6 +4,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import "../components/navbar.ts";
 import globalStyles from "/src/index.css?inline";
 import {
+  DOWNLOADER_PAGE_SIZE,
   fetchDownloaderItems,
   organizeDownload,
   deleteDownload,
@@ -43,6 +44,12 @@ export class DownloaderView extends LitElement {
 
   @state()
   private downloaderState: DownloaderState | null = null;
+
+  @state()
+  private page: number = 1;
+
+  @state()
+  private total: number = 0;
 
   @state()
   private loading: boolean = true;
@@ -104,6 +111,8 @@ export class DownloaderView extends LitElement {
       this.loading = true;
       this.initialLoad = true;
       this.error = null;
+      this.page = 1;
+      this.total = 0;
     }
   }
 
@@ -113,7 +122,7 @@ export class DownloaderView extends LitElement {
     }
   }
 
-  private async loadDownloadItems() {
+  private async loadDownloadItems(): Promise<void> {
     if (!this.downloaderId) return;
 
     const seq = ++this.loadSeq;
@@ -123,6 +132,8 @@ export class DownloaderView extends LitElement {
       const response = await fetchDownloaderItems(
         this.downloaderId,
         this.activeTab as DownloadState,
+        this.page,
+        DOWNLOADER_PAGE_SIZE,
       );
       if (seq !== this.loadSeq) return;
 
@@ -138,14 +149,22 @@ export class DownloaderView extends LitElement {
         count_of_failed: 0,
       };
 
+      // The page emptied (e.g. after a delete): step back to the last page.
+      if (resources.length === 0 && this.page > 1 && response.total > 0) {
+        this.page = Math.ceil(response.total / DOWNLOADER_PAGE_SIZE);
+        return await this.loadDownloadItems();
+      }
+
       // Only update if data has actually changed or if it's the initial load
       if (
         this.initialLoad ||
+        this.total !== response.total ||
         !downloadItemsEqual(this.downloadItems, resources) ||
         !downloaderStatesEqual(this.downloaderState, state)
       ) {
         this.downloadItems = resources;
         this.downloaderState = state;
+        this.total = response.total;
         this.initialLoad = false;
       }
     } catch (err) {
@@ -167,6 +186,39 @@ export class DownloaderView extends LitElement {
       this.activeTab = tabId;
       history.pushState(null, "", `/downloaders/${encodeURIComponent(this.downloaderId)}/${tabId}`);
     }
+  }
+
+  private goToPage(page: number) {
+    if (page < 1 || page === this.page) return;
+    this.page = page;
+    this.loading = true;
+    void this.loadDownloadItems();
+  }
+
+  private renderPager() {
+    const totalPages = Math.max(1, Math.ceil(this.total / DOWNLOADER_PAGE_SIZE));
+    if (totalPages <= 1) return "";
+    return html`
+      <nav aria-label="Pagination" class="flex justify-center items-center gap-2 mt-4">
+        <button
+          class="btn btn-sm"
+          aria-label="Previous page"
+          ?disabled=${this.page <= 1}
+          @click=${() => this.goToPage(this.page - 1)}
+        >
+          &laquo;
+        </button>
+        <span class="text-sm" aria-live="polite">Page ${this.page} of ${totalPages}</span>
+        <button
+          class="btn btn-sm"
+          aria-label="Next page"
+          ?disabled=${this.page >= totalPages}
+          @click=${() => this.goToPage(this.page + 1)}
+        >
+          &raquo;
+        </button>
+      </nav>
+    `;
   }
 
   private handleTabKeydown(e: KeyboardEvent) {
@@ -627,6 +679,7 @@ export class DownloaderView extends LitElement {
                     <div class="space-y-4">
                       ${this.downloadItems.map((item) => this.renderDownloadItem(item))}
                     </div>
+                    ${this.renderPager()}
                   `
         }
       </div>

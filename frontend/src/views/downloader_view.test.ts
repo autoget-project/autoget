@@ -11,7 +11,14 @@ import type {
 vi.mock("../utils/api.ts", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../utils/api.ts")>()),
   fetchDownloaderItems:
-    vi.fn<(name: string, state: DownloadState) => Promise<DownloaderStatusResponse>>(),
+    vi.fn<
+      (
+        name: string,
+        state: DownloadState,
+        page?: number,
+        pageSize?: number,
+      ) => Promise<DownloaderStatusResponse>
+    >(),
   organizeDownload:
     vi.fn<(id: string, action: OrganizeAction, hint?: string) => Promise<api.OrganizeResult>>(),
   deleteDownload: vi.fn<(id: string) => Promise<void>>(),
@@ -60,8 +67,11 @@ function item(over: Partial<DownloadItem> = {}): DownloadItem {
   };
 }
 
-function status(resources: DownloadItem[]): DownloaderStatusResponse {
+function status(resources: DownloadItem[], total = resources.length): DownloaderStatusResponse {
   return {
+    total,
+    page: 1,
+    page_size: 50,
     state: { count_of_downloading: resources.length, count_of_planned: 0, count_of_failed: 0 },
     resources,
   };
@@ -101,7 +111,7 @@ describe("downloader-view", () => {
   it("renders the empty message when there are no items", async () => {
     fetchItems.mockResolvedValue(status([]));
     const el = await mount();
-    expect(fetchItems).toHaveBeenCalledWith("tr", "downloading");
+    expect(fetchItems).toHaveBeenCalledWith("tr", "downloading", 1, 50);
     expect(el.shadowRoot?.textContent).toContain("No active downloads at the moment.");
   });
 
@@ -131,7 +141,7 @@ describe("downloader-view", () => {
     await settle(el);
     expect(push).toHaveBeenCalledTimes(1);
     expect(push).toHaveBeenCalledWith(null, "", "/downloaders/tr/seeding");
-    expect(fetchItems).toHaveBeenLastCalledWith("tr", "seeding");
+    expect(fetchItems).toHaveBeenLastCalledWith("tr", "seeding", 1, 50);
   });
 
   it("does not push history when activeTab is set programmatically", async () => {
@@ -141,7 +151,7 @@ describe("downloader-view", () => {
     el.activeTab = "failed";
     await settle(el);
     expect(push).not.toHaveBeenCalled();
-    expect(fetchItems).toHaveBeenLastCalledWith("tr", "failed");
+    expect(fetchItems).toHaveBeenLastCalledWith("tr", "failed", 1, 50);
   });
 
   it("ignores a stale response from a previous tab", async () => {
@@ -281,5 +291,40 @@ describe("downloader-view", () => {
     selected[0].dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
     await settle(el);
     expect(el.activeTab).toBe(tabs[0].id.replace("tab-", ""));
+  });
+
+  it("pages through a long list and resets to page 1 on tab change", async () => {
+    fetchItems.mockResolvedValue(status([item()], 120));
+    const el = await mount();
+    const nav = () => el.shadowRoot?.querySelector("nav[aria-label='Pagination']");
+    expect(nav()?.textContent).toContain("Page 1 of 3");
+    const next = nav()?.querySelector<HTMLButtonElement>("button[aria-label='Next page']");
+    next?.click();
+    await settle(el);
+    expect(fetchItems).toHaveBeenLastCalledWith("tr", "downloading", 2, 50);
+    expect(nav()?.textContent).toContain("Page 2 of 3");
+
+    el.activeTab = "seeding";
+    await settle(el);
+    expect(fetchItems).toHaveBeenLastCalledWith("tr", "seeding", 1, 50);
+  });
+
+  it("hides the pager when everything fits on one page", async () => {
+    fetchItems.mockResolvedValue(status([item()], 3));
+    const el = await mount();
+    expect(el.shadowRoot?.querySelector("nav[aria-label='Pagination']")).toBeNull();
+  });
+
+  it("steps back to the last page when the current page empties", async () => {
+    fetchItems.mockResolvedValueOnce(status([item()], 51));
+    const el = await mount();
+    fetchItems.mockResolvedValueOnce(status([item({ id: "p2" })], 51));
+    el.shadowRoot?.querySelector<HTMLButtonElement>("button[aria-label='Next page']")?.click();
+    await settle(el);
+    fetchItems.mockResolvedValueOnce(status([], 50));
+    fetchItems.mockResolvedValueOnce(status([item()], 50));
+    await vi.advanceTimersByTimeAsync(20_000);
+    await settle(el);
+    expect(fetchItems).toHaveBeenLastCalledWith("tr", "downloading", 1, 50);
   });
 });

@@ -708,6 +708,8 @@ export interface DownloadItem {
   organize_plans: PlanResponse | null;
 }
 
+export const DOWNLOADER_PAGE_SIZE = 50;
+
 export interface DownloaderState {
   count_of_downloading: number;
   count_of_planned: number;
@@ -717,6 +719,9 @@ export interface DownloaderState {
 export interface DownloaderStatusResponse {
   state: DownloaderState;
   resources: DownloadItem[];
+  total: number; // tasks in the whole list, across pages
+  page: number;
+  page_size: number;
 }
 
 export type DownloadState = "downloading" | "seeding" | "stopped" | "planned" | "failed";
@@ -724,14 +729,24 @@ export type DownloadState = "downloading" | "seeding" | "stopped" | "planned" | 
 export async function fetchDownloaderItems(
   downloaderName: string,
   state: DownloadState,
+  page = 1,
+  pageSize = DOWNLOADER_PAGE_SIZE,
 ): Promise<DownloaderStatusResponse> {
   const data = await getJSON<Partial<DownloaderStatusResponse>>(
-    buildUrl(`/api/v1/downloaders/${seg(downloaderName)}`, { state }),
+    buildUrl(`/api/v1/downloaders/${seg(downloaderName)}`, {
+      state,
+      page: String(page),
+      page_size: String(pageSize),
+    }),
   );
   // Ensure the response has the expected structure
+  const resources = data.resources || [];
   return {
     state: data.state || { count_of_downloading: 0, count_of_planned: 0, count_of_failed: 0 },
-    resources: data.resources || [],
+    resources,
+    total: data.total ?? resources.length,
+    page: data.page ?? page,
+    page_size: data.page_size ?? pageSize,
   };
 }
 

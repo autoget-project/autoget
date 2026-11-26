@@ -574,7 +574,9 @@ describe("request building and error handling", () => {
     const mock = vi.fn<typeof fetch>(async () => res(200, {}));
     vi.stubGlobal("fetch", mock);
     await fetchDownloaderItems("a/b c", "failed");
-    expect(String(mock.mock.calls[0][0])).toContain("/downloaders/a%2Fb%20c?state=failed");
+    expect(String(mock.mock.calls[0][0])).toContain(
+      "/downloaders/a%2Fb%20c?state=failed&page=1&page_size=50",
+    );
     await deleteDownload("x/y");
     expect(String(mock.mock.calls[1][0])).toBe("/api/v1/download/x%2Fy");
     await organizeDownload("id", "re_plan", "a&b=c");
@@ -676,6 +678,8 @@ describe("request building and error handling", () => {
     const items = await fetchDownloaderItems("d", "failed");
     expect(items.resources).toEqual([]);
     expect(items.state.count_of_failed).toBe(0);
+    expect(items.total).toBe(0);
+    expect(items.page).toBe(1);
   });
 });
 
