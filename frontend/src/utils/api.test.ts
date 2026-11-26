@@ -15,6 +15,7 @@ import {
   isAuthenticated,
   logout,
   organizeDownload,
+  scheduleProactiveRefresh,
 } from "./api";
 
 const KEY = "autoget_auth";
@@ -675,5 +676,86 @@ describe("request building and error handling", () => {
     const items = await fetchDownloaderItems("d", "failed");
     expect(items.resources).toEqual([]);
     expect(items.state.count_of_failed).toBe(0);
+  });
+});
+
+describe("proactive token refresh", () => {
+  function jwt(expSeconds: number): string {
+    const b64 = (o: object): string =>
+      btoa(JSON.stringify(o)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    return `${b64({ alg: "none" })}.${b64({ exp: expSeconds })}.sig`;
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+  });
+
+  afterEach(() => {
+    scheduleProactiveRefresh(); // no tokens left: clears any pending timer
+    vi.useRealTimers();
+  });
+
+  function refreshCalls(mock: Mock<typeof fetch>): unknown[] {
+    return mock.mock.calls.filter((call) => String(call[0]) === "/auth/refresh");
+  }
+
+  it("refreshes 60s before expiry and stores the new tokens", async () => {
+    const nowSec = Date.now() / 1000;
+    localStorage.setItem(
+      KEY,
+      JSON.stringify({ access_token: jwt(nowSec + 120), refresh_token: "r1" }),
+    );
+    const next = {
+      access_token: jwt(nowSec + 3600),
+      refresh_token: "r2",
+      expires_in: 3600,
+      token_type: "Bearer",
+    };
+    refreshResponse = () => res(200, next);
+    const mock = installFetchMock();
+
+    scheduleProactiveRefresh();
+    await vi.advanceTimersByTimeAsync(59_000);
+    expect(refreshCalls(mock)).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(refreshCalls(mock)).toHaveLength(1);
+    expect(JSON.parse(localStorage.getItem(KEY) ?? "{}").refresh_token).toBe("r2");
+  });
+
+  it("does not schedule for a token that is not a JWT", async () => {
+    localStorage.setItem(KEY, JSON.stringify({ access_token: "opaque", refresh_token: "r1" }));
+    const mock = installFetchMock();
+
+    scheduleProactiveRefresh();
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(refreshCalls(mock)).toHaveLength(0);
+  });
+
+  it("does not schedule without tokens", async () => {
+    const mock = installFetchMock();
+
+    scheduleProactiveRefresh();
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(refreshCalls(mock)).toHaveLength(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("retries after 30s when the refresh is unavailable", async () => {
+    const nowSec = Date.now() / 1000;
+    localStorage.setItem(
+      KEY,
+      JSON.stringify({ access_token: jwt(nowSec + 120), refresh_token: "r1" }),
+    );
+    refreshResponse = () => res(503);
+    const mock = installFetchMock();
+
+    scheduleProactiveRefresh();
+    await vi.advanceTimersByTimeAsync(61_000);
+    expect(refreshCalls(mock)).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(29_000);
+    expect(refreshCalls(mock)).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(refreshCalls(mock)).toHaveLength(2);
   });
 });

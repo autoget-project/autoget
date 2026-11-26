@@ -65,6 +65,59 @@ function broadcastSessionUpdate(tokens: StoredTokens): void {
 function setTokens(tokens: StoredTokens): void {
   localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(tokens));
   broadcastSessionUpdate(tokens);
+  scheduleProactiveRefresh();
+}
+
+// Refresh this long before the access token expires.
+const REFRESH_LEAD_MS = 60_000;
+const REFRESH_RETRY_MS = 30_000;
+// setTimeout delays above 2^31-1 ms overflow and fire immediately.
+const MAX_TIMEOUT_MS = 2 ** 31 - 1;
+
+// accessTokenExpiry returns the JWT exp claim in epoch milliseconds, or null
+// when the token is not a decodable JWT. The stored tokens only carry a
+// relative expires_in, so the claim is the one absolute expiry available on
+// both the login (callback.js) and refresh paths.
+export function accessTokenExpiry(token: string): number | null {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) {
+      return null;
+    }
+    const b64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, "="));
+    const exp = (JSON.parse(json) as { exp?: unknown }).exp;
+    return typeof exp === "number" && Number.isFinite(exp) ? exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+
+// scheduleProactiveRefresh renews the tokens shortly before the access token
+// expires. The HttpOnly image cookie is only renewed by a token refresh, and
+// <img> requests cannot trigger the 401 refresh path, so without this images
+// start failing once the cookie expires.
+export function scheduleProactiveRefresh(): void {
+  clearTimeout(refreshTimer);
+  refreshTimer = undefined;
+  const tokens = getTokens();
+  const exp = tokens?.access_token ? accessTokenExpiry(tokens.access_token) : null;
+  if (exp === null) {
+    return;
+  }
+  const delay = Math.min(Math.max(0, exp - Date.now() - REFRESH_LEAD_MS), MAX_TIMEOUT_MS);
+  refreshTimer = setTimeout(() => {
+    refreshTimer = undefined;
+    void refreshOnce().then((result) => {
+      // "ok" reschedules through setTokens; "expired" is handled by the next
+      // API 401.
+      if (result === "unavailable") {
+        refreshTimer = setTimeout(scheduleProactiveRefresh, REFRESH_RETRY_MS);
+      }
+    });
+  }, delay);
 }
 
 // isAuthenticated reports whether a session is stored locally. It is only true
@@ -407,6 +460,8 @@ function initAuthSync(): void {
       channel.onmessage = (event: MessageEvent) => {
         if (event.data?.type === "session_cleared" && event.data.sender !== TAB_ID) {
           onSessionClearedElsewhere();
+        } else if (event.data?.type === "session_updated" && event.data.sender !== TAB_ID) {
+          scheduleProactiveRefresh();
         }
       };
     }
@@ -416,8 +471,17 @@ function initAuthSync(): void {
   window.addEventListener("storage", (event: StorageEvent) => {
     if (event.key === AUTH_STORAGE_KEY && event.newValue === null) {
       onSessionClearedElsewhere();
+    } else if (event.key === AUTH_STORAGE_KEY) {
+      scheduleProactiveRefresh();
     }
   });
+  // Background timers are throttled, so re-check when the tab is shown again.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      scheduleProactiveRefresh();
+    }
+  });
+  scheduleProactiveRefresh();
 }
 
 initAuthSync();
