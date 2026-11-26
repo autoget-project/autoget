@@ -18,9 +18,6 @@ FROM golang:1.27.4-alpine AS backend-builder
 
 WORKDIR /src
 
-# Install build dependencies
-RUN apk add --no-cache git
-
 # Cache module downloads independently of source changes
 COPY protocol/go.mod ./protocol/
 COPY organizer/go.mod ./organizer/
@@ -35,7 +32,7 @@ COPY organizer/ ./organizer/
 COPY backend/ ./backend/
 
 WORKDIR /src/backend
-RUN CGO_ENABLED=0 GOOS=linux go build -o autoget ./cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o autoget ./cmd/main.go
 
 # Stage 3: Deploy image
 FROM alpine:3.24 AS deploy
