@@ -810,6 +810,7 @@ components:
         file: {type: string}
         action: {type: string, enum: [move, skip]}
         target: {type: string, nullable: true, description: Null for `skip`.}
+        target_exists: {type: boolean, description: Set when the target already existed in the library at plan time.}
     PlanResponse:
       type: object
       required: [plan, error]

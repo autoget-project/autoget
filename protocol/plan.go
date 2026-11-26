@@ -14,6 +14,9 @@ type PlanAction struct {
 	File   string  `json:"file"`
 	Action string  `json:"action"` // "move" or "skip"
 	Target *string `json:"target"` // pointer ensures "target": null when nil
+	// TargetExists is set at plan time when a move target already exists in the
+	// library. Omitted when false so the JSON stays identical for old clients.
+	TargetExists bool `json:"target_exists,omitempty"`
 }
 
 // PlanRequest represents the input parameters for creating a plan.

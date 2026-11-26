@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -31,6 +32,7 @@ type Pipeline struct {
 	router    *stage3planner.Router
 	subtitles *stage4postprocess.SubtitlePlanner
 	tracer    trace.Tracer
+	targetDir string
 }
 
 // NewPipeline wires the pipeline around the given AI provider and Stage 2
@@ -47,6 +49,7 @@ func NewPipeline(provider ai.Provider, enricher *stage2enricher.Enricher, downlo
 		router:    stage3planner.NewRouter(provider, targetDir, tpdb),
 		subtitles: stage4postprocess.NewSubtitlePlanner(provider, downloadDir),
 		tracer:    tracer,
+		targetDir: targetDir,
 	}
 }
 
@@ -298,7 +301,23 @@ func (p *Pipeline) runStage4(ctx context.Context, dir string, files []string, ca
 		}
 	}
 	out.plan, out.detail = stage4postprocess.SanitizePlanWithDetail(out.plan, files, cat)
+	flagExistingTargets(p.targetDir, out.plan)
 	return out
+}
+
+// flagExistingTargets marks move actions whose target already exists in the
+// library, so the reviewer sees conflicts before executing (the executor never
+// overwrites). Targets were validated by Stage 4 to stay inside targetDir.
+func flagExistingTargets(targetDir string, plan []model.PlanAction) {
+	for i := range plan {
+		a := &plan[i]
+		if a.Action != model.ActionMove || a.Target == nil {
+			continue
+		}
+		if _, err := os.Lstat(filepath.Join(targetDir, filepath.Clean(*a.Target))); err == nil {
+			a.TargetExists = true
+		}
+	}
 }
 
 // pairSubtitles collects subtitle files left unplanned by Stage 3 and pairs

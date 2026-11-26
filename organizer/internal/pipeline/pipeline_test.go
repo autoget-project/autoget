@@ -623,3 +623,23 @@ func TestCreatePlan_TVSeriesWithDirtyTitleAndOrganizerCategory(t *testing.T) {
 	assert.Contains(t, lastCall.Prompt, `"name":"A Prophet"`)
 	assert.Contains(t, lastCall.Prompt, `"year":2026`)
 }
+
+func TestCreatePlan_FlagsExistingTargets(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(targetDir, "book"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(targetDir, "book", "old.epub"), []byte("x"), 0o644))
+
+	p := NewPipeline(mock.NewProvider(), stage2enricher.NewEnricher(nil, nil, nil, nil), t.TempDir(), targetDir, nil, nil)
+
+	existing, err := p.CreatePlan(context.Background(), "hash", []string{"hash/old.epub"}, nil)
+	require.NoError(t, err)
+	require.Len(t, existing.Plan, 1)
+	assert.True(t, existing.Plan[0].TargetExists)
+
+	fresh, err := p.CreatePlan(context.Background(), "hash", []string{"hash/new.epub"}, nil)
+	require.NoError(t, err)
+	require.Len(t, fresh.Plan, 1)
+	assert.False(t, fresh.Plan[0].TargetExists)
+}

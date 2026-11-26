@@ -45,3 +45,27 @@ func TestPlanActionSkipNullTarget(t *testing.T) {
 		t.Fatalf("expected %s, got %s", expected, string(data))
 	}
 }
+
+func TestPlanActionTargetExists(t *testing.T) {
+	target := "movie/a.mkv"
+
+	data, err := json.Marshal(PlanAction{File: "a.mkv", Action: "move", Target: &target})
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+	if want := `{"file":"a.mkv","action":"move","target":"movie/a.mkv"}`; string(data) != want {
+		t.Fatalf("got %s, want %s", data, want)
+	}
+
+	data, err = json.Marshal(PlanAction{File: "a.mkv", Action: "move", Target: &target, TargetExists: true})
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+	var got PlanAction
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+	if !got.TargetExists {
+		t.Fatalf("target_exists lost in round trip: %s", data)
+	}
+}
