@@ -22,7 +22,7 @@ type Notifier struct {
 }
 
 func New(config *Config) (*Notifier, error) {
-	b, err := bot.New(config.Token)
+	b, err := bot.New(config.Token, bot.WithSkipGetMe())
 	if err != nil {
 		return nil, err
 	}

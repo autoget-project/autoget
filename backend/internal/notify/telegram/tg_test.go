@@ -41,3 +41,12 @@ func TestSendMarkdownMessage(t *testing.T) {
 	require.NoError(t, bot.SendMarkdownMessage(`*title*:
   test message`))
 }
+
+func TestNew_NoNetworkCall(t *testing.T) {
+	t.Parallel()
+
+	n, err := New(&Config{Token: "123:abc", ChatID: "1"})
+
+	require.NoError(t, err)
+	require.NotNil(t, n)
+}
