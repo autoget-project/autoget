@@ -111,4 +111,26 @@ describe("search-view", () => {
     expect(added.length).toBe(1);
     expect(removed).toEqual(added);
   });
+
+  it("restores a deep-linked category after categories load", async () => {
+    fetchIndexers.mockResolvedValue(["x"]);
+    let resolve!: (v: Category[]) => void;
+    fetchCategories.mockReturnValue(new Promise((r) => (resolve = r)));
+    const el = await mount("/search?indexer=x&category=c2");
+    resolve([
+      {
+        id: "c1",
+        name: "Movies",
+        subCategories: [{ id: "c2", name: "Action", subCategories: [] }],
+      },
+    ]);
+    await settle(el);
+    const crumbs = [...(el.shadowRoot?.querySelectorAll(".breadcrumbs li") ?? [])].map((li) =>
+      li.textContent?.trim(),
+    );
+    expect(crumbs).toContain("Action");
+    el.shadowRoot?.querySelector("form")?.dispatchEvent(new Event("submit", { cancelable: true }));
+    await settle(el);
+    expect(new URLSearchParams(window.location.search).get("category")).toBe("c2");
+  });
 });

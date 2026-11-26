@@ -118,6 +118,14 @@ export class SearchView extends LitElement {
       this.fetchAndDisplayCategories();
     }
 
+    this.applyUrlCategory();
+
+    // Reset searching state when URL changes (indicating search completed)
+    this.isSearching = false;
+    this.requestUpdate();
+  };
+
+  private applyUrlCategory() {
     // Update selected category path based on URL
     // This is a simplified approach; a more robust solution might involve re-building the path from allCategories
     if (this.currentCategory) {
@@ -139,11 +147,7 @@ export class SearchView extends LitElement {
       // Only display top-level categories if an indexer is selected
       this.displayedCategoryLevels = this.selectedIndexer ? [this.allCategories] : [];
     }
-
-    // Reset searching state when URL changes (indicating search completed)
-    this.isSearching = false;
-    this.requestUpdate();
-  };
+  }
 
   private async handleIndexerChange(indexer: string) {
     this.selectedIndexer = indexer;
@@ -186,6 +190,11 @@ export class SearchView extends LitElement {
         this.loadError = `Failed to load categories: ${errorMessage(error)}`;
       }
       this.displayedCategoryLevels = [this.allCategories]; // Start with the top level
+      // Re-apply the URL's category now that the category tree is available,
+      // unless the user has since picked a different indexer.
+      if (this.selectedIndexer === this.currentIndexer) {
+        this.applyUrlCategory();
+      }
     } else {
       this.allCategories = [];
       this.displayedCategoryLevels = [];
