@@ -297,7 +297,7 @@ func (p *Pipeline) runStage4(ctx context.Context, dir string, files []string, ca
 			out.plan = append(append(make([]model.PlanAction, 0, len(plan)+len(subActions)), plan...), subActions...)
 		}
 	}
-	out.plan, out.detail = stage4postprocess.SanitizePlanWithDetail(out.plan)
+	out.plan, out.detail = stage4postprocess.SanitizePlanWithDetail(out.plan, files, cat)
 	return out
 }
 

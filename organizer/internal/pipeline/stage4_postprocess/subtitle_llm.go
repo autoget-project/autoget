@@ -102,10 +102,17 @@ func (sp *SubtitlePlanner) PairSubtitles(ctx context.Context, dir string, subtit
 		}
 	}
 
+	isSubtitle := make(map[string]struct{}, len(subtitleFiles))
+	for _, f := range subtitleFiles {
+		isSubtitle[f] = struct{}{}
+	}
+
 	actions := make([]model.PlanAction, 0, len(subtitleFiles))
 	covered := make(map[string]struct{}, len(subtitleFiles))
 	for _, item := range resp.Plan {
-		if item.File == "" {
+		// Ignore files the LLM invented or that are not subtitles (e.g. a
+		// video); they fall through to the "never mentioned" handling.
+		if _, ok := isSubtitle[item.File]; !ok {
 			continue
 		}
 		// Dedupe by file (keep first) to defend the exactly-once contract

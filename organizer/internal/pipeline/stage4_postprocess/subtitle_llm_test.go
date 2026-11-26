@@ -152,3 +152,35 @@ func TestSubtitlePlanner_UnmatchedAndUncoveredSkipped(t *testing.T) {
 	uncovered := findAction(t, actions, "d1/uncovered.srt")
 	assert.Equal(t, "skip", uncovered.Action, "an uncovered subtitle must be skipped")
 }
+
+func TestSubtitlePlanner_IgnoresVideoAndInventedFiles(t *testing.T) {
+	t.Parallel()
+
+	prov := mock.NewProvider()
+	prov.AddRule(mock.Rule{
+		PromptPattern: "subtitle files to match their corresponding video",
+		Response: `{"plan":[
+			{"file":"d1/movie.mkv","action":"move","matched_video":"d1/movie.mkv","language":"Chinese"},
+			{"file":"d1/invented.srt","action":"move","matched_video":"d1/movie.mkv","language":"Chinese"},
+			{"file":"d1/a.srt","action":"move","matched_video":"d1/movie.mkv","language":"Chinese"}
+		]}`,
+	})
+
+	planner := NewSubtitlePlanner(prov, t.TempDir())
+	videoPlan := []model.PlanAction{
+		{File: "d1/movie.mkv", Action: "move", Target: ptr.Str("movie/X (2000)/X (2000).mkv")},
+	}
+	subs := []string{"d1/a.srt", "d1/b.srt"}
+
+	actions, err := planner.PairSubtitles(context.Background(), "d1", subs, videoPlan)
+	require.NoError(t, err)
+	require.Len(t, actions, len(subs), "every subtitle appears exactly once and nothing else")
+
+	counts := map[string]int{}
+	for _, a := range actions {
+		counts[a.File]++
+	}
+	assert.Equal(t, map[string]int{"d1/a.srt": 1, "d1/b.srt": 1}, counts)
+	assert.Equal(t, "move", findAction(t, actions, "d1/a.srt").Action)
+	assert.Equal(t, "skip", findAction(t, actions, "d1/b.srt").Action)
+}
