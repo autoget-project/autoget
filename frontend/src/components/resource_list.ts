@@ -1,5 +1,6 @@
 import { html, LitElement, unsafeCSS, css, type TemplateResult, type PropertyValues } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { repeat } from "lit/directives/repeat.js";
 import { DateTime } from "luxon";
 
 import {
@@ -333,10 +334,10 @@ export class ResourceList extends LitElement {
       `;
     }
 
-    const columns: TemplateResult[][] = Array.from({ length: this.columnCount }, () => []);
+    const columns: Resource[][] = Array.from({ length: this.columnCount }, () => []);
     this.resources.resources.forEach((resource, index) => {
       const columnIndex = index % this.columnCount; // Distribute items in row-first order
-      columns[columnIndex].push(this.renderResourceCard(resource));
+      columns[columnIndex].push(resource);
     });
 
     const maxCols = this.getMaxColumnsForCurrentViewport();
@@ -373,7 +374,16 @@ export class ResourceList extends LitElement {
         </button>
       </div>
       <div class="flex items-start gap-2">
-        ${columns.map((colItems) => html`<div class="min-w-0 flex-1 space-y-2">${colItems}</div>`)}
+        ${columns.map(
+          (colItems) =>
+            html`<div class="min-w-0 flex-1 space-y-2">
+              ${repeat(
+                colItems,
+                (r) => r.id,
+                (r) => this.renderResourceCard(r),
+              )}
+            </div>`,
+        )}
       </div>
     `;
   }

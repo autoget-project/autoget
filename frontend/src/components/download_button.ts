@@ -1,7 +1,12 @@
-import { html, LitElement, css, type TemplateResult, unsafeCSS } from "lit";
+import { html, LitElement, css, type PropertyValues, type TemplateResult, unsafeCSS } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import globalStyles from "/src/index.css?inline";
 import { ApiError, downloadResource, errorMessage } from "../utils/api.js";
+
+// Download outcomes for this page session (until reload), keyed by
+// `${indexerId}/${resourceId}`. Buttons are reused across relayouts and page
+// changes, and several buttons can show the same resource, so state lives here.
+const outcomes = new Map<string, "added" | "duplicate">();
 
 @customElement("download-button")
 export class DownloadButton extends LitElement {
@@ -35,30 +40,50 @@ export class DownloadButton extends LitElement {
   @state()
   private errorText: string = "";
 
+  private get key(): string {
+    return `${this.indexerId}/${this.resourceId}`;
+  }
+
+  protected willUpdate(changed: PropertyValues): void {
+    if (!changed.has("indexerId") && !changed.has("resourceId")) return;
+    const outcome = outcomes.get(this.key);
+    this.isAdded = outcome === "added";
+    this.isDuplicate = outcome === "duplicate";
+    this.hasFailed = false;
+    this.errorText = "";
+    this.isLoading = false;
+  }
+
   private async handleDownloadClick() {
     if (this.isLoading || this.isAdded) {
       return;
     }
 
+    const key = this.key;
     this.isLoading = true;
     this.hasFailed = false;
     this.requestUpdate();
 
     try {
       await downloadResource(this.indexerId, this.resourceId);
-      this.isAdded = true;
+      outcomes.set(key, "added");
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
         // The backend already tracks this torrent; nothing to retry.
-        this.isDuplicate = true;
-      } else {
+        outcomes.set(key, "duplicate");
+      } else if (key === this.key) {
         console.error("Error initiating download:", error);
         this.errorText = errorMessage(error);
         this.hasFailed = true;
       }
     } finally {
-      this.isLoading = false;
-      this.requestUpdate();
+      if (key === this.key) {
+        const outcome = outcomes.get(key);
+        this.isAdded = outcome === "added";
+        this.isDuplicate = outcome === "duplicate";
+        this.isLoading = false;
+        this.requestUpdate();
+      }
     }
   }
 

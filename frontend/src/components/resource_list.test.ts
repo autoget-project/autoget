@@ -220,4 +220,32 @@ describe("resource-list", () => {
     await settle(el);
     expect(cols()).toBe(4);
   });
+
+  it("keeps each download button with its resource across a relayout", async () => {
+    fetchRes.mockResolvedValue(
+      response([
+        resource({ id: "r1", title: "Alpha" }),
+        resource({ id: "r2", title: "Beta" }),
+        resource({ id: "r3", title: "Gamma" }),
+      ]),
+    );
+    const el = await mount();
+    const pairs = () =>
+      [...(el.shadowRoot?.querySelectorAll("download-button") ?? [])].map((b) => {
+        let n: Element | null = b;
+        while (n && !n.querySelector("h3")) n = n.parentElement;
+        return [b.getAttribute("resourceid"), n?.querySelector("h3")?.textContent?.trim()];
+      });
+    const expected = [
+      ["r1", "Alpha"],
+      ["r2", "Beta"],
+      ["r3", "Gamma"],
+    ];
+    expect(pairs()).toEqual(expected);
+    el.shadowRoot
+      ?.querySelector<HTMLButtonElement>('button[aria-label="Zoom in (decrease columns)"]')
+      ?.click();
+    await settle(el);
+    expect(pairs().sort()).toEqual(expected);
+  });
 });

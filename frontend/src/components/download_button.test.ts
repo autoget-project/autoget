@@ -17,10 +17,13 @@ type Button = HTMLElement & {
 
 const downloadResource = vi.mocked(api.downloadResource);
 
+// The session outcome map is module state, so give every test its own resource.
+let seq = 0;
+
 async function mount(): Promise<Button> {
   const el = document.createElement("download-button") as Button;
   el.indexerId = "idx";
-  el.resourceId = "res 1";
+  el.resourceId = `res ${++seq}`;
   document.body.appendChild(el);
   await el.updateComplete;
   return el;
@@ -60,7 +63,7 @@ describe("download-button", () => {
     const el = await mount();
     button(el).click();
     await settle(el);
-    expect(downloadResource).toHaveBeenCalledExactlyOnceWith("idx", "res 1");
+    expect(downloadResource).toHaveBeenCalledExactlyOnceWith("idx", `res ${seq}`);
     expect(button(el).textContent?.trim()).toBe("Added");
     expect(button(el).disabled).toBe(true);
   });
@@ -104,6 +107,25 @@ describe("download-button", () => {
     button(el).click();
     await settle(el);
     expect(downloadResource).toHaveBeenCalledTimes(2);
+    expect(button(el).textContent?.trim()).toBe("Added");
+  });
+
+  it("keeps the Added state with its resource when the ids change", async () => {
+    downloadResource.mockResolvedValue();
+    const el = await mount();
+    el.resourceId = "added-a";
+    await el.updateComplete;
+    button(el).click();
+    await settle(el);
+    expect(button(el).textContent?.trim()).toBe("Added");
+
+    el.resourceId = "other-b";
+    await el.updateComplete;
+    expect(button(el).textContent?.trim()).toBe("Download");
+    expect(button(el).disabled).toBe(false);
+
+    el.resourceId = "added-a";
+    await el.updateComplete;
     expect(button(el).textContent?.trim()).toBe("Added");
   });
 });
