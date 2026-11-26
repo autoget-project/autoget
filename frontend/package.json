@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.5",
-    "daisyui": "^5.8.0",
+    "daisyui": "^5.8.2",
     "lit": "^3.3.3",
     "luxon": "^3.7.2",
     "tailwindcss": "^4.3.5",
@@ -26,16 +26,16 @@
   },
   "devDependencies": {
     "@catppuccin/daisyui": "^2.1.1",
-    "@iconify/json": "^2.2.557",
+    "@iconify/json": "^2.2.560",
     "@iconify/tailwind4": "^1.2.3",
     "@types/luxon": "^3.7.6",
-    "@vitest/coverage-v8": "5.1.0",
+    "@vitest/coverage-v8": "5.1.1",
     "jsdom": "^31.0.1",
-    "oxfmt": "^0.78.0",
-    "oxlint": "^1.93.0",
+    "oxfmt": "^0.80.0",
+    "oxlint": "^1.95.0",
     "typescript": "~7.0.2",
     "vite": "^8.3.8",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.1"
   },
   "engines": {
     "node": ">=26"
