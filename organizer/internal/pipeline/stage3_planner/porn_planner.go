@@ -55,10 +55,7 @@ func (p *PornPlanner) Plan(ctx context.Context, pc *PlannerContext) ([]model.Pla
 		}
 	}
 
-	root := string(model.TargetDirPorn)
-	if pc.Metadata.IsVR {
-		root = string(model.TargetDirPornVR)
-	}
+	root := string(pornTargetRoot(pc.Metadata.IsVR))
 
 	actions := make([]model.PlanAction, 0, len(videos)+len(others))
 	for _, v := range videos {
@@ -90,4 +87,12 @@ func pornDisplayName(pc *PlannerContext, video string) string {
 	}
 	base := filepath.Base(video)
 	return strings.TrimSuffix(base, filepath.Ext(base))
+}
+
+// pornTargetRoot returns the library root for porn: porn_vr for VR, else porn.
+func pornTargetRoot(isVR bool) model.TargetDir {
+	if isVR {
+		return model.TargetDirPornVR
+	}
+	return model.TargetDirPorn
 }

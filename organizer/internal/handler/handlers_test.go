@@ -313,7 +313,7 @@ func TestReplanHandler_NonDomainCategoryUsesGenericPrompt(t *testing.T) {
 	prov := mock.NewProvider()
 	prov.AddRule(mock.Rule{
 		PromptPattern: "media categorization assistant",
-		Response:      `{"category":"photobook","reason":"image set","entities":{}}`,
+		Response:      `{"category":"unknown","reason":"image set","entities":{}}`,
 	})
 	prov.AddRule(mock.Rule{
 		PromptPattern: "revises file organization plans based on user feedback",

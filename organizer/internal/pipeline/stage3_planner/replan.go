@@ -27,6 +27,11 @@ type ReplanInput struct {
 // list: videos come from the LLM, companion subtitles are left to Stage 4
 // pairing, and any other files are explicitly skipped.
 func PlanReplan(ctx context.Context, provider ai.Provider, cat model.Category, in ReplanInput) ([]model.PlanAction, error) {
+	// Simple categories never need an LLM, exactly like the normal router.
+	if IsSimpleMoveCategory(cat) {
+		return SimplePlan(cat, in.Files), nil
+	}
+
 	videos, _, others := partitionFiles(in.Files)
 
 	// The LLM only names videos; subtitles are Stage 4's concern.
@@ -62,20 +67,19 @@ func ReplanPrompt(cat model.Category, in ReplanInput) string {
 	switch cat {
 	case model.CategoryTVSeries:
 		tpl = tvReplanPrompt
-		payload["root_path"] = string(model.TargetDirTVSeries)
+		payload["root_path"] = string(tvTargetRoot(in.Enriched.IsAnim))
 	case model.CategoryMovie:
 		tpl = movieReplanPrompt
-		payload["root_path"] = string(model.TargetDirMovie)
+		payload["root_path"] = string(movieTargetRoot(in.Enriched.IsAnim))
 	case model.CategoryBangoPorn:
 		tpl = bangoReplanPrompt
-		payload["root_path"] = string(model.TargetDirJAV)
-		// The canonical actress directory (ActorStore-resolved, 素人 when
-		// unknown) is a Go decision, exactly like the normal bango planner's
-		// target_dir: the LLM must not invent its own transliteration.
-		payload["actor_dir"] = BangoActorDir(in.Enriched)
+		// The complete directory (root + canonical actress dir, plus the VR
+		// bango subdir) is a Go decision, exactly like the normal bango
+		// planner's target_dir.
+		payload["root_path"] = ResolveBangoTargetDir(in.Enriched)
 	case model.CategoryPorn:
 		tpl = pornReplanPrompt
-		payload["root_path"] = string(model.TargetDirPorn)
+		payload["root_path"] = string(pornTargetRoot(in.Enriched.IsVR))
 	default:
 		tpl = genericReplanPrompt
 	}
@@ -98,7 +102,7 @@ const replanCommonRules = `1. Input (JSON object):
 2. Analyze:
    - Re-derive the correct naming from the files, enriched, metadata, entities and user_hint.
    - Apply the user_hint exactly when present; when it conflicts with the previous plan, the hint wins.
-   - Override every part of the previous plan that the hint or your own analysis identifies as wrong (including the category/library root).`
+   - Override every part of the previous plan that the hint or your own analysis identifies as wrong, except "root_path": it is decided by the pipeline and must be used verbatim.`
 
 const replanResponseRules = `Respond strictly following the required JSON schema.
 
@@ -141,9 +145,9 @@ A user requested this replan, so the previous plan is known to be flawed. Re-der
 
 ` + replanCommonRules + `
 3. Construct new relative paths following the JAV library convention:
-   - The actress directory layer MUST be exactly "actor_dir" from the input (the canonical library directory already resolved by the actress store), never your own transliteration of the performer name.
-   - {root_path}/{actor_dir}/<BANGO>.part.N.ext for multi-volume files; <BANGO>-C.ext keeps the Chinese subtitle marker.
-   - Every move target must start with the mandatory root prefix.
+   - "root_path" is the complete target directory (library root, canonical actress directory and, for VR, the bango subdirectory); use it verbatim, never your own transliteration of the performer name.
+   - Video: {root_path}/<BANGO>.ext; multi-volume files <BANGO>.part.N.ext; Chinese subtitle marker <BANGO>-C.ext.
+   - Every move target must start with root_path.
 4. Edge cases:
    - Extras and unmatchable files: "action": "skip" (omit target).
    - Every input file must appear exactly once in the plan.

@@ -548,7 +548,7 @@ func TestReplan_BangoUsesCanonicalActressDirFromStage2(t *testing.T) {
 
 	calls := prov.Calls()
 	require.Len(t, calls, 1, "dmm_id short-circuits Stage 1; Stage 2 resolves the actress dir without an LLM call")
-	assert.Contains(t, calls[0].Prompt, `"actor_dir":"悠香"`,
+	assert.Contains(t, calls[0].Prompt, `"root_path":"jav/悠香"`,
 		"Stage 2 must resolve the canonical actress directory and hand it to the replan prompt")
 }
 
