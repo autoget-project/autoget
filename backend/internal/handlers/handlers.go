@@ -151,49 +151,7 @@ func (s *Service) indexerDownload(c *gin.Context) {
 		return
 	}
 
-	resourceID := c.Param("resource")
-
-	detail, err := indexer.Detail(resourceID, true)
-	if err != nil {
-		respondIndexerError(c, err)
-		return
-	}
-
-	files := []string{}
-	for _, file := range detail.Files {
-		files = append(files, file.Name)
-	}
-
-	downloadStatus := &db.DownloadStatus{
-		Downloader: indexer.DownloaderName(),
-		State:      db.DownloadStarted,
-		ResTitle:   detail.Title,
-		ResTitle2:  detail.Title2,
-		ResIndexer: indexerName,
-		Category:   detail.Category,
-		DetailsURL: detail.DetailsURL,
-		FileList:   files,
-		Metadata:   detail.Metadata,
-	}
-
-	// The row is inserted right before the torrent file is placed, so a DB failure
-	// never leaves an untracked torrent in the watch dir.
-	created := false
-	_, err = indexer.Download(resourceID, func(hash string) error {
-		downloadStatus.ID = hash
-		if err := s.db.Create(downloadStatus).Error; err != nil {
-			return err
-		}
-		created = true
-		return nil
-	})
-	if err != nil {
-		if created {
-			// Placing the file failed after the row was inserted: roll back.
-			if delErr := s.db.Delete(&db.DownloadStatus{}, "id = ?", downloadStatus.ID).Error; delErr != nil {
-				log.Error().Err(delErr).Str("id", downloadStatus.ID).Msg("failed to roll back download status")
-			}
-		}
+	if err := indexers.DownloadTracked(s.db, indexer, c.Param("resource")); err != nil {
 		respondIndexerError(c, err)
 		return
 	}

@@ -3,6 +3,7 @@ package rsshelper
 import (
 	"bytes"
 	_ "embed"
+	"net/http"
 	"strings"
 	"text/template"
 
@@ -70,21 +71,16 @@ func SearchRSS(index indexers.IIndexer, d *gorm.DB, notify notify.INotifier, ite
 			if strings.Contains(strings.ToLower(item.Title), search.Text) {
 				search.Title = item.Title
 				search.URL = item.URL
-				search.ResID = item.ResID
 				search.Catergory = item.Catergory
 
-				err = db.UpdateSearch(d, search)
-				if err != nil {
-					logger.Error().Err(err).Msg("Failed to update search")
-					continue
-				}
-
 				if search.Action == "download" {
-					_, err := index.Download(search.ResID, nil)
-					if err != nil {
+					if err := indexers.DownloadTracked(d, index, item.ResID); err != nil && err.Code != http.StatusConflict {
 						logger.Error().Err(err).Msg("Failed to download torrent")
 						continue
 					}
+					// Downloaded, or already tracked (409): consume the search. Mark it in
+					// memory so later items in this batch skip it.
+					search.ResID = item.ResID
 
 					if err := db.DeleteSearch(d, search.ID); err != nil {
 						logger.Error().Err(err).Msg("Failed to delete search")
@@ -93,6 +89,11 @@ func SearchRSS(index indexers.IIndexer, d *gorm.DB, notify notify.INotifier, ite
 
 					downloadStarted = append(downloadStarted, search.Title)
 				} else if search.Action == "notification" {
+					search.ResID = item.ResID
+					if err := db.UpdateSearch(d, search); err != nil {
+						logger.Error().Err(err).Msg("Failed to update search")
+						continue
+					}
 					downloadPendingToStart = append(downloadPendingToStart, search.Title)
 				}
 			}
