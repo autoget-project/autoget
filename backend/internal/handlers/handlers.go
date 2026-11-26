@@ -56,6 +56,8 @@ func (s *Service) SetupRouter(router *gin.RouterGroup) {
 	router.GET("/indexers/:indexer/resources/:resource", s.indexerResourceDetail)
 	router.POST("/indexers/:indexer/resources/:resource/download", s.indexerDownload)
 	router.POST("/indexers/:indexer/registerSearch", s.indexerRegisterSearch)
+	router.GET("/searches", s.listSearches)
+	router.DELETE("/searches/:id", s.deleteSearch)
 
 	router.GET("/downloaders", s.listDownloaders)
 	router.GET("/downloaders/:downloader", s.getDownloaderStatuses)
@@ -200,6 +202,50 @@ func (s *Service) indexerRegisterSearch(c *gin.Context) {
 	}
 
 	c.JSON(200, gin.H{"status": "ok"})
+}
+
+type rssSearchResponse struct {
+	ID        uint      `json:"id"`
+	Indexer   string    `json:"indexer"`
+	Text      string    `json:"text"`
+	Action    string    `json:"action"`
+	CreatedAt time.Time `json:"created_at"`
+	ResID     string    `json:"res_id,omitempty"` // set once a notification search matched
+	Title     string    `json:"title,omitempty"`
+	URL       string    `json:"url,omitempty"`
+}
+
+func (s *Service) listSearches(c *gin.Context) {
+	searches, err := db.ListSearches(s.db)
+	if err != nil {
+		respondError(c, 500, "failed to list searches", err)
+		return
+	}
+	resp := make([]rssSearchResponse, 0, len(searches))
+	for _, r := range searches {
+		resp = append(resp, rssSearchResponse{
+			ID: r.ID, Indexer: r.Indexer, Text: r.Text, Action: r.Action, CreatedAt: r.CreatedAt,
+			ResID: r.ResID, Title: r.Title, URL: r.URL,
+		})
+	}
+	c.JSON(200, resp)
+}
+
+func (s *Service) deleteSearch(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "Invalid search id"})
+		return
+	}
+	if err := db.DeleteSearch(s.db, uint(id)); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(404, gin.H{"error": "Search not found"})
+			return
+		}
+		respondError(c, 500, "failed to delete search", err)
+		return
+	}
+	c.JSON(200, gin.H{"status": "deleted"})
 }
 
 type DownloaderInfoResponse struct {

@@ -1335,3 +1335,41 @@ func TestService_handleRePlan_AlreadyOrganized(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, db.Organized, got.OrganizeState)
 }
+
+func TestListAndDeleteSearches(t *testing.T) {
+	_, router, _, testDB := testSetup(t)
+	do := func(method, path string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(method, path, nil))
+		return w
+	}
+	s1 := &db.RSSSearch{Indexer: "mock", Text: "one", Action: "download"}
+	s2 := &db.RSSSearch{Indexer: "mock", Text: "two", Action: "notification", ResID: "r1", Title: "T", URL: "http://u"}
+	require.NoError(t, testDB.Create(s1).Error)
+	require.NoError(t, testDB.Create(s2).Error)
+
+	list := func() []rssSearchResponse {
+		w := do("GET", "/searches")
+		require.Equal(t, http.StatusOK, w.Code)
+		var out []rssSearchResponse
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &out))
+		return out
+	}
+	got := list()
+	require.Len(t, got, 2)
+	assert.Equal(t, "two", got[0].Text)
+	assert.Equal(t, "r1", got[0].ResID)
+	assert.Equal(t, "T", got[0].Title)
+
+	assert.Equal(t, http.StatusBadRequest, do("DELETE", "/searches/abc").Code)
+	assert.Equal(t, http.StatusNotFound, do("DELETE", "/searches/999").Code)
+
+	w := do("DELETE", fmt.Sprintf("/searches/%d", s2.ID))
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.JSONEq(t, `{"status":"deleted"}`, w.Body.String())
+	got = list()
+	require.Len(t, got, 1)
+	assert.Equal(t, "one", got[0].Text)
+
+	assert.Equal(t, http.StatusNotFound, do("DELETE", fmt.Sprintf("/searches/%d", s2.ID)).Code)
+}

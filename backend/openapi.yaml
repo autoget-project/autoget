@@ -208,6 +208,58 @@ paths:
         '404': {$ref: '#/components/responses/IndexerNotFound'}
         '500': {$ref: '#/components/responses/InternalError'}
         '503': {$ref: '#/components/responses/AuthUnavailable'}
+  /api/v1/searches:
+    get:
+      tags: [indexers]
+      operationId: listSearches
+      summary: List all registered RSS searches
+      description: Across all indexers, ordered by indexer then newest first.
+      responses:
+        '200':
+          description: The registered searches.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/RSSSearch'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/AuthUnavailable'}
+  /api/v1/searches/{id}:
+    delete:
+      tags: [indexers]
+      operationId: deleteSearch
+      summary: Delete an RSS search
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: integer, minimum: 0}
+      responses:
+        '200':
+          description: Search deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: {type: string, enum: [deleted]}
+        '400':
+          description: '`id` is not an unsigned integer.'
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404':
+          description: Search not found.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/AuthUnavailable'}
   /api/v1/downloaders:
     get:
       tags: [downloads]
@@ -821,6 +873,18 @@ components:
           nullable: true
           allOf:
             - $ref: '#/components/schemas/PlanResponse'
+    RSSSearch:
+      type: object
+      required: [id, indexer, text, action, created_at]
+      properties:
+        id: {type: integer}
+        indexer: {type: string}
+        text: {type: string, description: Lower-cased search text.}
+        action: {type: string, enum: [download, notification]}
+        created_at: {type: string, format: date-time}
+        res_id: {type: string, description: Set once a notification search matched.}
+        title: {type: string, description: Matched resource title.}
+        url: {type: string, description: Matched resource link; may be a signed download URL, so do not render it as a link.}
     DownloaderStatus:
       type: object
       required: [state, resources, total, page, page_size]

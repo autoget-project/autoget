@@ -41,6 +41,22 @@ func UpdateSearch(db *gorm.DB, search *RSSSearch) error {
 	return db.Save(search).Error
 }
 
+// ListSearches returns all live searches, ordered by indexer then newest first.
+func ListSearches(db *gorm.DB) ([]*RSSSearch, error) {
+	var searchs []*RSSSearch
+	err := db.Order("indexer ASC, created_at DESC, id DESC").Find(&searchs).Error
+	return searchs, err
+}
+
+// DeleteSearch soft-deletes a search. It returns gorm.ErrRecordNotFound when
+// no live search has the id.
 func DeleteSearch(db *gorm.DB, id uint) error {
-	return db.Delete(&RSSSearch{}, id).Error
+	res := db.Delete(&RSSSearch{}, id)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }

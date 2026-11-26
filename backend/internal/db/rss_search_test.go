@@ -2,6 +2,7 @@ package db
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -75,9 +76,9 @@ func TestDeleteSearch(t *testing.T) {
 	assert.Error(t, err) // Should return an error as record is not found
 	assert.Equal(t, gorm.ErrRecordNotFound, err)
 
-	// Test deleting a non-existent search (should not return an error)
-	err = DeleteSearch(db, 999) // Assuming 999 is a non-existent ID
-	assert.NoError(t, err)
+	// Deleting a non-existent search reports not found
+	err = DeleteSearch(db, 999)
+	assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
 }
 
 func TestRSSSearch_IndexerIsIndexed(t *testing.T) {
@@ -85,4 +86,35 @@ func TestRSSSearch_IndexerIsIndexed(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.True(t, d.Migrator().HasIndex(&RSSSearch{}, "Indexer"))
+}
+
+func TestListSearchesOrder(t *testing.T) {
+	db, err := SqliteForTest()
+	require.NoError(t, err)
+	base := time.Now().Add(-time.Hour)
+	for i, r := range []*RSSSearch{
+		{Indexer: "b", Text: "b-old", CreatedAt: base},
+		{Indexer: "a", Text: "a-old", CreatedAt: base.Add(time.Minute)},
+		{Indexer: "a", Text: "a-new", CreatedAt: base.Add(2 * time.Minute)},
+	} {
+		require.NoError(t, db.Create(r).Error, i)
+	}
+	got, err := ListSearches(db)
+	require.NoError(t, err)
+	texts := []string{}
+	for _, g := range got {
+		texts = append(texts, g.Text)
+	}
+	assert.Equal(t, []string{"a-new", "a-old", "b-old"}, texts)
+}
+
+func TestDeleteSearchMissing(t *testing.T) {
+	db, err := SqliteForTest()
+	require.NoError(t, err)
+	assert.ErrorIs(t, DeleteSearch(db, 999), gorm.ErrRecordNotFound)
+
+	s := &RSSSearch{Indexer: "i", Text: "t"}
+	require.NoError(t, db.Create(s).Error)
+	require.NoError(t, DeleteSearch(db, s.ID))
+	assert.ErrorIs(t, DeleteSearch(db, s.ID), gorm.ErrRecordNotFound)
 }
