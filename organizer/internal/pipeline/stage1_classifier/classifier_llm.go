@@ -51,6 +51,20 @@ func (c *ClassifierLLM) ClassifyWithDetail(ctx context.Context, files []string, 
 // classifyWithDetail is the shared implementation. A non-nil replan is passed
 // to every LLM prompt as clearly labelled suspect context (the previous plan is
 // flawed), never merged into the upstream metadata.
+// maxPromptFiles caps how many file names Stage 1 sends to the LLM.
+const maxPromptFiles = 200
+
+// promptFiles returns files unchanged when within maxPromptFiles; otherwise the
+// first maxPromptFiles entries plus one note entry counting the omitted ones.
+func promptFiles(files []string) []string {
+	if len(files) <= maxPromptFiles {
+		return files
+	}
+	out := make([]string, 0, maxPromptFiles+1)
+	out = append(out, files[:maxPromptFiles]...)
+	return append(out, fmt.Sprintf("(%d more files not shown)", len(files)-maxPromptFiles))
+}
+
 func (c *ClassifierLLM) classifyWithDetail(ctx context.Context, files []string, metadata map[string]interface{}, replan *model.ReplanContext) (model.ClassifierResult, ClassifierDetail, error) {
 	if c.provider == nil {
 		return model.ClassifierResult{
@@ -81,7 +95,11 @@ func (c *ClassifierLLM) classifyWithDetail(ctx context.Context, files []string, 
 	}
 
 	// Step 0: Single search grounding pass (only if provider supports search, e.g. Gemini)
-	searchCtx := GroundWithSearch(ctx, c.provider, files, metadata, replan)
+	// Bound the LLM prompts: huge torrents (thousands of files) would make
+	// every checker call enormous. Rule matching and candidate selection keep
+	// the full list.
+	shown := promptFiles(files)
+	searchCtx := GroundWithSearch(ctx, c.provider, shown, metadata, replan)
 	detail := ClassifierDetail{
 		SearchContext: searchCtx,
 	}
@@ -101,7 +119,7 @@ func (c *ClassifierLLM) classifyWithDetail(ctx context.Context, files []string, 
 		wg.Add(1)
 		go func(idx int, category model.Category, tpl string) {
 			defer wg.Done()
-			resp, err := runSpecialistChecker(ctx, c.provider, category, tpl, files, metadata, searchCtx, replan)
+			resp, err := runSpecialistChecker(ctx, c.provider, category, tpl, shown, metadata, searchCtx, replan)
 			results[idx] = CheckerResult{
 				Category: category,
 				Response: resp,
@@ -169,7 +187,7 @@ func (c *ClassifierLLM) classifyWithDetail(ctx context.Context, files []string, 
 
 	// Ambiguous, multiple "yes" conflicts, multiple "maybe", or all "no": call Arbiter
 	detail.ArbiterUsed = true
-	decision, err := DecideArbiter(ctx, c.provider, files, metadata, results, searchCtx, replan)
+	decision, err := DecideArbiter(ctx, c.provider, shown, metadata, results, searchCtx, replan)
 	if err != nil {
 		// Fallback: if we had at least one yes, take the first one
 		if len(yesResults) > 0 {

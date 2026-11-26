@@ -40,12 +40,16 @@ func NewProvider(apiKey string, opts ...ai.Option) (*Provider, error) {
 		model = strings.TrimPrefix(options.Model, "gemini:")
 	}
 
+	attempts := int32(3)
 	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{
 		APIKey:     apiKey,
 		Backend:    genai.BackendGeminiAPI,
 		HTTPClient: &http.Client{Timeout: options.Timeout},
 		HTTPOptions: genai.HTTPOptions{
 			BaseURL: strings.TrimRight(options.BaseURL, "/"),
+			// Retry transient errors (408, 429, 5xx) with the SDK's default
+			// exponential backoff: 3 attempts including the first request.
+			RetryOptions: &genai.HTTPRetryOptions{Attempts: &attempts},
 		},
 	})
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -233,6 +234,7 @@ func TestGrokProvider_ErrorStatus(t *testing.T) {
 			t.Cleanup(ts.Close)
 
 			provider := grok.NewProvider("bad-key", ai.WithBaseURL(ts.URL))
+			grok.SetRetryDelay(provider, time.Millisecond)
 
 			var out TestOutput
 			err := provider.GenerateStructured(context.Background(), "test prompt", TestOutput{}, &out)
@@ -648,4 +650,77 @@ func TestGrokProvider_GenerateStructuredWithTools_HandlerErrorFedBack(t *testing
 	mu.Lock()
 	defer mu.Unlock()
 	assert.Len(t, requests, 3, "handler errors must not abort the tool loop")
+}
+
+func TestGrokProvider_Retry(t *testing.T) {
+	t.Parallel()
+
+	okBody := `{"choices":[{"message":{"role":"assistant","content":"{\"name\":\"ok\",\"count\":1}"}}]}`
+
+	tests := []struct {
+		name         string
+		statuses     []int // status per request; the last repeats
+		wantRequests int32
+		wantErr      string
+	}{
+		{"503 then success", []int{503, 200}, 2, ""},
+		{"400 is not retried", []int{400}, 1, "400"},
+		{"always 503 stops after 3", []int{503}, 3, "503"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var n atomic.Int32
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				i := int(n.Add(1)) - 1
+				status := tt.statuses[min(i, len(tt.statuses)-1)]
+				if status == http.StatusOK {
+					_, _ = w.Write([]byte(okBody))
+					return
+				}
+				w.WriteHeader(status)
+				_, _ = w.Write([]byte(`{"error":{"message":"boom"}}`))
+			}))
+			t.Cleanup(ts.Close)
+
+			provider := grok.NewProvider("k", ai.WithBaseURL(ts.URL))
+			grok.SetRetryDelay(provider, time.Millisecond)
+
+			var out TestOutput
+			err := provider.GenerateStructured(context.Background(), "p", TestOutput{}, &out)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				assert.Equal(t, "ok", out.Name)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+			}
+			assert.Equal(t, tt.wantRequests, n.Load())
+		})
+	}
+}
+
+func TestGrokProvider_RetryBackoffHonoursContext(t *testing.T) {
+	t.Parallel()
+
+	var n atomic.Int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n.Add(1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(ts.Close)
+
+	provider := grok.NewProvider("k", ai.WithBaseURL(ts.URL))
+	grok.SetRetryDelay(provider, time.Hour)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	t.Cleanup(cancel)
+
+	start := time.Now()
+	var out TestOutput
+	err := provider.GenerateStructured(ctx, "p", TestOutput{}, &out)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Less(t, time.Since(start), 5*time.Second)
+	assert.Equal(t, int32(1), n.Load())
 }

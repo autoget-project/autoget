@@ -4,6 +4,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -53,6 +54,11 @@ func NewPlanHandler(p *pipeline.Pipeline, tracer trace.Tracer, opts ...PlanHandl
 	return h
 }
 
+// planTimeout bounds one plan or replan request so the organizer fails cleanly.
+// It must stay below the backend's organizerClientTimeout (5 min), otherwise
+// the backend gives up first.
+const planTimeout = 4 * time.Minute
+
 // Handle processes a plan creation request through the full 4-stage pipeline.
 // Fatal unrecoverable internal errors map to HTTP 500; normal planning (including
 // the unknown category) keeps the response contract with error set to null.
@@ -60,6 +66,9 @@ func (h *PlanHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	ctx, span := h.tracer.Start(r.Context(), telemetry.SpanHTTPPlan)
 	defer span.End()
+
+	ctx, cancel := context.WithTimeout(ctx, planTimeout)
+	defer cancel()
 
 	traceID := telemetry.TraceIDFromContext(ctx)
 	if traceID != "" {

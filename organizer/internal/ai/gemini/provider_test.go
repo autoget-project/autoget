@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -389,4 +390,32 @@ func TestGeminiProvider_GenerateStructuredWithTools_UnknownTool(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	assert.Equal(t, 1, requestCount, "provider must fail fast on undeclared tool names")
+}
+
+func TestGeminiProvider_RetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var hits atomic.Int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if hits.Add(1) == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"error":{"code":503,"message":"overloaded","status":"UNAVAILABLE"}}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"candidates":[{"content":{"parts":[{"text":"{\"title\":\"retried\",\"score\":2}"}]}}]}`))
+	}))
+	t.Cleanup(ts.Close)
+
+	provider, err := gemini.NewProvider("k",
+		ai.WithBaseURL(ts.URL),
+		ai.WithModel("gemini:gemini-1.5-flash"),
+		ai.WithTimeout(10*time.Second),
+	)
+	require.NoError(t, err)
+
+	var out TestOutput
+	require.NoError(t, provider.GenerateStructured(context.Background(), "p", TestOutput{}, &out))
+	assert.Equal(t, "retried", out.Title)
+	assert.Equal(t, int32(2), hits.Load())
 }

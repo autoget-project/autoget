@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -43,6 +44,9 @@ func (h *ReplanHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	ctx, span := h.tracer.Start(r.Context(), telemetry.SpanHTTPReplan)
 	defer span.End()
+
+	ctx, cancel := context.WithTimeout(ctx, planTimeout)
+	defer cancel()
 
 	traceID := telemetry.TraceIDFromContext(ctx)
 	if traceID != "" {

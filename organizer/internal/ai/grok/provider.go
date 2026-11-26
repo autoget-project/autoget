@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/autoget-project/autoget/organizer/internal/ai"
 )
@@ -22,6 +23,10 @@ const (
 // final round (response_format only) happens after the loop and is not counted.
 const maxToolRounds = 10
 
+// maxAttempts is the total number of tries (including the first) for one
+// request when the failure is transient.
+const maxAttempts = 3
+
 // Provider implements the ai.Provider interface using xAI's Grok (OpenAI compatible).
 type Provider struct {
 	apiKey     string
@@ -29,6 +34,8 @@ type Provider struct {
 	model      string
 	httpClient *http.Client
 	options    ai.ProviderOptions
+	// retryDelay is the base backoff between retry attempts (doubles each time).
+	retryDelay time.Duration
 }
 
 // NewProvider creates a new Grok Provider.
@@ -54,6 +61,7 @@ func NewProvider(apiKey string, opts ...ai.Option) *Provider {
 		model:      model,
 		httpClient: &http.Client{Timeout: options.Timeout},
 		options:    options,
+		retryDelay: time.Second,
 	}
 }
 
@@ -246,30 +254,9 @@ func (p *Provider) responses(ctx context.Context, reqBody responsesRequest) (str
 		return "", fmt.Errorf("failed to marshal request body: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/responses", p.baseURL)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
+	respBytes, err := p.post(ctx, "/responses", "grok responses API", bodyBytes)
 	if err != nil {
-		return "", fmt.Errorf("failed to create http request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", p.apiKey))
-
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("http request failed: %w", err)
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	respBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("grok responses API returned status %d: %s", resp.StatusCode, string(respBytes))
+		return "", err
 	}
 
 	var respObj responsesResponse
@@ -343,30 +330,9 @@ func (p *Provider) chat(ctx context.Context, reqBody chatCompletionRequest) (cha
 		return chatMessage{}, fmt.Errorf("failed to marshal request body: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/chat/completions", p.baseURL)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
+	respBytes, err := p.post(ctx, "/chat/completions", "grok API", bodyBytes)
 	if err != nil {
-		return chatMessage{}, fmt.Errorf("failed to create http request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", p.apiKey))
-
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return chatMessage{}, fmt.Errorf("http request failed: %w", err)
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	respBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return chatMessage{}, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return chatMessage{}, fmt.Errorf("grok API returned status %d: %s", resp.StatusCode, string(respBytes))
+		return chatMessage{}, err
 	}
 
 	var chatResp chatCompletionResponse
@@ -496,4 +462,61 @@ func (p *Provider) GenerateStructuredWithTools(ctx context.Context, prompt strin
 	}
 
 	return nil
+}
+
+// retryableStatus reports whether an HTTP status is a transient failure.
+func retryableStatus(code int) bool {
+	switch code {
+	case http.StatusTooManyRequests, http.StatusInternalServerError,
+		http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	}
+	return false
+}
+
+// post sends body to baseURL+path, retrying transport errors and transient
+// statuses (429, 500, 502, 503, 504) up to maxAttempts times with exponential
+// backoff. It returns the body of the first 200 response; any other final
+// status becomes an error naming label and the status code.
+func (p *Provider) post(ctx context.Context, path, label string, body []byte) ([]byte, error) {
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(p.retryDelay << (attempt - 1)):
+			}
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+path, bytes.NewReader(body))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create http request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", p.apiKey))
+
+		resp, err := p.httpClient.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("http request failed: %w", err)
+			if ctx.Err() != nil {
+				return nil, lastErr
+			}
+			continue
+		}
+		respBytes, readErr := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if readErr != nil {
+			return nil, fmt.Errorf("failed to read response body: %w", readErr)
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			return respBytes, nil
+		}
+		lastErr = fmt.Errorf("%s returned status %d: %s", label, resp.StatusCode, string(respBytes))
+		if !retryableStatus(resp.StatusCode) {
+			return nil, lastErr
+		}
+	}
+	return nil, lastErr
 }
