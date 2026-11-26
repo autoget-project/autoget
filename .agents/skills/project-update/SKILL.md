@@ -83,19 +83,21 @@ Always use `pnpm` (never `npm` or `yarn`).
 Inspect and update both Dockerfiles:
 
 - `Dockerfile`:
-  - `FROM node:<ver>-alpine AS frontend-builder` and `npm install -g pnpm@<ver>`
-  - `FROM golang:<ver>-alpine AS backend-builder` (and `apk add --no-cache git`)
+  - `FROM node:<ver>-alpine<alpine-ver> AS frontend-builder` and `npm install -g pnpm@<ver>`
+  - `FROM golang:<ver>-alpine AS backend-builder`
   - `FROM alpine:<ver> AS deploy` (and `apk --no-cache add ca-certificates tzdata`)
 - `Dockerfile.organizer`:
-  - `ARG GO_VERSION=<ver>` (`FROM golang:${GO_VERSION}-alpine AS builder`)
-  - `ARG ALPINE_VERSION=<ver>` (`FROM alpine:${ALPINE_VERSION} AS deploy`, `apk add --no-cache ca-certificates`)
+  - `FROM golang:<ver>-alpine AS builder`
+  - `FROM alpine:<ver> AS deploy` (`apk add --no-cache ca-certificates`)
+
+Base images are literal `FROM` tags (no `ARG`) so Dependabot's `docker`
+ecosystem can bump them.
 
 Checklist:
 - Verify the latest stable tags for `node:*-alpine`, `golang:*-alpine`, and
   `alpine:*`.
-- Ensure `GO_VERSION`, `NODE_VERSION`, `PNPM_VERSION`, and `ALPINE_VERSION`
-  match across `Dockerfile`, `Dockerfile.organizer`, `.github/workflows/ci.yml`,
-  `frontend/package.json`, and `CONTRIBUTING.md`.
+- Ensure the Go, Node, pnpm and Alpine versions match across `Dockerfile`,
+  `Dockerfile.organizer`, `.github/workflows/ci.yml` and `frontend/package.json`.
 - Build both images locally to verify:
   ```bash
   just build-images
