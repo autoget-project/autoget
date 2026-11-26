@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/autoget-project/autoget/organizer/internal/model"
 )
@@ -20,6 +21,10 @@ type Executor struct {
 	downloadDir string
 	// targetDir is the TARGET_DIR root of the media library.
 	targetDir string
+	// mu serialises ExecutePlan calls: executes are rare, user-triggered and
+	// made of fast renames, so one lock is enough (defence in depth behind
+	// the backend's own accept serialisation).
+	mu sync.Mutex
 }
 
 // NewExecutor creates a new Executor.
@@ -36,10 +41,19 @@ func NewExecutor(downloadDir, targetDir string) *Executor {
 // {downloadDir}/archive/{dir}, guarded by a source-dir existence pre-check
 // (L15) that silently skips archiving when the directory is already gone.
 //
+// Execution is idempotent: a source that is missing while its target already
+// exists counts as already moved, so re-running a plan after a partial failure
+// (or a fully applied plan) succeeds. A source that is missing with no target
+// is still "file not found". A present source with a present target remains
+// "target already exists" (never overwrite).
+//
 // ctx is currently unused: os.Rename/os.Stat are not context-aware, but the
 // parameter is kept in the interface so future cancellable execution backends
 // stay source-compatible.
 func (e *Executor) ExecutePlan(ctx context.Context, dir string, plan []model.PlanAction) (model.ExecuteResponse, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	failedMove := make([]model.PlanFailed, 0)
 
 	// Defense-in-depth: never trust client dir/file/target; escapes are
@@ -51,30 +65,6 @@ func (e *Executor) ExecutePlan(ctx context.Context, dir string, plan []model.Pla
 
 	for _, action := range plan {
 		if action.Action != "move" {
-			continue
-		}
-
-		sourcePath, srcErr := safeJoin(baseDir, action.File)
-
-		// Source existence pre-check (compatible with both files and dirs).
-		if srcErr != nil {
-			failedMove = append(failedMove, model.PlanFailed{
-				File:   action.File,
-				Action: action.Action,
-				Target: action.Target,
-				Reason: "file not found",
-			})
-			// L11: keep executing subsequent legal moves instead of aborting.
-			continue
-		}
-		if _, err := os.Stat(sourcePath); err != nil {
-			failedMove = append(failedMove, model.PlanFailed{
-				File:   action.File,
-				Action: action.Action,
-				Target: action.Target,
-				Reason: "file not found",
-			})
-			// L11: keep executing subsequent legal moves instead of aborting.
 			continue
 		}
 
@@ -99,6 +89,44 @@ func (e *Executor) ExecutePlan(ctx context.Context, dir string, plan []model.Pla
 			continue
 		}
 		targetFile := filepath.Join(e.targetDir, targetRel)
+
+		// Source existence pre-check (compatible with both files and dirs).
+		sourcePath, srcErr := safeJoin(baseDir, action.File)
+		if srcErr != nil {
+			failedMove = append(failedMove, model.PlanFailed{
+				File:   action.File,
+				Action: action.Action,
+				Target: action.Target,
+				Reason: "file not found",
+			})
+			// L11: keep executing subsequent legal moves instead of aborting.
+			continue
+		}
+		if _, err := os.Stat(sourcePath); err != nil {
+			if os.IsNotExist(err) {
+				// Idempotency: a missing source whose target exists was
+				// already moved by an earlier (partial) execution.
+				if _, tErr := os.Lstat(targetFile); tErr == nil {
+					continue
+				}
+				failedMove = append(failedMove, model.PlanFailed{
+					File:   action.File,
+					Action: action.Action,
+					Target: action.Target,
+					Reason: "file not found",
+				})
+			} else {
+				failedMove = append(failedMove, model.PlanFailed{
+					File:   action.File,
+					Action: action.Action,
+					Target: action.Target,
+					Reason: fmt.Sprintf("stat source failed: %v", err),
+				})
+			}
+			// L11: keep executing subsequent legal moves instead of aborting.
+			continue
+		}
+
 		if err := os.MkdirAll(filepath.Dir(targetFile), 0755); err != nil {
 			failedMove = append(failedMove, model.PlanFailed{
 				File:   action.File,

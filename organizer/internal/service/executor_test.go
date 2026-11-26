@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -190,4 +191,99 @@ func TestExecutePlan_SameTargetSecondMoveFails(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(targetDir, "movie", "M", "M.mkv"))
 	require.NoError(t, err)
 	assert.Equal(t, "first", string(got))
+}
+
+func TestExecutePlan_ReExecuteAfterPartialFailure(t *testing.T) {
+	t.Parallel()
+
+	downloadDir := t.TempDir()
+	targetDir := t.TempDir()
+	mustWriteFile(t, filepath.Join(downloadDir, "d", "a.mkv"), "a")
+
+	plan := []model.PlanAction{
+		{File: "a.mkv", Action: "move", Target: ptr.Str("movie/M/a.mkv")},
+		{File: "b.mkv", Action: "move", Target: ptr.Str("movie/M/b.mkv")},
+	}
+	exec := NewExecutor(downloadDir, targetDir)
+
+	resp, err := exec.ExecutePlan(context.Background(), "d", plan)
+	require.NoError(t, err)
+	require.Len(t, resp.FailedMove, 1)
+	assert.Equal(t, "b.mkv", resp.FailedMove[0].File)
+	assert.DirExists(t, filepath.Join(downloadDir, "d"))
+	assert.NoDirExists(t, filepath.Join(downloadDir, "archive", "d"))
+
+	mustWriteFile(t, filepath.Join(downloadDir, "d", "b.mkv"), "b")
+	resp, err = exec.ExecutePlan(context.Background(), "d", plan)
+	require.NoError(t, err)
+	assert.Empty(t, resp.FailedMove)
+	assert.FileExists(t, filepath.Join(targetDir, "movie", "M", "a.mkv"))
+	assert.FileExists(t, filepath.Join(targetDir, "movie", "M", "b.mkv"))
+	assert.DirExists(t, filepath.Join(downloadDir, "archive", "d"))
+}
+
+func TestExecutePlan_ReExecuteFullyAppliedPlan(t *testing.T) {
+	t.Parallel()
+
+	downloadDir := t.TempDir()
+	targetDir := t.TempDir()
+	mustWriteFile(t, filepath.Join(downloadDir, "d", "a.mkv"), "a")
+	plan := []model.PlanAction{
+		{File: "a.mkv", Action: "move", Target: ptr.Str("movie/M/a.mkv")},
+	}
+	exec := NewExecutor(downloadDir, targetDir)
+
+	for range 2 {
+		resp, err := exec.ExecutePlan(context.Background(), "d", plan)
+		require.NoError(t, err)
+		assert.Empty(t, resp.FailedMove)
+	}
+	assert.FileExists(t, filepath.Join(targetDir, "movie", "M", "a.mkv"))
+	assert.DirExists(t, filepath.Join(downloadDir, "archive", "d"))
+}
+
+func TestExecutePlan_SourceAndTargetMissingIsNotFound(t *testing.T) {
+	t.Parallel()
+
+	exec := NewExecutor(t.TempDir(), t.TempDir())
+	resp, err := exec.ExecutePlan(context.Background(), "d", []model.PlanAction{
+		{File: "a.mkv", Action: "move", Target: ptr.Str("movie/M/a.mkv")},
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.FailedMove, 1)
+	assert.Equal(t, "file not found", resp.FailedMove[0].Reason)
+}
+
+func TestExecutePlan_ConcurrentSamePlan(t *testing.T) {
+	t.Parallel()
+
+	downloadDir := t.TempDir()
+	targetDir := t.TempDir()
+	mustWriteFile(t, filepath.Join(downloadDir, "d", "a.mkv"), "a")
+	mustWriteFile(t, filepath.Join(downloadDir, "d", "b.mkv"), "b")
+	plan := []model.PlanAction{
+		{File: "a.mkv", Action: "move", Target: ptr.Str("movie/M/a.mkv")},
+		{File: "b.mkv", Action: "move", Target: ptr.Str("movie/M/b.mkv")},
+	}
+	exec := NewExecutor(downloadDir, targetDir)
+
+	var wg sync.WaitGroup
+	resps := make([]model.ExecuteResponse, 2)
+	errs := make([]error, 2)
+	for i := range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			resps[i], errs[i] = exec.ExecutePlan(context.Background(), "d", plan)
+		}()
+	}
+	wg.Wait()
+
+	for i := range 2 {
+		require.NoError(t, errs[i])
+		assert.Empty(t, resps[i].FailedMove)
+	}
+	assert.FileExists(t, filepath.Join(targetDir, "movie", "M", "a.mkv"))
+	assert.FileExists(t, filepath.Join(targetDir, "movie", "M", "b.mkv"))
+	assert.DirExists(t, filepath.Join(downloadDir, "archive", "d"))
 }
