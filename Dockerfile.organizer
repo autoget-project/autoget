@@ -26,8 +26,9 @@ COPY organizer/cmd ./organizer/cmd
 COPY organizer/internal ./organizer/internal
 COPY organizer/upload ./organizer/upload
 
+ARG VERSION=dev
 WORKDIR /src/organizer
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/organizer ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/organizer ./cmd/server
 
 # ---- Runtime stage ---------------------------------------------------------
 FROM alpine:3.24 AS deploy

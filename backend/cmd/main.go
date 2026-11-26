@@ -107,6 +107,9 @@ func buildIndexers(
 	return indexerMap, nil
 }
 
+// version is set at build time with -ldflags "-X main.version=...".
+var version = "dev"
+
 func main() {
 	configPath := flag.String("c", os.Getenv("CONFIG_PATH"), "path to the configuration file")
 	flag.Parse()
@@ -173,7 +176,7 @@ func main() {
 
 	serveErr := make(chan error, 1)
 	go func() {
-		log.Info().Str("addr", cfg.Port).Msg("server started")
+		log.Info().Str("version", version).Str("addr", cfg.Port).Msg("server started")
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serveErr <- err
 		}

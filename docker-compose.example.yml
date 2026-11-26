@@ -44,9 +44,10 @@
 # can put a TLS reverse proxy in front. The OIDC redirect_base_url must be the
 # externally reachable (HTTPS) URL of that proxy.
 
+# Bump both autoget image tags together when upgrading.
 services:
   backend:
-    image: ghcr.io/autoget-project/autoget:latest
+    image: ghcr.io/autoget-project/autoget:0.1.0
     restart: unless-stopped
     user: "1000:1000" # the image's built-in user
     command: ["/app/autoget", "-c", "/config/config.yaml"]
@@ -73,7 +74,7 @@ services:
         condition: service_started
 
   organizer:
-    image: ghcr.io/autoget-project/autoget-organizer:latest
+    image: ghcr.io/autoget-project/autoget-organizer:0.1.0
     restart: unless-stopped
     user: "1000:1000" # must be able to write to /data/finished and /data/media
     # Listens on 8000 by default (PORT unset); the backend reaches it at http://organizer:8000

@@ -20,8 +20,8 @@ build-frontend:
 
 # Build Docker images for backend and organizer
 build-images:
-    docker build --target deploy -t autoget:latest -f Dockerfile .
-    docker build --target deploy -t organizer:latest -f Dockerfile.organizer .
+    docker build --target deploy --build-arg VERSION=$(git describe --tags --always --dirty) -t autoget:latest -f Dockerfile .
+    docker build --target deploy --build-arg VERSION=$(git describe --tags --always --dirty) -t organizer:latest -f Dockerfile.organizer .
 
 # Run linters for protocol, backend, organizer and frontend, plus frontend typecheck
 lint: lint-protocol lint-backend lint-organizer lint-frontend typecheck

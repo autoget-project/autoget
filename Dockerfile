@@ -31,8 +31,9 @@ COPY protocol/ ./protocol/
 COPY organizer/ ./organizer/
 COPY backend/ ./backend/
 
+ARG VERSION=dev
 WORKDIR /src/backend
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o autoget ./cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o autoget ./cmd/main.go
 
 # Stage 3: Deploy image
 FROM alpine:3.24 AS deploy

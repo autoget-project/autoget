@@ -30,6 +30,9 @@ import (
 
 const defaultPort = "8000"
 
+// version is set at build time with -ldflags "-X main.version=...".
+var version = "dev"
+
 func main() {
 	cfg := config.LoadConfig()
 	if err := config.StartupCheck(cfg); err != nil {
@@ -110,7 +113,7 @@ func main() {
 	go uploadGC.Run(ctx, 1*time.Hour)
 
 	go func() {
-		log.Printf("organizer server listening on :%s (provider=%s model=%s)", port, provider.Name(), cfg.Model)
+		log.Printf("organizer server listening on :%s (version=%s provider=%s model=%s)", port, version, provider.Name(), cfg.Model)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("http server failed: %v", err)
 		}
