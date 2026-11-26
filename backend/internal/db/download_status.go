@@ -183,20 +183,12 @@ func GetDownloaderStateCounts(db *gorm.DB, downloader string) (*DownloaderStateC
 		return nil, err
 	}
 
-	// Count failed (both CreatePlanFailed and ExecutePlanFailed)
-	var createFailedCount, executeFailedCount int64
-
-	err = db.Model(&DownloadStatus{}).Where("downloader = ?", downloader).Where("move_state = ?", Moved).Where("organize_state = ?", CreatePlanFailed).Count(&createFailedCount).Error
+	// Count failed (CreatePlanFailed and ExecutePlanFailed); deleted rows are
+	// excluded to match the failed list.
+	err = db.Model(&DownloadStatus{}).Where("downloader = ?", downloader).Where("state != ?", DownloadDeleted).Where("move_state = ?", Moved).Where("organize_state IN ?", []OrganizeState{CreatePlanFailed, ExecutePlanFailed}).Count(&counts.CountOfFailed).Error
 	if err != nil {
 		return nil, err
 	}
-
-	err = db.Model(&DownloadStatus{}).Where("downloader = ?", downloader).Where("move_state = ?", Moved).Where("organize_state = ?", ExecutePlanFailed).Count(&executeFailedCount).Error
-	if err != nil {
-		return nil, err
-	}
-
-	counts.CountOfFailed = createFailedCount + executeFailedCount
 
 	return counts, nil
 }

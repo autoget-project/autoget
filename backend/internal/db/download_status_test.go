@@ -159,6 +159,16 @@ func TestGetDownloaderStateCounts(t *testing.T) {
 		OrganizeState: ExecutePlanFailed,
 	}
 
+	// Failed but deleted: must not be counted
+	deletedFailedStatus := &DownloadStatus{
+		ID:            "failed-deleted",
+		Downloader:    testDownloader,
+		State:         DownloadDeleted,
+		MoveState:     Moved,
+		OrganizeState: ExecutePlanFailed,
+	}
+	require.NoError(t, db.Create(deletedFailedStatus).Error)
+
 	// Items that shouldn't be counted (different downloader)
 	otherDownloaderStatus := &DownloadStatus{
 		ID:         "other-1",
@@ -190,6 +200,10 @@ func TestGetDownloaderStateCounts(t *testing.T) {
 	assert.Equal(t, int64(2), counts.CountOfDownloading)
 	assert.Equal(t, int64(2), counts.CountOfPlanned)
 	assert.Equal(t, int64(2), counts.CountOfFailed)
+
+	failedList, err := GetMovedAndOrganizeStatesDownloadStatusByDownloader(db, testDownloader, []OrganizeState{CreatePlanFailed, ExecutePlanFailed})
+	require.NoError(t, err)
+	assert.Len(t, failedList, int(counts.CountOfFailed))
 
 	// Test with non-existent downloader
 	emptyCounts, err := GetDownloaderStateCounts(db, "non-existent")
