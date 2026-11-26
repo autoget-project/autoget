@@ -142,6 +142,10 @@ func (c *Client) List(req *indexers.ListRequest) (*indexers.ListResult, *errors.
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.NewHTTPStatusError(http.StatusBadGateway, "indexer upstream error")
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.NewHTTPStatusError(http.StatusInternalServerError, fmt.Sprintf("failed to read response body: %v", err))
@@ -266,8 +270,11 @@ func (c *Client) Detail(id string, fileList bool) (*indexers.ResourceDetail, *er
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, errors.NewHTTPStatusError(http.StatusNotFound, "resource not found")
+	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.NewHTTPStatusError(resp.StatusCode, fmt.Sprintf("failed to fetch detail page, status code: %d", resp.StatusCode))
+		return nil, errors.NewHTTPStatusError(http.StatusBadGateway, "indexer upstream error")
 	}
 
 	body, err := io.ReadAll(resp.Body)

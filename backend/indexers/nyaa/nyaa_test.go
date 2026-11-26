@@ -2,6 +2,8 @@ package nyaa
 
 import (
 	_ "embed"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 
@@ -292,4 +294,29 @@ func TestSearchRSS(t *testing.T) {
 	assert.Equal(t, "Match Search 2", search2After.Title)
 	assert.Equal(t, "Anime - Non-English", search2After.Catergory)
 	assert.Equal(t, "https://nyaa.si/download/2015287.torrent", search2After.URL)
+}
+
+func TestUpstreamStatusErrors(t *testing.T) {
+	tests := []struct {
+		status int
+		want   int
+	}{
+		{http.StatusForbidden, http.StatusBadGateway},
+		{http.StatusNotFound, http.StatusNotFound},
+	}
+	for _, tt := range tests {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(tt.status)
+		}))
+		c := NewClient(&Config{BaseURL: ts.URL}, "", nil, nil)
+
+		_, err := c.Detail("1", false)
+		require.NotNil(t, err)
+		assert.Equal(t, tt.want, err.Code)
+
+		_, err = c.List(&indexers.ListRequest{})
+		require.NotNil(t, err)
+		assert.Equal(t, http.StatusBadGateway, err.Code)
+		ts.Close()
+	}
 }

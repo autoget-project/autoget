@@ -602,8 +602,8 @@ components:
           schema: {$ref: '#/components/schemas/Error'}
     Error:
       description: |
-        Error reported by the indexer; the status code is whatever the indexer
-        chose (typically 4xx, 5xx or 502 for upstream failures). Messages of
+        Error reported by the indexer: 4xx (never 401/403) for client errors;
+        upstream failures, including indexer auth errors, are 502. Messages of
         4xx errors are passed through; 5xx errors carry a generic
         `internal error` message and the details are logged server-side.
       content:

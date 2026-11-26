@@ -256,12 +256,13 @@ func (m *MTeam) List(listReq *indexers.ListRequest) (*indexers.ListResult, *erro
 	}
 	r, err := client.Do(request)
 	if err != nil {
-		return nil, errors.NewHTTPStatusError(http.StatusInternalServerError, "failed to request")
+		return nil, errors.NewHTTPStatusError(http.StatusBadGateway, "failed to request")
 	}
+	defer func() { _ = r.Body.Close() }()
 
 	if r.StatusCode != http.StatusOK {
-		logger.Error().Err(err).Str("indexer", name).Int("status_code", r.StatusCode).Msg("API error")
-		return nil, errors.NewHTTPStatusError(r.StatusCode, "search request failed")
+		logger.Error().Str("indexer", name).Int("status_code", r.StatusCode).Msg("API error")
+		return nil, errors.NewHTTPStatusError(http.StatusBadGateway, "indexer upstream error")
 	}
 
 	var resp searchResponse

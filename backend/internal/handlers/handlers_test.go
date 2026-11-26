@@ -266,6 +266,14 @@ func TestService_indexerResourceDetail(t *testing.T) {
 				expectedCode: http.StatusInternalServerError,
 				expectedMsg:  "internal error",
 			},
+			{
+				name:         "indexer auth error becomes 502",
+				indexerName:  "mock",
+				resourceID:   "some-id",
+				mockErr:      errors.NewHTTPStatusError(http.StatusForbidden, "bad key"),
+				expectedCode: http.StatusBadGateway,
+				expectedMsg:  "indexer upstream error",
+			},
 		}
 
 		for _, tt := range tests {

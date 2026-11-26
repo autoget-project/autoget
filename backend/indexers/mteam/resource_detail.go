@@ -142,12 +142,13 @@ func makeMultipartAPICall(baseURL, path, apiKey string, vars map[string]string, 
 	}
 	r, err := client.Do(req)
 	if err != nil {
-		return errors.NewHTTPStatusError(http.StatusInternalServerError, "failed to request")
+		return errors.NewHTTPStatusError(http.StatusBadGateway, "failed to request")
 	}
+	defer func() { _ = r.Body.Close() }()
 
 	if r.StatusCode != http.StatusOK {
-		logger.Error().Err(err).Str("indexer", name).Int("status_code", r.StatusCode).Msg("API error")
-		return errors.NewHTTPStatusError(r.StatusCode, "search request failed")
+		logger.Error().Str("indexer", name).Int("status_code", r.StatusCode).Msg("API error")
+		return errors.NewHTTPStatusError(http.StatusBadGateway, "indexer upstream error")
 	}
 
 	err = json.NewDecoder(r.Body).Decode(o)
