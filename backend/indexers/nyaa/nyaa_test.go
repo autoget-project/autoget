@@ -73,6 +73,10 @@ func TestDetail(t *testing.T) {
 }
 
 func TestDetailWithComplexFileLists(t *testing.T) {
+	if os.Getenv("LOCAL_TEST") == "" {
+		t.Skip("LOCAL_TEST not set; skipping live network test")
+	}
+
 	n := NewClient(&Config{UseProxy: true}, "", nil, nil)
 	got, err := n.Detail("1980395", true)
 	require.Nil(t, err)
