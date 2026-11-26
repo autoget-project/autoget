@@ -17,21 +17,22 @@ A web application for searching and managing resources, downloads for AutoGet. B
 - **Styling**: Tailwind CSS with DaisyUI components
 - **Build Tool**: Vite
 - **Testing**: Vitest with jsdom
-- **Code Quality**: ESLint + Prettier
+- **Code Quality**: oxlint + oxfmt
 - **Icons**: Iconify
 - **Date Handling**: Luxon
-- **Routing**: @lit-labs/router
+- **Routing**: in-repo `src/utils/router.ts` on native URLPattern (`urlpattern-polyfill` is loaded on demand)
 
 ## Prerequisites
 
-- Node.js (version 25 or higher)
-- npm
+- Node.js 26 or higher
+- pnpm 12 (see [CONTRIBUTING](../CONTRIBUTING.md) for the exact version)
 
 ### Development
 
 ```bash
-# Start the development server
-npm run dev
+# Install dependencies and start the development server
+pnpm install
+pnpm dev
 
 # The application will be available at http://localhost:8889
 ```
@@ -40,5 +41,13 @@ npm run dev
 
 ```bash
 # Build the application
-npm run build
+pnpm run build
 ```
+
+### Testing
+
+```bash
+pnpm run test:run
+```
+
+See [CONTRIBUTING](../CONTRIBUTING.md) for the full workflow.

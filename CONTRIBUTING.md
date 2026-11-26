@@ -37,6 +37,18 @@ Run from the repo root (see the `Justfile` for all recipes):
 
 Run `just fmt lint build test` before committing.
 
+## Run locally
+
+- Backend: write a `config.yaml` with `port: 8888` and an `auth` section, then
+  `cd backend && go run ./cmd/main.go -c config.yaml`.
+- Organizer: `just run-organizer` (listens on :8000; environment variables are
+  listed in `organizer/README.md`).
+- Frontend: `cd frontend && pnpm dev` (serves on :8889).
+- Proxy: `caddy run --config dev/Caddyfile`, then browse
+  http://localhost:8880. This matches the OIDC redirect base and routes
+  `/api` and `/auth` to the backend, everything else to vite.
+- `dev/e2e-transfer.sh` runs the resumable-upload drill with failure injection.
+
 ## Tests
 
 - Go tests use `stretchr/testify` (`require` for setup, `assert` for results);

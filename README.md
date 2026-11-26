@@ -76,6 +76,20 @@ columns, so any such change would need a manual migration. Back up the
 PostgreSQL database before upgrading to a new image version.
 There is no versioned migration tooling.
 
+Upgrade runbook (compose deployment):
+
+1. Read the release notes and pin the new tag on both images
+   (`autoget` and `autoget-organizer`) in `docker-compose.yml`.
+2. Back up the database:
+   `docker compose exec -T postgres pg_dump -U autoget -Fc autoget > autoget-$(date +%F).dump`
+3. Pull and restart: `docker compose pull && docker compose up -d`.
+4. Verify: `docker compose ps` shows the services healthy, and
+   `docker compose logs backend organizer` shows the new `version`.
+5. Roll back by re-pinning the previous tag and running `docker compose up -d`.
+   AutoMigrate only adds columns and indexes, so the older version normally
+   runs on the newer schema. If it does not, restore the dump with
+   `docker compose exec -T postgres pg_restore -U autoget -d autoget --clean < autoget-<date>.dump`.
+
 The backend uses GORM prepared statements (`PrepareStmt`), which are not
 compatible with PgBouncer in transaction pooling mode. If you put PgBouncer in
 front of PostgreSQL, use session pooling mode.
