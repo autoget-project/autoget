@@ -84,11 +84,11 @@ export class SearchView extends LitElement {
   @state()
   private loadError: string | null = null;
 
-  async connectedCallback() {
+  connectedCallback() {
     super.connectedCallback();
-    await this.loadIndexers();
     window.addEventListener("popstate", this.handlePopState);
     this.handlePopState(); // Initial call to set state from URL
+    void this.loadIndexers();
   }
 
   disconnectedCallback() {

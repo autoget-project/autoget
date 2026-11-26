@@ -90,4 +90,25 @@ describe("search-view", () => {
     el.remove();
     expect(removeSpy).toHaveBeenCalledWith("popstate", expect.any(Function));
   });
+
+  it("does not leave a popstate listener when removed before indexers load", async () => {
+    let resolve!: (v: string[]) => void;
+    fetchIndexers.mockReturnValue(new Promise((r) => (resolve = r)));
+    const added: EventListenerOrEventListenerObject[] = [];
+    const removed: EventListenerOrEventListenerObject[] = [];
+    const origAdd = window.addEventListener.bind(window);
+    vi.spyOn(window, "addEventListener").mockImplementation((t, l, o) => {
+      if (t === "popstate") added.push(l as EventListenerOrEventListenerObject);
+      origAdd(t, l, o);
+    });
+    vi.spyOn(window, "removeEventListener").mockImplementation((t, l) => {
+      if (t === "popstate") removed.push(l as EventListenerOrEventListenerObject);
+    });
+    const el = await mount();
+    el.remove();
+    resolve(["mteam"]);
+    await settle(el);
+    expect(added.length).toBe(1);
+    expect(removed).toEqual(added);
+  });
 });
