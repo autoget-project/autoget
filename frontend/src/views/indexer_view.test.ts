@@ -156,4 +156,13 @@ describe("indexer-view", () => {
     expect(panel().getAttribute("style")).toContain("width: 256px");
     vi.unstubAllGlobals();
   });
+
+  it("encodes the indexer and category ids in category links", async () => {
+    fetchCategories.mockResolvedValue([{ id: "a:b/c", name: "Adult" }] as Category[]);
+    const el = await mount();
+    el.indexerId = "m x";
+    await settle(el);
+    const href = el.shadowRoot?.querySelector("#left-panel-categories a")?.getAttribute("href");
+    expect(href).toBe("/indexers/m%20x/a%3Ab%2Fc");
+  });
 });

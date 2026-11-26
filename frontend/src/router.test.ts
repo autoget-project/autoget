@@ -5,6 +5,7 @@ vi.mock("./utils/api.ts", () => ({
   fetchIndexers: vi.fn<() => Promise<string[]>>(),
   fetchIndexerCategories: vi.fn<(id: string) => Promise<unknown[]>>(),
   fetchDownloaders: vi.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
+  seg: (v: string) => encodeURIComponent(v),
 }));
 vi.mock("./views/search_view", () => ({}));
 vi.mock("./views/indexer_view", () => ({}));

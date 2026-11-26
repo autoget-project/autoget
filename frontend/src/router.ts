@@ -4,6 +4,7 @@ import {
   fetchIndexers,
   fetchIndexerCategories,
   fetchDownloaders,
+  seg,
   type DownloaderInfo,
 } from "./utils/api.ts";
 import { defaultCategoryId, resolveIndexers } from "./utils/router_helpers.ts";
@@ -94,7 +95,7 @@ export class AppRouter extends LitElement {
           return true;
         }
         this.loadFailed = false;
-        const newUrl = `/indexers/${encodeURIComponent(indexers[0])}`;
+        const newUrl = `/indexers/${seg(indexers[0])}`;
         this.router.redirect(newUrl);
         return false;
       },
@@ -129,7 +130,7 @@ export class AppRouter extends LitElement {
           console.warn("Failed to fetch categories:", error);
           this.showLoadFailure(
             `Failed to load categories for "${id}". Check the backend, then retry.`,
-            `/indexers/${encodeURIComponent(id)}`,
+            `/indexers/${seg(id)}`,
           );
           return true;
         }
@@ -139,7 +140,7 @@ export class AppRouter extends LitElement {
           this.router.redirect("/404");
           return false;
         }
-        const newUrl = `/indexers/${encodeURIComponent(id)}/${encodeURIComponent(cid)}`;
+        const newUrl = `/indexers/${seg(id)}/${seg(cid)}`;
         this.router.redirect(newUrl);
         return false;
       },
@@ -170,7 +171,7 @@ export class AppRouter extends LitElement {
           return false;
         }
         // Redirect to default tab if no tab specified
-        this.router.redirect(`/downloaders/${id}/downloading`);
+        this.router.redirect(`/downloaders/${seg(id)}/downloading`);
         return false;
       },
     },
@@ -193,7 +194,7 @@ export class AppRouter extends LitElement {
         // Validate tab parameter
         const validTabs = ["downloading", "seeding", "stopped", "planned", "failed"];
         if (tab === undefined || !validTabs.includes(tab)) {
-          this.router.redirect(`/downloaders/${id}/downloading`);
+          this.router.redirect(`/downloaders/${seg(id)}/downloading`);
           return false;
         }
         return true;

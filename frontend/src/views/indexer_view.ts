@@ -1,7 +1,7 @@
 import { html, LitElement, unsafeCSS, css, type TemplateResult, type PropertyValues } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { type Category, errorMessage, fetchIndexerCategories } from "../utils/api";
+import { type Category, errorMessage, fetchIndexerCategories, seg } from "../utils/api";
 import { renderError } from "../components/error_alert";
 import "../components/navbar.ts";
 import "../components/resource_list.ts";
@@ -125,7 +125,10 @@ export class IndexerView extends LitElement {
     if (category.subCategories && category.subCategories.length > 0) {
       return html`
         <li>
-          <a class="${activeClass} min-w-0" href="/indexers/${this.indexerId}/${category.id}">
+          <a
+            class="${activeClass} min-w-0"
+            href="/indexers/${seg(this.indexerId)}/${seg(category.id)}"
+          >
             <span class="truncate">${category.name}</span>
           </a>
           <ul>
@@ -135,7 +138,10 @@ export class IndexerView extends LitElement {
       `;
     } else {
       return html`<li>
-        <a class="${activeClass} min-w-0" href="/indexers/${this.indexerId}/${category.id}">
+        <a
+          class="${activeClass} min-w-0"
+          href="/indexers/${seg(this.indexerId)}/${seg(category.id)}"
+        >
           <span class="truncate">${category.name}</span>
         </a>
       </li> `;

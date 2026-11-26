@@ -6,6 +6,7 @@ vi.mock("../utils/api", () => ({
   fetchDownloaders: vi.fn<() => Promise<unknown[]>>(),
   isAuthenticated: vi.fn<() => boolean>(),
   logout: vi.fn<() => void>(),
+  seg: (v: string) => encodeURIComponent(v),
 }));
 vi.mock("./theme_controller.ts", () => ({}));
 
@@ -131,5 +132,16 @@ describe("app-navbar", () => {
       ?.querySelector<HTMLButtonElement>('button[aria-label="Toggle categories"]')
       ?.click();
     expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it("encodes indexer and downloader names in links", async () => {
+    fetchIndexers.mockResolvedValue(["a b/c"]);
+    fetchDownloaders.mockResolvedValue([downloader("x y")]);
+    const el = await mount();
+    const hrefs = [...(el.shadowRoot?.querySelectorAll("a") ?? [])].map((a) =>
+      a.getAttribute("href"),
+    );
+    expect(hrefs).toContain("/indexers/a%20b%2Fc");
+    expect(hrefs).toContain("/downloaders/x%20y");
   });
 });

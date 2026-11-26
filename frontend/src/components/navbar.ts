@@ -6,6 +6,7 @@ import {
   fetchDownloaders,
   isAuthenticated,
   logout,
+  seg,
   type DownloaderInfo,
 } from "../utils/api";
 import { createVisibilityPoller } from "../utils/polling";
@@ -153,7 +154,7 @@ export class AppNavbar extends LitElement {
               ${this.indexers.map((indexer) => {
                 const isActive = this.activePage === indexer;
                 return html`<a
-                  href="/indexers/${indexer}"
+                  href="/indexers/${seg(indexer)}"
                   class="tab tab-sm sm:tab-md ${isActive ? "tab-active font-bold" : ""}"
                   role="tab"
                   >${indexer}</a
@@ -184,7 +185,7 @@ export class AppNavbar extends LitElement {
                 return html`
                   <li>
                     <a
-                      href="/indexers/${indexer}"
+                      href="/indexers/${seg(indexer)}"
                       class="${isActive ? "menu-active font-bold" : ""}"
                     >
                       ${indexer}
@@ -206,7 +207,7 @@ export class AppNavbar extends LitElement {
 
               return html`
                 <a
-                  href="/downloaders/${downloader.name}"
+                  href="/downloaders/${seg(downloader.name)}"
                   class="btn btn-ghost btn-sm ${isActive ? "btn-active" : ""} border-2 ${borderColor}"
                 >
                   ${downloader.name}
@@ -254,7 +255,7 @@ export class AppNavbar extends LitElement {
                         return html`
                           <li>
                             <a
-                              href="/downloaders/${downloader.name}"
+                              href="/downloaders/${seg(downloader.name)}"
                               class="flex items-center justify-between ${
                                 isActive ? "menu-active font-bold" : ""
                               }"
