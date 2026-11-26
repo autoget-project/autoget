@@ -356,14 +356,30 @@ export class DownloaderView extends LitElement {
     }
 
     const currentUserHint = this.userHints.get(downloadId) || "";
+    const conflicts = organizePlans.plan.filter((a: PlanAction) => a.target_exists).length;
 
     return html`
       <div class="mt-4">
         <details tabindex="0" class="collapse collapse-arrow bg-base-200">
           <summary class="collapse-title text-lg font-medium">
-            Organize Plan (${organizePlans.plan.length} items)
+            Organize Plan (${organizePlans.plan.length}
+            items${conflicts > 0 ? `, ${conflicts} conflicts` : ""})
           </summary>
           <div class="collapse-content">
+            ${
+              this.activeTab === "planned" && conflicts > 0
+                ? html`<div class="alert alert-warning mb-4" role="alert">
+                    <span
+                      class="icon-[ph--warning-bold]"
+                      style="width: 1.2em; height: 1.2em;"
+                    ></span>
+                    <span
+                      >${conflicts} target(s) already exist and will fail on Accept; re-plan with a
+                      hint or organize manually.</span
+                    >
+                  </div>`
+                : ""
+            }
             <!-- Feedback Section - Only show in planned tab -->
             ${
               this.activeTab === "planned"
@@ -439,10 +455,21 @@ export class DownloaderView extends LitElement {
       planAction.action === "move" ? planAction.target || "No target specified" : "skip";
 
     return html`
-      <tr>
+      <tr class=${planAction.target_exists ? "bg-error/10" : ""}>
         <td>${actionBadge}</td>
         <td class="font-mono text-sm">${planAction.file}</td>
-        <td class="font-mono text-sm">${targetDisplay}</td>
+        <td class="font-mono text-sm">
+          ${targetDisplay}
+          ${
+            planAction.target_exists
+              ? html`<span
+                  class="badge badge-error badge-sm ml-1"
+                  title="Target already exists in the library; it will not be overwritten"
+                  >exists</span
+                >`
+              : ""
+          }
+        </td>
       </tr>
     `;
   }

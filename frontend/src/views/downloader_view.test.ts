@@ -247,6 +247,28 @@ describe("downloader-view", () => {
     expect(el.shadowRoot?.textContent).toContain("Plan Error: x");
   });
 
+  it("highlights plan targets that already exist in the Planned tab", async () => {
+    fetchItems.mockResolvedValue(
+      status([
+        item({
+          organize_plans: {
+            plan: [
+              { file: "a.mkv", action: "move", target: "movie/a.mkv", target_exists: true },
+              { file: "b.mkv", action: "move", target: "movie/b.mkv" },
+            ],
+            error: undefined,
+          },
+        }),
+      ]),
+    );
+    const el = await mount("planned");
+    const text = (el.shadowRoot?.textContent ?? "").replace(/\s+/g, " ");
+    expect(text).toContain("2 items, 1 conflicts");
+    expect(text).toContain("1 target(s) already exist and will fail on Accept");
+    expect(el.shadowRoot?.querySelectorAll("tr.bg-error\\/10").length).toBe(1);
+    expect(el.shadowRoot?.querySelectorAll(".badge-error.badge-sm").length).toBe(1);
+  });
+
   it("does not delete when the confirmation is declined", async () => {
     fetchItems.mockResolvedValue(status([item()]));
     vi.stubGlobal("confirm", vi.fn<(m?: string) => boolean>().mockReturnValue(false));

@@ -792,6 +792,7 @@ export interface PlanAction {
   file: string; // Exact original path
   action: ActionType; // "move" or "skip"
   target?: string; // Target path for "move" action
+  target_exists?: boolean; // Target already existed in the library at plan time
 }
 
 export interface PlanResponse {
