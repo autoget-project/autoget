@@ -112,6 +112,71 @@ describe("downloader-view", () => {
     expect(el.shadowRoot?.textContent).not.toContain("No active downloads");
   });
 
+  it("fetches once on mount without touching history", async () => {
+    const push = vi.spyOn(history, "pushState");
+    fetchItems.mockResolvedValue(status([]));
+    await mount();
+    expect(fetchItems).toHaveBeenCalledTimes(1);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("pushes history once when a tab is clicked", async () => {
+    const push = vi.spyOn(history, "pushState");
+    fetchItems.mockResolvedValue(status([]));
+    const el = await mount();
+    const tab = [
+      ...(el.shadowRoot?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? []),
+    ].find((b) => b.textContent?.includes("Seeding"));
+    tab?.click();
+    await settle(el);
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(push).toHaveBeenCalledWith(null, "", "/downloaders/tr/seeding");
+    expect(fetchItems).toHaveBeenLastCalledWith("tr", "seeding");
+  });
+
+  it("does not push history when activeTab is set programmatically", async () => {
+    const push = vi.spyOn(history, "pushState");
+    fetchItems.mockResolvedValue(status([]));
+    const el = await mount();
+    el.activeTab = "failed";
+    await settle(el);
+    expect(push).not.toHaveBeenCalled();
+    expect(fetchItems).toHaveBeenLastCalledWith("tr", "failed");
+  });
+
+  it("ignores a stale response from a previous tab", async () => {
+    let resolveFirst!: (v: DownloaderStatusResponse) => void;
+    fetchItems.mockImplementationOnce(
+      () => new Promise<DownloaderStatusResponse>((r) => (resolveFirst = r)),
+    );
+    fetchItems.mockResolvedValueOnce(status([item({ res_title: "Second Tab Item" })]));
+    const el = await mount();
+    el.activeTab = "seeding";
+    await settle(el);
+    expect(el.shadowRoot?.textContent).toContain("Second Tab Item");
+    resolveFirst(status([item({ id: "d2", res_title: "First Tab Item" })]));
+    await settle(el);
+    expect(el.shadowRoot?.textContent).toContain("Second Tab Item");
+    expect(el.shadowRoot?.textContent).not.toContain("First Tab Item");
+  });
+
+  it("shows the spinner again when downloaderId changes", async () => {
+    fetchItems.mockResolvedValueOnce(status([item({ res_title: "Old Item" })]));
+    const el = await mount();
+    expect(el.shadowRoot?.textContent).toContain("Old Item");
+    let resolveNext!: (v: DownloaderStatusResponse) => void;
+    fetchItems.mockImplementationOnce(
+      () => new Promise<DownloaderStatusResponse>((r) => (resolveNext = r)),
+    );
+    el.downloaderId = "other";
+    await settle(el);
+    expect(el.shadowRoot?.querySelector(".loading-spinner, .loading")).not.toBeNull();
+    expect(el.shadowRoot?.textContent).not.toContain("Old Item");
+    resolveNext(status([item({ res_title: "New Item" })]));
+    await settle(el);
+    expect(el.shadowRoot?.textContent).toContain("New Item");
+  });
+
   it("shows an error with Retry on load failure and recovers", async () => {
     fetchItems.mockRejectedValue(new Error("backend down"));
     const el = await mount();

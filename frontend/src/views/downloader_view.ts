@@ -86,8 +86,9 @@ export class DownloaderView extends LitElement {
     { id: "failed", label: "Failed" },
   ];
 
-  protected async firstUpdated() {
-    await this.loadDownloadItems();
+  private loadSeq = 0;
+
+  protected firstUpdated() {
     if (this.isConnected) {
       this.poller.start();
     }
@@ -98,20 +99,24 @@ export class DownloaderView extends LitElement {
     this.poller.stop();
   }
 
-  protected async updated(changedProperties: Map<string, unknown>) {
+  protected willUpdate(changedProperties: Map<string, unknown>) {
     if (changedProperties.has("activeTab") || changedProperties.has("downloaderId")) {
-      // Update URL when activeTab changes
-      if (changedProperties.has("activeTab") && this.downloaderId) {
-        const newUrl = `/downloaders/${this.downloaderId}/${this.activeTab}`;
-        history.pushState(null, "", newUrl);
-      }
-      await this.loadDownloadItems();
+      this.loading = true;
+      this.initialLoad = true;
+      this.error = null;
+    }
+  }
+
+  protected updated(changedProperties: Map<string, unknown>) {
+    if (changedProperties.has("activeTab") || changedProperties.has("downloaderId")) {
+      void this.loadDownloadItems();
     }
   }
 
   private async loadDownloadItems() {
     if (!this.downloaderId) return;
 
+    const seq = ++this.loadSeq;
     this.error = null;
 
     try {
@@ -119,6 +124,7 @@ export class DownloaderView extends LitElement {
         this.downloaderId,
         this.activeTab as DownloadState,
       );
+      if (seq !== this.loadSeq) return;
 
       // Handle case where response might be undefined or malformed
       if (!response) {
@@ -143,6 +149,7 @@ export class DownloaderView extends LitElement {
         this.initialLoad = false;
       }
     } catch (err) {
+      if (seq !== this.loadSeq) return;
       this.error = errorMessage(err);
       // Only clear items on error if there are no items yet
       if (this.downloadItems.length === 0) {
@@ -151,15 +158,14 @@ export class DownloaderView extends LitElement {
       }
       this.initialLoad = false;
     } finally {
-      this.loading = false;
+      if (seq === this.loadSeq) this.loading = false;
     }
   }
 
   private handleTabChange(tabId: string) {
     if (this.activeTab !== tabId) {
       this.activeTab = tabId;
-      this.initialLoad = true; // Reset for new tab
-      this.loading = true;
+      history.pushState(null, "", `/downloaders/${encodeURIComponent(this.downloaderId)}/${tabId}`);
     }
   }
 
