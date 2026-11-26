@@ -165,7 +165,8 @@ func main() {
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
-	r.Use(gin.LoggerWithConfig(gin.LoggerConfig{SkipQueryString: true}), gin.Recovery())
+	r.Use(gin.LoggerWithConfig(gin.LoggerConfig{SkipQueryString: true, SkipPaths: []string{"/healthz"}}), gin.Recovery())
+	r.GET("/healthz", handlers.Healthz(db))
 	setupRouter(r, authSvc, hstsEnabled(cfg.Auth), service.SetupRouter)
 
 	srv := newServer(":"+cfg.Port, r)

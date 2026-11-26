@@ -59,15 +59,18 @@ services:
       - ./data/finished:/finished
     healthcheck:
       # The port here must match `port:` in config.yaml (and the mapping above).
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8888/"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8888/healthz"]
       interval: 30s
       timeout: 3s
       start_period: 10s
       retries: 3
     depends_on:
-      - postgres
-      - organizer
-      - transmission
+      postgres:
+        condition: service_healthy
+      organizer:
+        condition: service_healthy
+      transmission:
+        condition: service_started
 
   organizer:
     image: ghcr.io/autoget-project/autoget-organizer:latest
@@ -97,6 +100,11 @@ services:
       POSTGRES_DB: autoget
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U autoget -d autoget"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   transmission:
     image: lscr.io/linuxserver/transmission:latest

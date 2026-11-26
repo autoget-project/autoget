@@ -65,5 +65,12 @@ USER 1000:1000
 # Set working directory
 WORKDIR /app
 
+# Documented default port. The probe below must match `port:` in config.yaml
+# (compose overrides it to 8888 and carries its own healthcheck).
+EXPOSE 8080
+
+# busybox wget ships with alpine.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s CMD wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1
+
 # Run command: /app/autoget -c /config/config.yaml
 CMD ["/app/autoget", "-c", "/config/config.yaml"]
