@@ -8,7 +8,7 @@ import (
 
 type RSSSearch struct {
 	gorm.Model
-	Indexer string `gorm:"indexer,index"`
+	Indexer string `gorm:"index"`
 	Text    string `gorm:"text"`
 	Action  string `gorm:"action"`
 

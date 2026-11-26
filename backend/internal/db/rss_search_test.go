@@ -79,3 +79,10 @@ func TestDeleteSearch(t *testing.T) {
 	err = DeleteSearch(db, 999) // Assuming 999 is a non-existent ID
 	assert.NoError(t, err)
 }
+
+func TestRSSSearch_IndexerIsIndexed(t *testing.T) {
+	d, err := SqliteForTest()
+	require.NoError(t, err)
+
+	assert.True(t, d.Migrator().HasIndex(&RSSSearch{}, "Indexer"))
+}
