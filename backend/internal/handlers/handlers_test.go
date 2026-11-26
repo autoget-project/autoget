@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -602,6 +603,59 @@ func TestGetDownloaderStatuses(t *testing.T) {
 			ids = append(ids, r.ID)
 		}
 		assert.Equal(t, []string{"new-exec", "mid-create", "old-create"}, ids)
+	})
+
+	t.Run("paging", func(t *testing.T) {
+		_, router, _, testDB := testSetup(t)
+		base := time.Now().Add(-time.Hour)
+		for i := 0; i < 5; i++ {
+			require.NoError(t, testDB.Create(&db.DownloadStatus{
+				ID: fmt.Sprintf("s%d", i), Downloader: "mock", State: db.DownloadSeeding, CreatedAt: base.Add(time.Duration(i) * time.Minute),
+			}).Error)
+		}
+		get := func(q string) (int, DownloaderStatusResponse) {
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, httptest.NewRequest("GET", "/downloaders/mock?state=seeding"+q, nil))
+			var r DownloaderStatusResponse
+			if w.Code == http.StatusOK {
+				require.NoError(t, json.Unmarshal(w.Body.Bytes(), &r))
+			}
+			return w.Code, r
+		}
+		ids := func(r DownloaderStatusResponse) []string {
+			out := []string{}
+			for _, x := range r.Resources {
+				out = append(out, x.ID)
+			}
+			return out
+		}
+
+		code, r := get("&page=2&page_size=2")
+		assert.Equal(t, http.StatusOK, code)
+		assert.Equal(t, []string{"s2", "s1"}, ids(r))
+		assert.Equal(t, int64(5), r.Total)
+		assert.Equal(t, 2, r.Page)
+		assert.Equal(t, 2, r.PageSize)
+
+		code, r = get("&page=3&page_size=2")
+		assert.Equal(t, http.StatusOK, code)
+		assert.Equal(t, []string{"s0"}, ids(r))
+
+		code, r = get("&page=9&page_size=2")
+		assert.Equal(t, http.StatusOK, code)
+		assert.Empty(t, r.Resources)
+		assert.Equal(t, int64(5), r.Total)
+
+		code, r = get("")
+		assert.Equal(t, http.StatusOK, code)
+		assert.Len(t, r.Resources, 5)
+		assert.Equal(t, 1, r.Page)
+		assert.Equal(t, defaultPageSize, r.PageSize)
+
+		for _, q := range []string{"&page=0", "&page=x", "&page_size=0", "&page_size=201", "&page_size=x"} {
+			code, _ = get(q)
+			assert.Equal(t, http.StatusBadRequest, code, q)
+		}
 	})
 
 	t.Run("invalid state filter", func(t *testing.T) {

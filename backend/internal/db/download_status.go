@@ -111,6 +111,51 @@ func GetDownloadStatusByDownloaderAndState(db *gorm.DB, downloader string, state
 	return ss, err
 }
 
+// DownloadList selects one of the per-downloader lists shown by the API.
+type DownloadList string
+
+const (
+	ListDownloading DownloadList = "downloading"
+	ListSeeding     DownloadList = "seeding"
+	ListStopped     DownloadList = "stopped"
+	ListPlanned     DownloadList = "planned"
+	ListFailed      DownloadList = "failed"
+)
+
+func (l DownloadList) scope(d *gorm.DB, downloader string) (*gorm.DB, bool) {
+	q := d.Model(&DownloadStatus{}).Where("downloader = ?", downloader)
+	moved := func(states ...OrganizeState) *gorm.DB {
+		return q.Where("state != ?", DownloadDeleted).Where("move_state = ?", Moved).Where("organize_state IN ?", states)
+	}
+	switch l {
+	case ListDownloading:
+		return q.Where("state = ?", DownloadStarted), true
+	case ListSeeding:
+		return q.Where("state = ?", DownloadSeeding), true
+	case ListStopped:
+		return q.Where("state = ?", DownloadStopped), true
+	case ListPlanned:
+		return moved(Planned), true
+	case ListFailed:
+		return moved(CreatePlanFailed, ExecutePlanFailed), true
+	}
+	return nil, false
+}
+
+// ListDownloadStatuses returns one page of a downloader's list, newest first,
+// plus the total number of rows in the list. ok is false for an unknown list.
+func ListDownloadStatuses(d *gorm.DB, downloader string, list DownloadList, limit, offset int) (rows []DownloadStatus, total int64, ok bool, err error) {
+	q, ok := list.scope(d, downloader)
+	if !ok {
+		return nil, 0, false, nil
+	}
+	if err = q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+		return nil, 0, true, err
+	}
+	err = q.Order("created_at DESC, id ASC").Limit(limit).Offset(offset).Find(&rows).Error
+	return rows, total, true, err
+}
+
 func GetFinishedUnmovedDownloadStatusByDownloader(db *gorm.DB, downloader string) ([]DownloadStatus, error) {
 	var ss []DownloadStatus
 	err := db.Where("downloader = ?", downloader).Where("state >= ?", DownloadSeeding).Where("move_state IN ?", []MoveState{UnMoved, Moving}).Find(&ss).Error

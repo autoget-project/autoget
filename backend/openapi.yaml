@@ -245,15 +245,23 @@ paths:
           schema:
             type: string
             enum: [downloading, seeding, stopped, planned, failed]
+        - name: page
+          in: query
+          description: 1-based page number. Defaults to 1.
+          schema: {type: integer, minimum: 1, default: 1}
+        - name: page_size
+          in: query
+          description: Tasks per page. Defaults to 50 when omitted, so clients that never send paging parameters get the first 50 tasks.
+          schema: {type: integer, minimum: 1, maximum: 200, default: 50}
       responses:
         '200':
-          description: State counts plus the tasks in the requested state, newest first.
+          description: State counts plus one page of the tasks in the requested state, newest first.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DownloaderStatus'
         '400':
-          description: '`state` is missing or invalid.'
+          description: '`state`, `page` or `page_size` is missing or invalid.'
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Error'}
@@ -815,13 +823,17 @@ components:
             - $ref: '#/components/schemas/PlanResponse'
     DownloaderStatus:
       type: object
-      required: [state, resources]
+      required: [state, resources, total, page, page_size]
       properties:
         state: {$ref: '#/components/schemas/StateCounts'}
         resources:
           type: array
           nullable: true
+          description: The requested page of tasks.
           items: {$ref: '#/components/schemas/DownloadStatus'}
+        total: {type: integer, format: int64, description: Number of tasks in the whole list, across pages.}
+        page: {type: integer, description: 1-based page number served.}
+        page_size: {type: integer, description: Page size used (the default when not requested).}
     TokenResponse:
       type: object
       properties:

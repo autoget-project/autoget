@@ -3,11 +3,13 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"path"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -248,6 +250,38 @@ func (s *Service) listDownloaders(c *gin.Context) {
 type DownloaderStatusResponse struct {
 	State     db.DownloaderStateCounts `json:"state"`
 	Resources []db.DownloadStatus      `json:"resources"`
+	Total     int64                    `json:"total"`     // rows in the whole list, across pages
+	Page      int                      `json:"page"`      // 1-based
+	PageSize  int                      `json:"page_size"` // requested (or default) page size
+}
+
+const (
+	defaultPageSize = 50
+	maxPageSize     = 200
+)
+
+// parsePaging reads the optional page (default 1) and page_size (default
+// defaultPageSize, at most maxPageSize) query parameters. It answers 400 and
+// returns false on invalid values.
+func parsePaging(c *gin.Context) (page, pageSize int, ok bool) {
+	page, pageSize = 1, defaultPageSize
+	if v := c.Query("page"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			c.JSON(400, gin.H{"error": "page must be a positive integer"})
+			return 0, 0, false
+		}
+		page = n
+	}
+	if v := c.Query("page_size"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > maxPageSize {
+			c.JSON(400, gin.H{"error": fmt.Sprintf("page_size must be between 1 and %d", maxPageSize)})
+			return 0, 0, false
+		}
+		pageSize = n
+	}
+	return page, pageSize, true
 }
 
 func (s *Service) getDownloaderStatuses(c *gin.Context) {
@@ -266,29 +300,16 @@ func (s *Service) getDownloaderStatuses(c *gin.Context) {
 		return
 	}
 
-	var statuses []db.DownloadStatus
-	var err error
-
-	switch state {
-	case "downloading":
-		statuses, err = db.GetUnfinishedDownloadStatusByDownloader(s.db, downloaderName)
-	case "seeding":
-		// For seeding, we want downloads that are in seeding state
-		statuses, err = db.GetDownloadStatusByDownloaderAndState(s.db, downloaderName, db.DownloadSeeding)
-	case "stopped":
-		// For stopped, we want downloads that are stopped
-		statuses, err = db.GetDownloadStatusByDownloaderAndState(s.db, downloaderName, db.DownloadStopped)
-	case "planned":
-		// For planned, we want downloads that are moved and have been planned for organization
-		statuses, err = db.GetMovedAndOrganizeStateDownloadStatusByDownloader(s.db, downloaderName, db.Planned)
-	case "failed":
-		// For failed, we want downloads that failed during either plan creation or execution
-		statuses, err = db.GetMovedAndOrganizeStatesDownloadStatusByDownloader(s.db, downloaderName, []db.OrganizeState{db.CreatePlanFailed, db.ExecutePlanFailed})
-	default:
-		c.JSON(400, gin.H{"error": "Invalid state. Valid states: downloading, seeding, stopped, planned, failed"})
+	page, pageSize, ok := parsePaging(c)
+	if !ok {
 		return
 	}
 
+	statuses, total, valid, err := db.ListDownloadStatuses(s.db, downloaderName, db.DownloadList(state), pageSize, (page-1)*pageSize)
+	if !valid {
+		c.JSON(400, gin.H{"error": "Invalid state. Valid states: downloading, seeding, stopped, planned, failed"})
+		return
+	}
 	if err != nil {
 		respondError(c, 500, "failed to list downloads", err)
 		return
@@ -304,6 +325,9 @@ func (s *Service) getDownloaderStatuses(c *gin.Context) {
 	response := DownloaderStatusResponse{
 		State:     *stateCounts,
 		Resources: statuses,
+		Total:     total,
+		Page:      page,
+		PageSize:  pageSize,
 	}
 
 	c.JSON(200, response)
