@@ -366,7 +366,13 @@ paths:
       tags: [utility]
       operationId: image
       summary: Proxy an indexer image
+      security:
+        - bearerAuth: []
+        - imageCookieAuth: []
       description: |
+        Authenticates with either the bearer token or the image cookie (see
+        `imageCookieAuth`).
+
         Fetches an image from the one allowed upstream host (`img.m-team.cc`,
         https, path under `/images/`), adding the required Referer. Redirects
         off that host are not followed. Images over 10 MiB are rejected with 502 when the
@@ -452,6 +458,13 @@ paths:
       responses:
         '200':
           description: HTML page that completes the login in the browser.
+          headers:
+            Set-Cookie:
+              description: |
+                `autoget_image_token=<access token>; Path=/api/v1/image;
+                Max-Age=<token lifetime>; HttpOnly; SameSite=Strict` (plus
+                `Secure` when `redirect_base_url` is https).
+              schema: {type: string}
           content:
             text/html: {schema: {type: string}}
         '400':
@@ -517,7 +530,14 @@ paths:
                 refresh_token: {type: string, minLength: 1}
       responses:
         '200':
-          description: New tokens.
+          description: New tokens. Also refreshes the image cookie.
+          headers:
+            Set-Cookie:
+              description: |
+                `autoget_image_token=<access token>; Path=/api/v1/image;
+                Max-Age=<token lifetime>; HttpOnly; SameSite=Strict` (plus
+                `Secure` when `redirect_base_url` is https).
+              schema: {type: string}
           content:
             application/json:
               schema: {$ref: '#/components/schemas/TokenResponse'}
@@ -554,6 +574,16 @@ components:
       description: |
         Access token from the OIDC login, verified as a JWT whose audience
         includes the client id. Not checked when `auth.disabled` is set.
+    imageCookieAuth:
+      type: apiKey
+      in: cookie
+      name: autoget_image_token
+      description: |
+        The access token in an HttpOnly cookie (Path `/api/v1/image`,
+        SameSite=Strict, Max-Age equal to the token lifetime, Secure when
+        `redirect_base_url` is https). Set by `/auth/callback` and
+        `/auth/refresh`; accepted only by `GET /api/v1/image`, because `<img>`
+        requests cannot send an Authorization header.
   parameters:
     Indexer:
       name: indexer

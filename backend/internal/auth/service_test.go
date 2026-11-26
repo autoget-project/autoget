@@ -474,6 +474,7 @@ func TestCallbackSuccess(t *testing.T) {
 	body := w.Body.String()
 	assert.Contains(t, body, `data-redirect="/search?q=foo"`)
 	assert.Contains(t, body, `&#34;access_token&#34;:&#34;at&#34;`)
+	assertImageCookie(t, w, "at", 3600, false)
 
 	// state is single-use
 	w = httptest.NewRecorder()
@@ -649,6 +650,7 @@ func TestRefreshSuccessRotating(t *testing.T) {
 	require.True(t, ok)
 	assert.Greater(t, expiresIn, float64(0))
 	assert.LessOrEqual(t, expiresIn, float64(3600))
+	assertImageCookie(t, w, "new_at", 300, false)
 }
 
 // A provider that does not rotate the refresh token must not blank out the
@@ -833,4 +835,68 @@ func TestNewDisabledWarns(t *testing.T) {
 func TestConfigValidateDisabledSkipsFields(t *testing.T) {
 	assert.NoError(t, (&Config{Disabled: true}).Validate())
 	assert.Error(t, (&Config{}).Validate())
+}
+
+// assertImageCookie checks the image cookie set on w: HttpOnly, SameSite=Strict,
+// scoped to the image route, Max-Age close to expiresIn.
+func assertImageCookie(t *testing.T, w *httptest.ResponseRecorder, value string, expiresIn int, secure bool) {
+	t.Helper()
+	var got *http.Cookie
+	for _, c := range w.Result().Cookies() {
+		if c.Name == imageCookieName {
+			got = c
+		}
+	}
+	require.NotNil(t, got, "image cookie not set")
+	assert.Equal(t, value, got.Value)
+	assert.Equal(t, "/api/v1/image", got.Path)
+	assert.True(t, got.HttpOnly)
+	assert.Equal(t, http.SameSiteStrictMode, got.SameSite)
+	assert.Equal(t, secure, got.Secure)
+	assert.InDelta(t, expiresIn, got.MaxAge, 5)
+}
+
+func TestSetImageCookieSecureAndNoLifetime(t *testing.T) {
+	s := &Service{cookieSecure: true}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	s.setImageCookie(c, tokenResponse{AccessToken: "at", ExpiresIn: 60})
+	assertImageCookie(t, w, "at", 60, true)
+
+	w = httptest.NewRecorder()
+	c, _ = gin.CreateTestContext(w)
+	s.setImageCookie(c, tokenResponse{AccessToken: "at"})
+	assert.Empty(t, w.Result().Cookies())
+}
+
+func TestMiddlewareImageCookie(t *testing.T) {
+	s := testService(t)
+	router := gin.New()
+	api := router.Group("/api/v1", s.Middleware())
+	ok := func(c *gin.Context) { c.Status(http.StatusOK) }
+	api.GET("/image", ok)
+	api.POST("/image", ok)
+	api.GET("/indexers", ok)
+
+	do := func(method, path string, withCookie bool) int {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(method, path, nil)
+		if withCookie {
+			req.AddCookie(&http.Cookie{Name: imageCookieName, Value: s.token()})
+		}
+		router.ServeHTTP(w, req)
+		return w.Code
+	}
+
+	assert.Equal(t, http.StatusOK, do(http.MethodGet, "/api/v1/image", true))
+	assert.Equal(t, http.StatusUnauthorized, do(http.MethodGet, "/api/v1/image", false))
+	assert.Equal(t, http.StatusUnauthorized, do(http.MethodPost, "/api/v1/image", true))
+	assert.Equal(t, http.StatusUnauthorized, do(http.MethodGet, "/api/v1/indexers", true))
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/image", nil)
+	req.AddCookie(&http.Cookie{Name: imageCookieName, Value: "garbage"})
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }

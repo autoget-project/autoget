@@ -34,6 +34,12 @@ const (
 	// an outage does not turn every request into a discovery call.
 	discoveryRetryInterval = 30 * time.Second
 	stateCookieName        = "autoget_auth_state"
+	// imageCookieName carries the access token for GET /api/v1/image only:
+	// <img> requests cannot send an Authorization header.
+	imageCookieName = "autoget_image_token"
+	// imageRoute is the only route that accepts imageCookieName, and the
+	// cookie's Path, so the browser sends it nowhere else.
+	imageRoute = "/api/v1/image"
 )
 
 // Service provides the optional OAuth/OIDC login flow and bearer-token
@@ -176,7 +182,8 @@ const (
 )
 
 // Middleware guards the API and is a pass-through when auth is disabled. A
-// request carrying a valid Bearer token passes; a missing or invalid token
+// request carrying a valid Bearer token passes (GET /api/v1/image alone also
+// accepts the image cookie instead); a missing or invalid token
 // gets 401, a valid token without the required role gets 403, and an
 // unreachable provider gets 503 so clients keep their session instead of being
 // pushed through the login flow.
@@ -188,6 +195,9 @@ func (s *Service) Middleware() gin.HandlerFunc {
 		}
 
 		token := bearerToken(c.Request)
+		if token == "" && c.Request.Method == http.MethodGet && c.FullPath() == imageRoute {
+			token, _ = c.Cookie(imageCookieName)
+		}
 		if token == "" {
 			c.AbortWithStatus(http.StatusUnauthorized)
 			return
@@ -426,7 +436,9 @@ func (s *Service) callback(c *gin.Context) {
 		}
 	}
 
-	data, err := json.Marshal(newTokenResponse(tok))
+	resp := newTokenResponse(tok)
+	s.setImageCookie(c, resp)
+	data, err := json.Marshal(resp)
 	if err != nil {
 		log.Error().Err(err).Msg("marshal tokens failed")
 		c.String(http.StatusInternalServerError, "login failed")
@@ -475,7 +487,20 @@ func (s *Service) refresh(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, newTokenResponse(tok))
+	resp := newTokenResponse(tok)
+	s.setImageCookie(c, resp)
+	c.JSON(http.StatusOK, resp)
+}
+
+// setImageCookie stores the access token in an HttpOnly cookie scoped to the
+// image proxy route, living as long as the token. It is a no-op when the
+// token's lifetime is unknown.
+func (s *Service) setImageCookie(c *gin.Context, tok tokenResponse) {
+	if tok.AccessToken == "" || tok.ExpiresIn <= 0 {
+		return
+	}
+	c.SetSameSite(http.SameSiteStrictMode)
+	c.SetCookie(imageCookieName, tok.AccessToken, int(tok.ExpiresIn), imageRoute, "", s.cookieSecure, true)
 }
 
 // newTokenResponse maps an oauth2 token to the wire format, converting the
