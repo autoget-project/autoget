@@ -117,4 +117,15 @@ describe("indexer-view", () => {
     expect(el.shadowRoot?.querySelector('[role="alert"]')).toBeNull();
     expect(el.shadowRoot?.querySelectorAll("#left-panel-categories li").length).toBe(1);
   });
+
+  it("renders without waiting for categories and fetches once per indexer change", async () => {
+    fetchCategories.mockReturnValue(new Promise(() => {}));
+    const el = await mount();
+    expect(el.shadowRoot?.querySelector("resource-list")).not.toBeNull();
+    expect(fetchCategories).toHaveBeenCalledTimes(1);
+    el.indexerId = "nyaa";
+    await settle(el);
+    expect(fetchCategories).toHaveBeenCalledTimes(2);
+    expect(fetchCategories).toHaveBeenLastCalledWith("nyaa");
+  });
 });

@@ -132,7 +132,7 @@ export class IndexerView extends LitElement {
     }
   }
 
-  async connectedCallback() {
+  connectedCallback() {
     super.connectedCallback();
     if (typeof window !== "undefined" && window.innerWidth < 1024) {
       this.sidebarVisible = false;
@@ -144,7 +144,6 @@ export class IndexerView extends LitElement {
         this.sidebarWidth = this.clampSidebarWidth(parsed);
       }
     }
-    await this.fetchIndexerCategories();
   }
 
   private findCategoryName(id: string, categories: Category[]): string | null {
@@ -162,9 +161,10 @@ export class IndexerView extends LitElement {
     return null;
   }
 
-  protected async update(changedProperties: PropertyValues): Promise<void> {
+  protected willUpdate(changedProperties: PropertyValues): void {
     if (changedProperties.has("indexerId")) {
-      await this.fetchIndexerCategories();
+      this.categories = [];
+      void this.fetchIndexerCategories();
     }
 
     if (this.indexerId) {
@@ -178,8 +178,6 @@ export class IndexerView extends LitElement {
       title += ` - Page ${this.page}`;
       document.title = title;
     }
-
-    super.update(changedProperties);
   }
 
   private retryCategories = () => {
