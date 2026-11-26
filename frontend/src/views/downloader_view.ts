@@ -169,7 +169,7 @@ export class DownloaderView extends LitElement {
     }
   }
 
-  private isProcessing(downloadId: string, action: OrganizeAction): boolean {
+  private isProcessing(downloadId: string, action: OrganizeAction | "delete"): boolean {
     return this.processingActions.has(`${downloadId}:${action}`);
   }
 
@@ -229,6 +229,12 @@ export class DownloaderView extends LitElement {
   }
 
   private async handleDeleteDownload(downloadId: string) {
+    const actionKey = `${downloadId}:delete`;
+    // Prevent a second delete while one is already in flight
+    if (this.processingActions.has(actionKey)) {
+      return;
+    }
+
     // Show confirmation dialog
     if (
       !confirm(
@@ -238,6 +244,10 @@ export class DownloaderView extends LitElement {
       return;
     }
 
+    const nextProcessing = new Set(this.processingActions);
+    nextProcessing.add(actionKey);
+    this.processingActions = nextProcessing;
+
     try {
       this.actionError = null;
       await deleteDownload(downloadId);
@@ -246,6 +256,10 @@ export class DownloaderView extends LitElement {
     } catch (error) {
       console.error("Error deleting download:", error);
       this.actionError = `Failed to delete download: ${errorMessage(error)}`;
+    } finally {
+      const remaining = new Set(this.processingActions);
+      remaining.delete(actionKey);
+      this.processingActions = remaining;
     }
   }
 
@@ -516,10 +530,18 @@ export class DownloaderView extends LitElement {
                 <!-- Delete button for all tabs -->
                 <button
                   class="btn btn-xs sm:btn-sm btn-error"
+                  ?disabled=${this.isProcessing(item.id, "delete")}
                   @click=${() => this.handleDeleteDownload(item.id)}
                   title="Delete download and remove all local data"
                 >
-                  <span class="icon-[ph--trash-bold]" style="width: 1.2em; height: 1.2em;"></span>
+                  ${
+                    this.isProcessing(item.id, "delete")
+                      ? html`<span class="loading loading-spinner loading-xs"></span>`
+                      : html`<span
+                          class="icon-[ph--trash-bold]"
+                          style="width: 1.2em; height: 1.2em;"
+                        ></span>`
+                  }
                   Delete
                 </button>
               </div>

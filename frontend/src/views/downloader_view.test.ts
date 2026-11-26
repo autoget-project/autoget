@@ -246,4 +246,22 @@ describe("downloader-view", () => {
     expect(deleteDownload).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
+
+  it("ignores a second delete while the first is in flight", async () => {
+    fetchItems.mockResolvedValue(status([item()]));
+    let resolve!: () => void;
+    deleteDownload.mockReturnValue(new Promise<void>((r) => (resolve = r)));
+    vi.stubGlobal("confirm", vi.fn<(m?: string) => boolean>().mockReturnValue(true));
+    const el = await mount();
+    const btn = () => el.shadowRoot?.querySelector<HTMLButtonElement>("button.btn-error");
+    btn()?.click();
+    btn()?.click();
+    await settle(el);
+    expect(deleteDownload).toHaveBeenCalledTimes(1);
+    expect(btn()?.disabled).toBe(true);
+    resolve();
+    await settle(el);
+    expect(btn()?.disabled).toBe(false);
+    vi.unstubAllGlobals();
+  });
 });
