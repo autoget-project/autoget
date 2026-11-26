@@ -141,10 +141,6 @@ func GetDownloadStatus(db *gorm.DB, hash string) (*DownloadStatus, error) {
 	return s, err
 }
 
-func SaveDownloadStatus(db *gorm.DB, s *DownloadStatus) error {
-	return db.Save(s).Error
-}
-
 // UpdateDownloadStatusColumns writes only cols of s (by primary key), including
 // zero values and serialized columns, and bumps updated_at. An optional
 // condition (query, args...) makes it a conditional transition; it reports

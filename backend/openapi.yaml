@@ -275,12 +275,13 @@ paths:
         All parameters are query parameters; there is no request body.
 
         - `accept_plan`: execute the stored plan through the organizer service.
-          400 when no plan exists. Answers 200 even when some moves failed; then
+          400 when no plan exists; 409 unless the download is in the planned
+          state. Only one accept runs at a time. Answers 200 even when some moves failed; then
           `failed` lists them and the download becomes `ExecutePlanFailed`.
         - `manual_organized`: mark the download as organized by hand.
         - `re_plan`: ask the organizer for a new plan, optionally steered by
           `user_hint`. On organizer failure the state becomes `CreatePlanFailed`
-          and 500 is returned.
+          and 500 is returned. 409 when the download is already organized.
       parameters:
         - $ref: '#/components/parameters/DownloadId'
         - name: action
@@ -333,6 +334,11 @@ paths:
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/DownloadNotFound'}
+        '409':
+          description: '`accept_plan` when the download is not in planned state, or `re_plan` on an organized download.'
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
         '500': {$ref: '#/components/responses/InternalError'}
         '503': {$ref: '#/components/responses/AuthUnavailable'}
   /api/v1/download/{id}:

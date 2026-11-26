@@ -8,6 +8,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -28,6 +29,9 @@ type Service struct {
 	indexers        map[string]indexers.IIndexer
 	downloaders     map[string]downloaders.IDownloader
 	organizerClient *organizer.Client
+
+	// acceptMu serialises accept_plan so a plan is executed at most once.
+	acceptMu sync.Mutex
 }
 
 func NewService(config *config.Config, db *gorm.DB, indexers map[string]indexers.IIndexer, downloaders map[string]downloaders.IDownloader, organizerClient *organizer.Client) *Service {
@@ -433,8 +437,27 @@ func (s *Service) organizeDownload(c *gin.Context) {
 }
 
 func (s *Service) handleAcceptPlan(c *gin.Context, downloadStatus *db.DownloadStatus) {
+	s.acceptMu.Lock()
+	defer s.acceptMu.Unlock()
+
+	// Reload under the lock: the row loaded by the caller may be stale.
+	downloadStatus, err := db.GetDownloadStatusByID(s.db, downloadStatus.ID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(404, gin.H{"error": "Download not found"})
+		} else {
+			respondError(c, 500, "failed to load download", err)
+		}
+		return
+	}
+
 	if downloadStatus.OrganizePlans == nil {
 		c.JSON(400, gin.H{"error": "No organize plan available"})
+		return
+	}
+
+	if downloadStatus.OrganizeState != db.Planned {
+		c.JSON(409, gin.H{"error": "plan is not in planned state"})
 		return
 	}
 
@@ -457,9 +480,14 @@ func (s *Service) handleAcceptPlan(c *gin.Context, downloadStatus *db.DownloadSt
 		downloadStatus.OrganizeState = db.ExecutePlanFailed
 	}
 
-	// Update the download status
-	if err := db.SaveDownloadStatus(s.db, downloadStatus); err != nil {
+	// Only transition a plan that is still planned.
+	updated, err := db.UpdateDownloadStatusColumns(s.db, downloadStatus, []string{"organize_state"}, "organize_state = ?", db.Planned)
+	if err != nil {
 		respondError(c, 500, "failed to save download status", err)
+		return
+	}
+	if !updated {
+		c.JSON(409, gin.H{"error": "plan is not in planned state"})
 		return
 	}
 
@@ -477,8 +505,7 @@ func (s *Service) handleManualOrganized(c *gin.Context, downloadStatus *db.Downl
 	// Set the organize plan action to manually organized
 	downloadStatus.OrganizeState = db.Organized
 
-	// Update the download status
-	if err := db.SaveDownloadStatus(s.db, downloadStatus); err != nil {
+	if _, err := db.UpdateDownloadStatusColumns(s.db, downloadStatus, []string{"organize_state"}); err != nil {
 		respondError(c, 500, "failed to save download status", err)
 		return
 	}
@@ -487,6 +514,11 @@ func (s *Service) handleManualOrganized(c *gin.Context, downloadStatus *db.Downl
 }
 
 func (s *Service) handleRePlan(c *gin.Context, downloadStatus *db.DownloadStatus) {
+	if downloadStatus.OrganizeState == db.Organized {
+		c.JSON(409, gin.H{"error": "download is already organized"})
+		return
+	}
+
 	// Get user_hint from query parameter (optional)
 	userHint := c.Query("user_hint")
 
@@ -504,7 +536,8 @@ func (s *Service) handleRePlan(c *gin.Context, downloadStatus *db.DownloadStatus
 	if err != nil {
 		// Update the state to CreatePlanFailed when re-planning fails
 		downloadStatus.OrganizeState = db.CreatePlanFailed
-		if saveErr := db.SaveDownloadStatus(s.db, downloadStatus); saveErr != nil {
+		// Best effort: if the download was organized meanwhile, keep that state.
+		if _, saveErr := db.UpdateDownloadStatusColumns(s.db, downloadStatus, []string{"organize_state"}, "organize_state <> ?", db.Organized); saveErr != nil {
 			respondError(c, 500, "failed to save download status", saveErr)
 			return
 		}
@@ -516,9 +549,13 @@ func (s *Service) handleRePlan(c *gin.Context, downloadStatus *db.DownloadStatus
 	downloadStatus.OrganizePlans = resp
 	downloadStatus.OrganizeState = db.Planned
 
-	// Update the download status
-	if err := db.SaveDownloadStatus(s.db, downloadStatus); err != nil {
+	updated, err := db.UpdateDownloadStatusColumns(s.db, downloadStatus, []string{"organize_plans", "organize_state"}, "organize_state <> ?", db.Organized)
+	if err != nil {
 		respondError(c, 500, "failed to save download status", err)
+		return
+	}
+	if !updated {
+		c.JSON(409, gin.H{"error": "download is already organized"})
 		return
 	}
 

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -743,7 +744,7 @@ func TestService_handleAcceptPlan_Success(t *testing.T) {
 		Downloader:    "test-downloader",
 		State:         db.DownloadStarted,
 		OrganizePlans: &organizer.PlanResponse{Plan: testPlan},
-		OrganizeState: db.Unplanned,
+		OrganizeState: db.Planned,
 	}
 	err = testDB.Create(downloadStatus).Error
 	require.NoError(t, err)
@@ -807,7 +808,7 @@ func TestService_handleAcceptPlan_PartialFailure(t *testing.T) {
 		Downloader:    "test-downloader",
 		State:         db.DownloadStarted,
 		OrganizePlans: &organizer.PlanResponse{Plan: testPlan},
-		OrganizeState: db.Unplanned,
+		OrganizeState: db.Planned,
 	}
 	err = testDB.Create(downloadStatus).Error
 	require.NoError(t, err)
@@ -869,7 +870,7 @@ func TestService_handleRePlan_Success(t *testing.T) {
 		Downloader:    "test-downloader",
 		State:         db.DownloadStarted,
 		FileList:      []string{"file1.txt", "file2.txt"},
-		OrganizeState: db.Organized,
+		OrganizeState: db.CreatePlanFailed,
 	}
 	err = testDB.Create(downloadStatus).Error
 	require.NoError(t, err)
@@ -915,7 +916,7 @@ func TestService_handleRePlan_OrganizerError(t *testing.T) {
 		Downloader:    "test-downloader",
 		State:         db.DownloadStarted,
 		FileList:      []string{"file1.txt"},
-		OrganizeState: db.Organized,
+		OrganizeState: db.CreatePlanFailed,
 	}
 	err = testDB.Create(downloadStatus).Error
 	require.NoError(t, err)
@@ -978,7 +979,7 @@ func TestService_handleRePlan_WithUserHint_Success(t *testing.T) {
 		FileList:      testFiles,
 		Metadata:      testMetadata,
 		OrganizePlans: existingPlan,
-		OrganizeState: db.Organized,
+		OrganizeState: db.CreatePlanFailed,
 	}
 	err = testDB.Create(downloadStatus).Error
 	require.NoError(t, err)
@@ -1032,7 +1033,7 @@ func TestService_handleRePlan_WithUserHint_Error(t *testing.T) {
 		Downloader:    "test-downloader",
 		State:         db.DownloadStarted,
 		FileList:      []string{"file1.txt"},
-		OrganizeState: db.Organized,
+		OrganizeState: db.CreatePlanFailed,
 	}
 	err = testDB.Create(downloadStatus).Error
 	require.NoError(t, err)
@@ -1092,7 +1093,7 @@ func TestService_handleRePlan_EmptyUserHint_UsesReplan(t *testing.T) {
 		State:         db.DownloadStarted,
 		FileList:      testFiles,
 		Metadata:      testMetadata,
-		OrganizeState: db.Organized,
+		OrganizeState: db.CreatePlanFailed,
 	}
 	err = testDB.Create(downloadStatus).Error
 	require.NoError(t, err)
@@ -1212,4 +1213,71 @@ func TestService_DBErrorDoesNotLeak(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, "failed to load download", resp["error"])
 	assert.NotContains(t, w.Body.String(), "closed")
+}
+
+func newOrganizerCounter(t *testing.T, serv *Service, executes *atomic.Int32) {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/execute" {
+			executes.Add(1)
+			time.Sleep(20 * time.Millisecond)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+	oc, err := organizer.NewClient(srv.URL, nil)
+	require.NoError(t, err)
+	serv.organizerClient = oc
+}
+
+func TestService_handleAcceptPlan_NotPlanned(t *testing.T) {
+	serv, router, _, testDB := testSetup(t)
+	var executes atomic.Int32
+	newOrganizerCounter(t, serv, &executes)
+
+	for _, st := range []db.OrganizeState{db.Unplanned, db.Organized, db.CreatePlanFailed, db.ExecutePlanFailed} {
+		require.NoError(t, testDB.Where("id = ?", "h").Delete(&db.DownloadStatus{}).Error)
+		require.NoError(t, testDB.Create(&db.DownloadStatus{ID: "h", Downloader: "d", OrganizeState: st,
+			OrganizePlans: &organizer.PlanResponse{Plan: []organizer.PlanAction{{File: "a", Action: organizer.ActionSkip}}}}).Error)
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest("POST", "/download/h/organize?action=accept_plan", nil))
+		assert.Equal(t, http.StatusConflict, w.Code, "state %d", st)
+	}
+	assert.Equal(t, int32(0), executes.Load())
+}
+
+func TestService_handleAcceptPlan_ConcurrentExecutesOnce(t *testing.T) {
+	serv, router, _, testDB := testSetup(t)
+	var executes atomic.Int32
+	newOrganizerCounter(t, serv, &executes)
+	require.NoError(t, testDB.Create(&db.DownloadStatus{ID: "h", Downloader: "d", OrganizeState: db.Planned,
+		OrganizePlans: &organizer.PlanResponse{Plan: []organizer.PlanAction{{File: "a", Action: organizer.ActionSkip}}}}).Error)
+
+	codes := make(chan int, 2)
+	for range 2 {
+		go func() {
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, httptest.NewRequest("POST", "/download/h/organize?action=accept_plan", nil))
+			codes <- w.Code
+		}()
+	}
+	got := []int{<-codes, <-codes}
+	assert.ElementsMatch(t, []int{http.StatusOK, http.StatusConflict}, got)
+	assert.Equal(t, int32(1), executes.Load())
+}
+
+func TestService_handleRePlan_AlreadyOrganized(t *testing.T) {
+	serv, router, _, testDB := testSetup(t)
+	var executes atomic.Int32
+	newOrganizerCounter(t, serv, &executes)
+	require.NoError(t, testDB.Create(&db.DownloadStatus{ID: "h", Downloader: "d", OrganizeState: db.Organized}).Error)
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest("POST", "/download/h/organize?action=re_plan", nil))
+	assert.Equal(t, http.StatusConflict, w.Code)
+
+	got, err := db.GetDownloadStatus(testDB, "h")
+	require.NoError(t, err)
+	assert.Equal(t, db.Organized, got.OrganizeState)
 }
