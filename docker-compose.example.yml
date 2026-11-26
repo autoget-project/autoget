@@ -19,8 +19,8 @@
 #   /finished   backend copies completed downloads here (backend mount)
 #   /data       organizer mounts ./data as ONE volume: /data/finished is its
 #               source and /data/media its library root. They must share a single
-#               mount or rename(2) fails with EXDEV; the organizer checks this at
-#               startup. It refuses to start unless ALL category sub-directories
+#               mount or rename(2) fails with EXDEV when a plan is executed. The
+#               organizer refuses to start unless ALL category sub-directories
 #               of /data/media exist (see the mkdir above / organizer/README.md)
 #
 # The matching backend config (config/config.yaml) must contain:

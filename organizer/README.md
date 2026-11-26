@@ -44,7 +44,7 @@ Configure the following environment variables before starting the service:
 | `XAI_API_KEY` | Conditional | `xai-...` | Required when using Grok models |
 | `TPDB_API_TOKEN` | No | (empty) | ThePornDB API token; when set, the porn category queries real scene names via LLM function calling, otherwise the local naming chain is used |
 
-> **Same mount required**: `DOWNLOAD_COMPLETED_DIR` and `TARGET_DIR` must be on the same filesystem **and** under the same mount, because files are moved with `rename(2)`, which fails with `EXDEV` across separate mount points (even bind mounts of one filesystem). Mount a common parent (e.g. `-v /path/to/data:/data`) rather than two volumes. Startup performs a test rename and exits if it fails.
+> **Same mount required**: `DOWNLOAD_COMPLETED_DIR` and `TARGET_DIR` must be on the same filesystem **and** under the same mount, because files are moved with `rename(2)`, which fails with `EXDEV` across separate mount points (even bind mounts of one filesystem). Mount a common parent (e.g. `-v /path/to/data:/data`) rather than two volumes. Otherwise executing a plan fails with "invalid cross-device link".
 
 > **Note**: `TARGET_DIR` must contain required media subdirectories (all of them): `audio_book`, `book`, `music`, `music_video`, `photobook`, `movie`, `anim_movie`, `tv_series`, `anim_tv_series`, `porn`, `porn_vr`, `jav`, `jav_vr`, `madou`. The startup routine validates that every one exists and is writable, and exits otherwise. Create them with `mkdir -p $TARGET_DIR/{audio_book,book,music,music_video,photobook,movie,anim_movie,tv_series,anim_tv_series,porn,porn_vr,jav,jav_vr,madou}`.
 
