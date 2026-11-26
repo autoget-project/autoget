@@ -109,6 +109,26 @@ func (e *Executor) ExecutePlan(ctx context.Context, dir string, plan []model.Pla
 			continue
 		}
 
+		// Never overwrite: os.Rename silently replaces existing files and
+		// empty directories.
+		if _, err := os.Lstat(targetFile); err == nil {
+			failedMove = append(failedMove, model.PlanFailed{
+				File:   action.File,
+				Action: action.Action,
+				Target: action.Target,
+				Reason: "target already exists",
+			})
+			continue
+		} else if !os.IsNotExist(err) {
+			failedMove = append(failedMove, model.PlanFailed{
+				File:   action.File,
+				Action: action.Action,
+				Target: action.Target,
+				Reason: fmt.Sprintf("stat target failed: %v", err),
+			})
+			continue
+		}
+
 		if err := os.Rename(sourcePath, targetFile); err != nil {
 			failedMove = append(failedMove, model.PlanFailed{
 				File:   action.File,

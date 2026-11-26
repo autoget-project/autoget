@@ -136,3 +136,21 @@ func TestSanitizePlanWithDetail(t *testing.T) {
 	require.Len(t, sanitized, 3)
 	assert.Len(t, detail.ForcedSkips, 2)
 }
+
+func TestSanitizePlanWithDetail_DuplicateTargetKeepsFirst(t *testing.T) {
+	t.Parallel()
+
+	plan := []model.PlanAction{
+		{File: "a.mp4", Action: "move", Target: mustStrPtr("porn/x.mp4")},
+		{File: "b.mp4", Action: "move", Target: mustStrPtr("porn/./x.mp4")},
+	}
+
+	sanitized, detail := SanitizePlanWithDetail(plan)
+	require.Len(t, sanitized, 2)
+	assert.Equal(t, "move", sanitized[0].Action)
+	assert.Equal(t, "skip", sanitized[1].Action)
+	assert.Nil(t, sanitized[1].Target)
+	require.Len(t, detail.ForcedSkips, 1)
+	assert.Contains(t, detail.ForcedSkips[0], "duplicate target")
+	assert.Contains(t, detail.ForcedSkips[0], "a.mp4")
+}

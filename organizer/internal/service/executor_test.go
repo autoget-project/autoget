@@ -124,3 +124,70 @@ func TestExecutePlan_SkipActionsAreIgnored(t *testing.T) {
 	assert.FileExists(t, filepath.Join(downloadDir, "archive", "d5", "cover.nfo"))
 	assert.NoDirExists(t, filepath.Join(downloadDir, "d5"), "source dir must be gone after archiving")
 }
+
+func TestExecutePlan_NeverOverwritesExistingTarget(t *testing.T) {
+	t.Parallel()
+
+	downloadDir := t.TempDir()
+	targetDir := t.TempDir()
+	mustWriteFile(t, filepath.Join(downloadDir, "d", "movie.mkv"), "new")
+	existing := filepath.Join(targetDir, "movie", "M", "M.mkv")
+	mustWriteFile(t, existing, "old")
+
+	exec := NewExecutor(downloadDir, targetDir)
+	resp, err := exec.ExecutePlan(context.Background(), "d", []model.PlanAction{
+		{File: "movie.mkv", Action: "move", Target: ptr.Str("movie/M/M.mkv")},
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.FailedMove, 1)
+	assert.Equal(t, "target already exists", resp.FailedMove[0].Reason)
+
+	got, err := os.ReadFile(existing)
+	require.NoError(t, err)
+	assert.Equal(t, "old", string(got))
+	got, err = os.ReadFile(filepath.Join(downloadDir, "d", "movie.mkv"))
+	require.NoError(t, err)
+	assert.Equal(t, "new", string(got))
+	assert.NoDirExists(t, filepath.Join(downloadDir, "archive", "d"))
+}
+
+func TestExecutePlan_DirectoryMoveOntoExistingEmptyDirFails(t *testing.T) {
+	t.Parallel()
+
+	downloadDir := t.TempDir()
+	targetDir := t.TempDir()
+	mustWriteFile(t, filepath.Join(downloadDir, "d", "season", "ep01.mkv"), "a")
+	require.NoError(t, os.MkdirAll(filepath.Join(targetDir, "tv_series", "S", "Season 01"), 0o755))
+
+	exec := NewExecutor(downloadDir, targetDir)
+	resp, err := exec.ExecutePlan(context.Background(), "d", []model.PlanAction{
+		{File: "season", Action: "move", Target: ptr.Str("tv_series/S/Season 01")},
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.FailedMove, 1)
+	assert.Equal(t, "target already exists", resp.FailedMove[0].Reason)
+	assert.FileExists(t, filepath.Join(downloadDir, "d", "season", "ep01.mkv"))
+}
+
+func TestExecutePlan_SameTargetSecondMoveFails(t *testing.T) {
+	t.Parallel()
+
+	downloadDir := t.TempDir()
+	targetDir := t.TempDir()
+	mustWriteFile(t, filepath.Join(downloadDir, "d", "a.mkv"), "first")
+	mustWriteFile(t, filepath.Join(downloadDir, "d", "b.mkv"), "second")
+
+	exec := NewExecutor(downloadDir, targetDir)
+	resp, err := exec.ExecutePlan(context.Background(), "d", []model.PlanAction{
+		{File: "a.mkv", Action: "move", Target: ptr.Str("movie/M/M.mkv")},
+		{File: "b.mkv", Action: "move", Target: ptr.Str("movie/M/M.mkv")},
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.FailedMove, 1)
+	assert.Equal(t, "b.mkv", resp.FailedMove[0].File)
+	assert.Equal(t, "target already exists", resp.FailedMove[0].Reason)
+
+	got, err := os.ReadFile(filepath.Join(targetDir, "movie", "M", "M.mkv"))
+	require.NoError(t, err)
+	assert.Equal(t, "first", string(got))
+}

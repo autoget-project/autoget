@@ -43,7 +43,8 @@ type PostProcessDetail struct {
 //   - garbage files (.nfo, .url, .torrent ...) are forced to skip;
 //   - move actions without a target are forced to skip;
 //   - every move target is filepath.Clean'ed, and any absolute or escaping
-//     ("../") target is rejected and forced to skip.
+//     ("../") target is rejected and forced to skip;
+//   - a target already planned for an earlier action is forced to skip (first wins).
 func SanitizePlan(plan []model.PlanAction) []model.PlanAction {
 	sanitized, _ := SanitizePlanWithDetail(plan)
 	return sanitized
@@ -53,6 +54,8 @@ func SanitizePlan(plan []model.PlanAction) []model.PlanAction {
 func SanitizePlanWithDetail(plan []model.PlanAction) ([]model.PlanAction, PostProcessDetail) {
 	sanitized := make([]model.PlanAction, 0, len(plan))
 	var detail PostProcessDetail
+	// seen maps a cleaned target to the first file planned for it.
+	seen := map[string]string{}
 	for _, action := range plan {
 		if _, ok := garbageExtensions[strings.ToLower(filepath.Ext(action.File))]; ok {
 			detail.ForcedSkips = append(detail.ForcedSkips, action.File+": garbage extension")
@@ -74,6 +77,12 @@ func SanitizePlanWithDetail(plan []model.PlanAction) ([]model.PlanAction, PostPr
 			sanitized = append(sanitized, model.PlanAction{File: action.File, Action: "skip"})
 			continue
 		}
+		if other, dup := seen[cleaned]; dup {
+			detail.ForcedSkips = append(detail.ForcedSkips, fmt.Sprintf("%s: duplicate target %s (also planned for %s)", action.File, cleaned, other))
+			sanitized = append(sanitized, model.PlanAction{File: action.File, Action: "skip"})
+			continue
+		}
+		seen[cleaned] = action.File
 		target := cleaned
 		sanitized = append(sanitized, model.PlanAction{File: action.File, Action: "move", Target: &target})
 	}
