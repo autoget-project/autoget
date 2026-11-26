@@ -35,11 +35,11 @@ func TestRenderRSSResult(t *testing.T) {
 				"Item D",
 			},
 			expectedSubstrings: []string{
-				"# TestIndexer RSS",
-				"## Download Started",
+				"TestIndexer RSS",
+				"Download started:",
 				"- Item A",
 				"- Item B",
-				"## Download Pending to Start",
+				"Download pending to start:",
 				"- Item C",
 				"- Item D",
 			},
@@ -54,13 +54,13 @@ func TestRenderRSSResult(t *testing.T) {
 				"Item D",
 			},
 			expectedSubstrings: []string{
-				"# TestIndexer RSS",
-				"## Download Pending to Start",
+				"TestIndexer RSS",
+				"Download pending to start:",
 				"- Item C",
 				"- Item D",
 			},
 			notExpectedSubstrings: []string{
-				"## Download Started",
+				"Download started:",
 			},
 		},
 		{
@@ -72,13 +72,13 @@ func TestRenderRSSResult(t *testing.T) {
 			},
 			downloadPendingToStart: []string{},
 			expectedSubstrings: []string{
-				"# TestIndexer RSS",
-				"## Download Started",
+				"TestIndexer RSS",
+				"Download started:",
 				"- Item A",
 				"- Item B",
 			},
 			notExpectedSubstrings: []string{
-				"## Download Pending to Start",
+				"Download pending to start:",
 			},
 		},
 		{
@@ -87,11 +87,11 @@ func TestRenderRSSResult(t *testing.T) {
 			downloadStarted:        []string{},
 			downloadPendingToStart: []string{},
 			expectedSubstrings: []string{
-				"# TestIndexer RSS",
+				"TestIndexer RSS",
 			},
 			notExpectedSubstrings: []string{
-				"## Download Started",
-				"## Download Pending to Start",
+				"Download started:",
+				"Download pending to start:",
 			},
 		},
 	}
@@ -142,8 +142,7 @@ func (f *fakeIndexer) Download(id string, before indexers.BeforePlaceFunc) (*ind
 
 type fakeNotifier struct{ msgs []string }
 
-func (n *fakeNotifier) SendMessage(m string) error         { n.msgs = append(n.msgs, m); return nil }
-func (n *fakeNotifier) SendMarkdownMessage(m string) error { n.msgs = append(n.msgs, m); return nil }
+func (n *fakeNotifier) SendMessage(m string) error { n.msgs = append(n.msgs, m); return nil }
 
 func setupRSS(t *testing.T, action string) *gorm.DB {
 	t.Helper()
@@ -204,4 +203,14 @@ func TestSearchRSS_NotificationStoresResID(t *testing.T) {
 	require.Len(t, s, 1)
 	assert.Equal(t, "1", s[0].ResID)
 	assert.Equal(t, 0, idx.downloads)
+}
+
+func TestSearchRSS_SpecialCharsSentAsPlainText(t *testing.T) {
+	d := setupRSS(t, "notification")
+	n := &fakeNotifier{}
+
+	SearchRSS(&fakeIndexer{}, d, n, []*indexers.RSSItem{{ResID: "1", Title: "Foo a_b*c[d]"}})
+
+	require.Len(t, n.msgs, 1)
+	assert.Contains(t, n.msgs[0], "- Foo a_b*c[d]")
 }

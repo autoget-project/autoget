@@ -15,7 +15,7 @@ import (
 	"github.com/autoget-project/autoget/backend/internal/notify"
 )
 
-//go:embed rss.md
+//go:embed rss.txt
 var rssTemplateContent string
 
 var rssTemplate *template.Template
@@ -106,7 +106,7 @@ func SearchRSS(index indexers.IIndexer, d *gorm.DB, notify notify.INotifier, ite
 			logger.Error().Err(err).Msg("Failed to render RSS result")
 			return
 		}
-		if err := notify.SendMarkdownMessage(msg); err != nil {
+		if err := notify.SendMessage(msg); err != nil {
 			logger.Error().Err(err).Msg("Failed to send RSS notification")
 		}
 	}

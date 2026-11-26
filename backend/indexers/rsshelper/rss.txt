@@ -1,0 +1,8 @@
+{{.Indexer}} RSS
+{{if .DownloadStarted}}
+Download started:
+{{range .DownloadStarted}}- {{.}}
+{{end}}{{end}}{{if .DownloadPendingToStart}}
+Download pending to start:
+{{range .DownloadPendingToStart}}- {{.}}
+{{end}}{{end}}

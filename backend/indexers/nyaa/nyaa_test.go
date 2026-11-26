@@ -232,11 +232,6 @@ func (f *fakeNotifier) SendMessage(message string) error {
 	return nil
 }
 
-func (f *fakeNotifier) SendMarkdownMessage(message string) error {
-	f.message = message
-	return nil
-}
-
 var (
 	//go:embed test_data/rss.xml
 	rssResp string
@@ -279,9 +274,9 @@ func TestSearchRSS(t *testing.T) {
 
 	n.SearchRSS(items)
 
-	assert.Contains(t, notifier.message, "# nyaa RSS")
-	assert.Contains(t, notifier.message, "## Download Started\n\n- Match Search 1")
-	assert.Contains(t, notifier.message, "## Download Pending to Start\n\n- Match Search 2")
+	assert.Contains(t, notifier.message, "nyaa RSS")
+	assert.Contains(t, notifier.message, "Download started:\n- Match Search 1")
+	assert.Contains(t, notifier.message, "Download pending to start:\n- Match Search 2")
 
 	search1After := &db.RSSSearch{}
 	search1After.ID = search1.ID

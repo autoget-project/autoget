@@ -320,8 +320,6 @@ func (f *fakeNotifier) SendMessage(m string) error {
 	return nil
 }
 
-func (f *fakeNotifier) SendMarkdownMessage(m string) error { return f.SendMessage(m) }
-
 func (f *fakeNotifier) count() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
