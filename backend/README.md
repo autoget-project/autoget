@@ -92,6 +92,13 @@ whole API is then open to anyone who can reach the port).
 > was omitted. Existing configs without an `auth` section must now add
 > `auth: {disabled: true}` to keep running unauthenticated.
 
+#### Deleted download retention
+
+Downloads removed from the downloader are kept in the database marked as
+deleted, then purged daily (04:00) once older than `deleted_retention_days`
+(default `30`; a negative value disables purging). Until purged, adding the
+same torrent again is rejected as already added.
+
 #### Secrets and database TLS
 
 `config.yaml` holds plaintext secrets (`pg_dsn` password, `client_secret`, mteam

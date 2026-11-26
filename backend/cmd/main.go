@@ -142,6 +142,7 @@ func main() {
 	defer stop()
 
 	cronjob := newCron()
+	registerPurgeJob(cronjob, db, cfg.DeletedRetentionDays)
 	cronjob.Start()
 
 	downloaderMap := map[string]downloaders.IDownloader{}
@@ -239,4 +240,24 @@ func newServer(addr string, handler http.Handler) *http.Server {
 // logged instead of crashing the process.
 func newCron() *cron.Cron {
 	return cron.New(cron.WithChain(cron.Recover(cron.DefaultLogger)))
+}
+
+// registerPurgeJob schedules a daily hard-delete of downloads marked deleted
+// more than retentionDays ago. A negative value disables purging.
+func registerPurgeJob(c *cron.Cron, gdb *gorm.DB, retentionDays int) {
+	if retentionDays < 0 {
+		return
+	}
+	if _, err := c.AddFunc("0 4 * * *", func() {
+		n, err := db.PurgeDeletedDownloadStatuses(gdb, time.Now().AddDate(0, 0, -retentionDays))
+		if err != nil {
+			log.Error().Err(err).Msg("failed to purge deleted downloads")
+			return
+		}
+		if n > 0 {
+			log.Info().Int64("count", n).Msg("purged deleted downloads")
+		}
+	}); err != nil {
+		log.Fatal().Err(err).Msg("failed to schedule purge job")
+	}
 }

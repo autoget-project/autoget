@@ -13,11 +13,18 @@ import (
 	"github.com/autoget-project/autoget/backend/internal/notify/telegram"
 )
 
+// DefaultDeletedRetentionDays is used when deleted_retention_days is unset.
+const DefaultDeletedRetentionDays = 30
+
 type Config struct {
 	Port             string `yaml:"port"`
 	ProxyURL         string `yaml:"proxy_url"`
 	PgDSN            string `yaml:"pg_dsn"`
 	OrganizerService string `yaml:"organizer_service"`
+
+	// DeletedRetentionDays is how long rows marked deleted are kept before they
+	// are purged. 0 means DefaultDeletedRetentionDays; a negative value disables purging.
+	DeletedRetentionDays int `yaml:"deleted_retention_days"`
 
 	Telegram *telegram.Config `yaml:"telegram"`
 
@@ -43,6 +50,9 @@ func ReadConfig(path string) (*Config, error) {
 
 	if config.Port == "" {
 		config.Port = "8080"
+	}
+	if config.DeletedRetentionDays == 0 {
+		config.DeletedRetentionDays = DefaultDeletedRetentionDays
 	}
 
 	if config.Nyaa != nil {

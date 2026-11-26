@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -497,6 +498,34 @@ func TestConfig_validate(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
+		})
+	}
+}
+
+func TestReadConfig_DeletedRetentionDays(t *testing.T) {
+	base := `
+pg_dsn: dsn
+organizer_service: "http://organizer:8080"
+auth:
+  disabled: true
+telegram:
+  token: t
+  chat_id: c
+`
+	for name, tc := range map[string]struct {
+		extra string
+		want  int
+	}{
+		"default":  {"", DefaultDeletedRetentionDays},
+		"explicit": {"deleted_retention_days: 7\n", 7},
+		"negative": {"deleted_retention_days: -1\n", -1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.yaml")
+			assert.NoError(t, os.WriteFile(path, []byte(base+tc.extra), 0o600))
+			cfg, err := ReadConfig(path)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.want, cfg.DeletedRetentionDays)
 		})
 	}
 }

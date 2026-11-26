@@ -431,3 +431,25 @@ func TestUpdateDownloadStatusColumns(t *testing.T) {
 		assert.Equal(t, Organized, got.OrganizeState)
 	})
 }
+
+func TestPurgeDeletedDownloadStatuses(t *testing.T) {
+	d, err := SqliteForTest()
+	require.NoError(t, err)
+	for _, r := range []*DownloadStatus{
+		{ID: "old-deleted", State: DownloadDeleted},
+		{ID: "new-deleted", State: DownloadDeleted},
+		{ID: "old-stopped", State: DownloadStopped},
+	} {
+		require.NoError(t, d.Create(r).Error)
+	}
+	old := time.Now().AddDate(0, 0, -40)
+	require.NoError(t, d.Model(&DownloadStatus{}).Where("id IN ?", []string{"old-deleted", "old-stopped"}).UpdateColumn("updated_at", old).Error)
+
+	n, err := PurgeDeletedDownloadStatuses(d, time.Now().AddDate(0, 0, -30))
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), n)
+
+	var ids []string
+	require.NoError(t, d.Unscoped().Model(&DownloadStatus{}).Order("id").Pluck("id", &ids).Error)
+	assert.Equal(t, []string{"new-deleted", "old-stopped"}, ids)
+}

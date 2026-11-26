@@ -27,6 +27,10 @@ telegram:
   token: bot_token
   chat_id: your_chat_id
 organizer_service: http://organizer_service
+# Days to keep downloads marked deleted before they are purged from the database
+# (daily at 04:00). Default 30; a negative value keeps them forever. Until purged,
+# re-adding the same torrent is rejected as already added.
+# deleted_retention_days: 30
 mteam:
   api_key: your_key
   # web_base_url: https://kp.m-team.cc # optional: site used for resource detail links (defaults to the public site)

@@ -162,6 +162,13 @@ func UpdateDownloadStateForStatuses(db *gorm.DB, ids []string, state DownloadSta
 	return db.Model(&DownloadStatus{}).Where("id IN ?", ids).Update("state", state).Error
 }
 
+// PurgeDeletedDownloadStatuses hard-deletes rows marked deleted before cutoff
+// (updated_at is bumped when a row is marked deleted) and returns how many.
+func PurgeDeletedDownloadStatuses(d *gorm.DB, cutoff time.Time) (int64, error) {
+	res := d.Where("state = ? AND updated_at < ?", DownloadDeleted, cutoff).Delete(&DownloadStatus{})
+	return res.RowsAffected, res.Error
+}
+
 type DownloaderStateCounts struct {
 	CountOfDownloading int64 `json:"count_of_downloading"`
 	CountOfPlanned     int64 `json:"count_of_planned"`
