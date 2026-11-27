@@ -139,17 +139,15 @@ describe("resource-detail-dialog", () => {
     expect(HTMLDialogElement.prototype.close).toHaveBeenCalled();
   });
 
-  it("falls back to click-outside closing without closedby support", async () => {
+  it("renders a daisyUI modal-backdrop form and backdrop blur for outside clicks", async () => {
     fetchDetail.mockResolvedValue(resource());
     const el = await mount();
     el.open("idx", resource());
     await settle(el);
-    const dialog = el.shadowRoot?.querySelector("dialog") as HTMLDialogElement;
-    dialog.getBoundingClientRect = () =>
-      ({ left: 10, right: 100, top: 10, bottom: 100 }) as DOMRect;
-    dialog.dispatchEvent(new MouseEvent("click", { clientX: 50, clientY: 50 }));
-    expect(HTMLDialogElement.prototype.close).not.toHaveBeenCalled();
-    dialog.dispatchEvent(new MouseEvent("click", { clientX: 5, clientY: 5 }));
-    expect(HTMLDialogElement.prototype.close).toHaveBeenCalled();
+    const dialog = el.shadowRoot?.querySelector("dialog");
+    expect(dialog?.classList.contains("backdrop-blur-xs")).toBe(true);
+    const backdrop = dialog?.querySelector("form.modal-backdrop");
+    expect(backdrop?.getAttribute("method")).toBe("dialog");
+    expect(backdrop?.querySelector("button")).not.toBeNull();
   });
 });

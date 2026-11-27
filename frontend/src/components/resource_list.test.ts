@@ -107,13 +107,16 @@ describe("resource-list", () => {
     expect(el.shadowRoot?.querySelectorAll("download-button").length).toBe(2);
   });
 
-  it("opens the detail dialog from the Info button", async () => {
+  it("opens the detail dialog from the Info button, not the title", async () => {
     fetchRes.mockResolvedValue(response([resource({ id: "7", title: "Alpha" })]));
     const el = await mount();
     const dialog = el.shadowRoot?.querySelector("resource-detail-dialog") as HTMLElement & {
       open: (indexerId: string, resource: Resource) => void;
     };
     dialog.open = vi.fn<(indexerId: string, resource: Resource) => void>();
+    expect(el.shadowRoot?.querySelector("h3 button")).toBeNull();
+    el.shadowRoot?.querySelector<HTMLButtonElement>("h3")?.click();
+    expect(dialog.open).not.toHaveBeenCalled();
     el.shadowRoot?.querySelector<HTMLButtonElement>('button[aria-label^="Show details"]')?.click();
     expect(dialog.open).toHaveBeenCalledWith("idx", expect.objectContaining({ id: "7" }));
   });

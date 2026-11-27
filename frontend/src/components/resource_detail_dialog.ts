@@ -88,20 +88,6 @@ export class ResourceDetailDialog extends LitElement {
     this.requestSeq++;
   };
 
-  // Safari lacks the `closedby` attribute, so close on a click outside the box.
-  private handleClick = (event: MouseEvent) => {
-    if ("closedBy" in HTMLDialogElement.prototype) return;
-    const dialog = this.dialog;
-    if (event.target !== dialog) return;
-    const r = dialog.getBoundingClientRect();
-    const outside =
-      event.clientX < r.left ||
-      event.clientX > r.right ||
-      event.clientY < r.top ||
-      event.clientY > r.bottom;
-    if (outside) dialog.close();
-  };
-
   private renderFiles(detail: ResourceDetail): TemplateResult | typeof nothing {
     const files = detail.files ?? [];
     if (files.length === 0) return nothing;
@@ -195,10 +181,9 @@ export class ResourceDetailDialog extends LitElement {
     const r = this.resource;
     return html`
       <dialog
-        class="modal modal-bottom sm:modal-middle"
+        class="modal modal-bottom sm:modal-middle backdrop-blur-xs"
         closedby="any"
         aria-labelledby="detail-title"
-        @click=${this.handleClick}
         @close=${this.handleClose}
       >
         <div class="modal-box max-w-4xl">
@@ -243,6 +228,9 @@ export class ResourceDetailDialog extends LitElement {
               : nothing
           }
         </div>
+        <form method="dialog" class="modal-backdrop">
+          <button type="submit">close</button>
+        </form>
       </dialog>
     `;
   }

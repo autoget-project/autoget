@@ -305,12 +305,7 @@ export class ResourceList extends LitElement {
           <h3
             class="text-base-content font-medium line-clamp-4 text-balance break-all border-b border-base-300"
           >
-            <button
-              class="text-left hover:underline break-all"
-              @click=${() => this.openDetail(resource)}
-            >
-              ${resource.title || "Untitled Resource"}
-            </button>
+            ${resource.title || "Untitled Resource"}
           </h3>
           ${
             resource.title2
